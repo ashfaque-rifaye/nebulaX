@@ -1,0 +1,6 @@
+{
+  "name": "Nebula",
+  "description": "An autonomous agent swarm that senses the open web, weaves memory graphs, resolves contradictions, and drafts approval-gated actions.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

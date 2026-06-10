@@ -1,6 +1,7 @@
 // ─── Nebula Multi-Provider LLM Client ───────────────────────────────────────
 // Provider-agnostic, OpenAI-compatible inference with an automatic fallback
-// chain. Primary: Groq. Fallbacks (in order): Cerebras → Hugging Face.
+// chain plus runtime configuration: the UI can switch the active model and
+// supply API keys at runtime (kept in server memory, never persisted to disk).
 //
 // Every provider below exposes an OpenAI-compatible /chat/completions endpoint,
 // so we drive them all with one request shape and just swap base URL + key.
@@ -11,50 +12,143 @@ export interface ChatMessage {
   content: string;
 }
 
+export interface ProviderDef {
+  id: string;
+  name: string;
+  baseUrl: string;
+  envVar: string;             // environment variable that may hold the key
+  defaultModel: string;
+  models: string[];           // curated picks; any model id can be typed in
+  supportsJsonMode: boolean;
+  keyHint: string;            // where to get a key
+}
+
+// The catalogue of switchable providers, in default fallback priority order.
+export const PROVIDER_CATALOG: ProviderDef[] = [
+  {
+    id: "groq",
+    name: "Groq",
+    baseUrl: "https://api.groq.com/openai/v1",
+    envVar: "GROQ_API_KEY",
+    defaultModel: "llama-3.3-70b-versatile",
+    models: ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3-32b"],
+    supportsJsonMode: true,
+    keyHint: "console.groq.com/keys",
+  },
+  {
+    id: "cerebras",
+    name: "Cerebras",
+    baseUrl: "https://api.cerebras.ai/v1",
+    envVar: "CEREBRAS_API_KEY",
+    defaultModel: "llama-3.3-70b",
+    models: ["llama-3.3-70b", "llama3.1-8b", "qwen-3-32b", "gpt-oss-120b"],
+    supportsJsonMode: true,
+    keyHint: "cloud.cerebras.ai",
+  },
+  {
+    id: "openai",
+    name: "OpenAI",
+    baseUrl: "https://api.openai.com/v1",
+    envVar: "OPENAI_API_KEY",
+    defaultModel: "gpt-4o-mini",
+    models: ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini", "gpt-4.1"],
+    supportsJsonMode: true,
+    keyHint: "platform.openai.com/api-keys",
+  },
+  {
+    id: "openrouter",
+    name: "OpenRouter",
+    baseUrl: "https://openrouter.ai/api/v1",
+    envVar: "OPENROUTER_API_KEY",
+    defaultModel: "meta-llama/llama-3.3-70b-instruct",
+    models: ["meta-llama/llama-3.3-70b-instruct", "anthropic/claude-3.5-haiku", "google/gemini-2.0-flash-001", "deepseek/deepseek-chat-v3-0324"],
+    supportsJsonMode: true,
+    keyHint: "openrouter.ai/keys",
+  },
+  {
+    id: "together",
+    name: "Together AI",
+    baseUrl: "https://api.together.xyz/v1",
+    envVar: "TOGETHER_API_KEY",
+    defaultModel: "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+    models: ["meta-llama/Llama-3.3-70B-Instruct-Turbo", "Qwen/Qwen2.5-72B-Instruct-Turbo", "mistralai/Mixtral-8x7B-Instruct-v0.1"],
+    supportsJsonMode: true,
+    keyHint: "api.together.xyz/settings/api-keys",
+  },
+  {
+    id: "mistral",
+    name: "Mistral",
+    baseUrl: "https://api.mistral.ai/v1",
+    envVar: "MISTRAL_API_KEY",
+    defaultModel: "mistral-small-latest",
+    models: ["mistral-small-latest", "mistral-large-latest", "open-mistral-nemo"],
+    supportsJsonMode: true,
+    keyHint: "console.mistral.ai/api-keys",
+  },
+  {
+    id: "huggingface",
+    name: "Hugging Face",
+    baseUrl: "https://router.huggingface.co/v1",
+    envVar: "HF_API_TOKEN",
+    defaultModel: "mistralai/Mistral-7B-Instruct-v0.3",
+    models: ["mistralai/Mistral-7B-Instruct-v0.3", "meta-llama/Llama-3.1-8B-Instruct", "Qwen/Qwen2.5-7B-Instruct"],
+    supportsJsonMode: false,
+    keyHint: "huggingface.co/settings/tokens",
+  },
+];
+
+// ── Runtime configuration (in-memory; set from the UI via /api/llm/config) ──
+interface RuntimeOverride {
+  apiKey?: string;   // user-supplied key (overrides env)
+  model?: string;    // user-selected model (overrides default/env)
+}
+interface RuntimeConfig {
+  activeProviderId: string | null;   // null = automatic cascade
+  overrides: Record<string, RuntimeOverride>;
+}
+const runtime: RuntimeConfig = { activeProviderId: null, overrides: {} };
+
+const ENV_MODEL_VARS: Record<string, string> = {
+  groq: "GROQ_MODEL",
+  cerebras: "CEREBRAS_MODEL",
+  huggingface: "HF_MODEL",
+};
+
+function isUsableKey(key: string | undefined): key is string {
+  return !!key && key.trim() !== "" && !key.startsWith("MY_") && !key.includes("your_") && !key.includes("xxx");
+}
+
 interface ProviderConfig {
+  id: string;
   name: string;
   baseUrl: string;
   apiKey: string | undefined;
   model: string;
-  // Some providers (HF) are finicky about response_format; allow opting out.
   supportsJsonMode: boolean;
 }
 
-// Build the provider chain from environment variables. Order = priority.
-function getProviders(): ProviderConfig[] {
-  const providers: ProviderConfig[] = [
-    {
-      name: "Groq",
-      baseUrl: "https://api.groq.com/openai/v1",
-      apiKey: process.env.GROQ_API_KEY,
-      model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile",
-      supportsJsonMode: true,
-    },
-    {
-      name: "Cerebras",
-      baseUrl: "https://api.cerebras.ai/v1",
-      apiKey: process.env.CEREBRAS_API_KEY,
-      model: process.env.CEREBRAS_MODEL || "llama-3.3-70b",
-      supportsJsonMode: true,
-    },
-    {
-      name: "HuggingFace",
-      baseUrl: "https://router.huggingface.co/v1",
-      apiKey: process.env.HF_API_TOKEN,
-      model: process.env.HF_MODEL || "mistralai/Mistral-7B-Instruct-v0.3",
-      supportsJsonMode: false,
-    },
-  ];
+function resolveProvider(def: ProviderDef): ProviderConfig {
+  const ov = runtime.overrides[def.id] || {};
+  const envKey = process.env[def.envVar];
+  const envModel = ENV_MODEL_VARS[def.id] ? process.env[ENV_MODEL_VARS[def.id]] : undefined;
+  return {
+    id: def.id,
+    name: def.name,
+    baseUrl: def.baseUrl,
+    apiKey: isUsableKey(ov.apiKey) ? ov.apiKey : (isUsableKey(envKey) ? envKey : undefined),
+    model: ov.model || envModel || def.defaultModel,
+    supportsJsonMode: def.supportsJsonMode,
+  };
+}
 
-  // Keep only providers that have a usable, non-placeholder key.
-  return providers.filter(
-    (p) =>
-      p.apiKey &&
-      p.apiKey.trim() !== "" &&
-      !p.apiKey.startsWith("MY_") &&
-      !p.apiKey.includes("your_") &&
-      !p.apiKey.includes("xxx"),
-  );
+// Build the provider chain. If the user pinned an active provider, it leads
+// the chain; remaining configured providers stay as fallbacks.
+function getProviders(): ProviderConfig[] {
+  const resolved = PROVIDER_CATALOG.map(resolveProvider).filter((p) => isUsableKey(p.apiKey));
+  if (!runtime.activeProviderId) return resolved;
+  const pinned = resolved.find((p) => p.id === runtime.activeProviderId);
+  if (!pinned) return resolved;
+  return [pinned, ...resolved.filter((p) => p.id !== pinned.id)];
 }
 
 /** True if at least one provider has credentials configured. */
@@ -65,6 +159,86 @@ export function isLLMAvailable(): boolean {
 /** Names of the configured providers, in fallback order (for logging/UI). */
 export function getProviderNames(): string[] {
   return getProviders().map((p) => p.name);
+}
+
+/** Mask a key for display: keep first 4 + last 3 characters. */
+function maskKey(key: string | undefined): string | null {
+  if (!key) return null;
+  if (key.length <= 8) return "•••••";
+  return `${key.slice(0, 4)}…${key.slice(-3)}`;
+}
+
+/** Full config snapshot for the settings UI (keys are masked). */
+export function getLLMConfigSummary() {
+  const chain = getProviders();
+  return {
+    activeProviderId: runtime.activeProviderId,
+    chain: chain.map((p) => ({ id: p.id, name: p.name, model: p.model })),
+    providers: PROVIDER_CATALOG.map((def) => {
+      const ov = runtime.overrides[def.id] || {};
+      const resolved = resolveProvider(def);
+      const envConfigured = isUsableKey(process.env[def.envVar]);
+      return {
+        id: def.id,
+        name: def.name,
+        models: def.models,
+        defaultModel: def.defaultModel,
+        keyHint: def.keyHint,
+        model: resolved.model,
+        configured: isUsableKey(resolved.apiKey),
+        keySource: isUsableKey(ov.apiKey) ? "runtime" : envConfigured ? "env" : null,
+        maskedKey: maskKey(resolved.apiKey),
+      };
+    }),
+  };
+}
+
+/** Apply runtime configuration from the settings UI. */
+export function updateLLMConfig(patch: {
+  activeProviderId?: string | null;
+  overrides?: Record<string, { apiKey?: string | null; model?: string | null }>;
+}) {
+  if (patch.activeProviderId !== undefined) {
+    const valid = patch.activeProviderId === null || PROVIDER_CATALOG.some((d) => d.id === patch.activeProviderId);
+    if (valid) runtime.activeProviderId = patch.activeProviderId;
+  }
+  if (patch.overrides) {
+    for (const [id, ov] of Object.entries(patch.overrides)) {
+      if (!PROVIDER_CATALOG.some((d) => d.id === id)) continue;
+      const cur = runtime.overrides[id] || {};
+      if (ov.apiKey !== undefined) {
+        if (ov.apiKey === null || ov.apiKey === "") delete cur.apiKey;
+        else cur.apiKey = String(ov.apiKey).trim();
+      }
+      if (ov.model !== undefined) {
+        if (ov.model === null || ov.model === "") delete cur.model;
+        else cur.model = String(ov.model).trim();
+      }
+      runtime.overrides[id] = cur;
+    }
+  }
+  return getLLMConfigSummary();
+}
+
+/** Smoke-test one provider (or the head of the chain) and report latency. */
+export async function testProvider(providerId?: string): Promise<{ ok: boolean; provider: string; model: string; latencyMs: number; sample?: string; error?: string }> {
+  let cfg: ProviderConfig | undefined;
+  if (providerId) {
+    const def = PROVIDER_CATALOG.find((d) => d.id === providerId);
+    if (!def) return { ok: false, provider: providerId, model: "", latencyMs: 0, error: "Unknown provider" };
+    cfg = resolveProvider(def);
+    if (!isUsableKey(cfg.apiKey)) return { ok: false, provider: cfg.name, model: cfg.model, latencyMs: 0, error: "No API key configured" };
+  } else {
+    cfg = getProviders()[0];
+    if (!cfg) return { ok: false, provider: "none", model: "", latencyMs: 0, error: "No provider configured" };
+  }
+  const start = Date.now();
+  try {
+    const { content } = await callProvider(cfg, [{ role: "user", content: "Reply with exactly the word: OK" }], { maxTokens: 5, temperature: 0, timeoutMs: 15000 });
+    return { ok: true, provider: cfg.name, model: cfg.model, latencyMs: Date.now() - start, sample: content.trim().slice(0, 40) };
+  } catch (err: any) {
+    return { ok: false, provider: cfg.name, model: cfg.model, latencyMs: Date.now() - start, error: err?.message || String(err) };
+  }
 }
 
 interface ChatOptions {
@@ -134,7 +308,7 @@ export async function chat(
 ): Promise<{ text: string; provider: string; tokens: number }> {
   const providers = getProviders();
   if (providers.length === 0) {
-    throw new Error("No LLM provider configured (set GROQ_API_KEY / CEREBRAS_API_KEY / HF_API_TOKEN).");
+    throw new Error("No LLM provider configured (add an API key in Model Settings, or set GROQ_API_KEY / CEREBRAS_API_KEY / HF_API_TOKEN).");
   }
 
   const errors: string[] = [];

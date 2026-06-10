@@ -40,14 +40,12 @@ export const FabricChat: React.FC<FabricChatProps> = ({
   const lastUserQ = [...messages].reverse().find(m => m.role === "user")?.content || "";
 
   return (
-    <aside className={`absolute top-0 right-0 h-full w-full sm:w-[380px] md:w-[420px] border-l shadow-2xl flex flex-col z-50 ${
-      isDark ? "bg-[#0d1017] border-white/10" : "bg-white border-slate-200"
-    }`}>
+    <div className="flex flex-col h-full overflow-hidden">
       {/* header */}
-      <div className={`p-4 border-b flex justify-between items-center ${isDark ? "bg-black/25 border-white/5" : "bg-slate-50 border-slate-200"}`}>
+      <div className={`p-4 border-b flex justify-between items-center flex-shrink-0 ${isDark ? "bg-black/25 border-white/5" : "bg-slate-50 border-slate-200"}`}>
         <div className="flex flex-col">
           <h3 className="text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-            <MessageSquare className="w-4 h-4 text-blue-500" />
+            <MessageSquare className="w-4 h-4 text-indigo-400" />
             Ask the Fabric
           </h3>
           <span className={`text-[10px] font-mono ${isDark ? "text-gray-500" : "text-slate-400"}`}>
@@ -162,6 +160,6 @@ export const FabricChat: React.FC<FabricChatProps> = ({
           <CornerDownLeft className="w-2.5 h-2.5" /> to send · Shift+Enter for newline
         </div>
       </div>
-    </aside>
+    </div>
   );
 };

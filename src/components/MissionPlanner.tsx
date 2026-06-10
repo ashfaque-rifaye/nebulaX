@@ -1,10 +1,12 @@
 import React from "react";
 import { MissionPlanVariant } from "../types.ts";
-import { X, Loader2, Sparkles, ArrowRight, Compass, Check, Wand2 } from "lucide-react";
+import { X, Loader2, Sparkles, ArrowRight, Compass, Check, Wand2, User, Leaf, Cpu, Timer } from "lucide-react";
 
 interface MissionPlannerProps {
   isDark: boolean;
   prompt: string;
+  persona?: string;       // selected operator persona steering the angles
+  deployCost?: number;    // Green Credits charged on deploy
   loading: boolean;
   variants: MissionPlanVariant[];
   deployingId: string | null; // id of variant being deployed, or "as-is"
@@ -22,6 +24,8 @@ const ACCENTS = [
 export const MissionPlanner: React.FC<MissionPlannerProps> = ({
   isDark,
   prompt,
+  persona,
+  deployCost = 25,
   loading,
   variants,
   deployingId,
@@ -44,16 +48,33 @@ export const MissionPlanner: React.FC<MissionPlannerProps> = ({
         {/* header */}
         <div className={`sticky top-0 z-10 flex items-start justify-between gap-4 px-6 py-4 border-b backdrop-blur ${isDark ? "bg-[#0a0d14]/90 border-white/10" : "bg-white/90 border-slate-200"}`}>
           <div className="flex flex-col gap-1">
-            <span className="inline-flex items-center gap-1.5 text-[10px] font-mono tracking-widest text-blue-500 uppercase font-semibold">
+            <span className="inline-flex items-center gap-1.5 text-[10px] font-mono tracking-widest text-indigo-400 uppercase font-semibold">
               <Wand2 className="w-3.5 h-3.5" />
               Choose your mission angle
             </span>
-            <h2 className={`text-lg font-extrabold tracking-tight ${isDark ? "text-white" : "text-slate-900"}`}>
+            <h2 className={`text-lg font-bold tracking-tight font-display ${isDark ? "text-white" : "text-slate-900"}`}>
               How should the swarm approach this?
             </h2>
             <p className={`text-xs max-w-2xl ${isDark ? "text-gray-400" : "text-slate-500"}`}>
-              For <span className="font-semibold text-blue-500">“{prompt}”</span> — pick a strategy and the agents weave it.
+              For <span className="font-semibold text-indigo-400">“{prompt}”</span> — pick a strategy and the agents weave it.
             </p>
+            {/* deployment context: persona steering + live cost preview */}
+            <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+              {persona && (
+                <span className={`flex items-center gap-1 text-[9px] font-mono px-2 py-0.5 rounded-full border ${isDark ? "border-indigo-500/30 bg-indigo-500/10 text-indigo-300" : "border-indigo-200 bg-indigo-50 text-indigo-600"}`} title="Angles are tailored to this operator persona">
+                  <User className="w-2.5 h-2.5" /> {persona}
+                </span>
+              )}
+              <span className={`flex items-center gap-1 text-[9px] font-mono px-2 py-0.5 rounded-full border ${isDark ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400" : "border-emerald-200 bg-emerald-50 text-emerald-600"}`} title="Green Credits charged when the swarm deploys">
+                <Leaf className="w-2.5 h-2.5" /> {deployCost} credits
+              </span>
+              <span className={`flex items-center gap-1 text-[9px] font-mono px-2 py-0.5 rounded-full border ${isDark ? "border-white/10 text-gray-400" : "border-slate-200 text-slate-500"}`} title="Typical token spend for one full sensing pass">
+                <Cpu className="w-2.5 h-2.5" /> ~8–15k tokens
+              </span>
+              <span className={`flex items-center gap-1 text-[9px] font-mono px-2 py-0.5 rounded-full border ${isDark ? "border-white/10 text-gray-400" : "border-slate-200 text-slate-500"}`} title="Typical wall-clock time until the fabric is ready">
+                <Timer className="w-2.5 h-2.5" /> ~30–90s
+              </span>
+            </div>
           </div>
           <button
             onClick={onCancel}

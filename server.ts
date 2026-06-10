@@ -5,7 +5,7 @@ import { createServer as createViteServer } from "vite";
 import { db } from "./src/db.ts";
 import { runMissionSensing, executeSingleAgentCognition, planMissionVariants, answerFabricQuestion, runSelfCorrection, enrichMissionNodes, runCustomAgent, generateFutures } from "./src/agents.ts";
 import { WeaveNode } from "./src/types.ts";
-import { isLLMAvailable, getProviderNames, chat } from "./src/llm.ts";
+import { isLLMAvailable, getProviderNames, chat, getLLMConfigSummary, updateLLMConfig, testProvider } from "./src/llm.ts";
 import { PLEDGES, DEPLOY_COST, MANUAL_AGENT_COST, CHAT_COST } from "./src/footprint.ts";
 import { ChatTurn } from "./src/types.ts";
 
@@ -49,6 +49,30 @@ async function startServer() {
     } catch (err: any) {
       res.status(502).json({ available: true, providers, error: err.message || "All providers failed smoke test." });
     }
+  });
+
+  // ─── LLM model control: switch providers/models, supply API keys at runtime ─
+
+  // Current configuration: catalogue, fallback chain, masked keys.
+  app.get("/api/llm/config", (req, res) => {
+    res.json(getLLMConfigSummary());
+  });
+
+  // Update configuration: pin a provider, set models, store API keys (memory only).
+  app.put("/api/llm/config", (req, res) => {
+    try {
+      const { activeProviderId, overrides } = req.body || {};
+      const summary = updateLLMConfig({ activeProviderId, overrides });
+      res.json(summary);
+    } catch (err: any) {
+      res.status(400).json({ error: err.message || "Invalid LLM configuration" });
+    }
+  });
+
+  // Live connection test for one provider (or the head of the chain).
+  app.post("/api/llm/test", async (req, res) => {
+    const result = await testProvider(req.body?.providerId);
+    res.status(result.ok ? 200 : 502).json(result);
   });
 
   // ─── Profiles & Green Credits ──────────────────────────────────────────────

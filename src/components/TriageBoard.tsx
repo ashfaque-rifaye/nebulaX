@@ -63,8 +63,8 @@ export const TriageBoard: React.FC<TriageBoardProps> = ({ nodes, isDark, onSelec
   return (
     <div className="flex-1 overflow-hidden flex flex-col">
       <div className={`px-5 py-3 border-b ${isDark ? "border-white/5" : "border-slate-200"}`}>
-        <h2 className={`text-base font-bold flex items-center gap-2 ${isDark ? "text-white" : "text-slate-900"}`}>
-          <GripVertical className="w-4 h-4 text-blue-500" />
+        <h2 className={`text-base font-bold flex items-center gap-2 font-display ${isDark ? "text-white" : "text-slate-900"}`}>
+          <GripVertical className="w-4 h-4 text-indigo-400" />
           Agent Triage Board
         </h2>
         <p className={`text-[11px] ${isDark ? "text-gray-400" : "text-slate-500"}`}>

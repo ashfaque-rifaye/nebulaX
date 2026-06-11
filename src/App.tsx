@@ -76,18 +76,15 @@ import { CommandConsole } from "./components/CommandConsole.tsx";
 import { FabricCanvas } from "./components/FabricCanvas.tsx";
 import { TriageBoard } from "./components/TriageBoard.tsx";
 import { MissionReplay } from "./components/MissionReplay.tsx";
-import { SignalRadar } from "./components/SignalRadar.tsx";
+import { Constellation3D } from "./components/Constellation3D.tsx";
 import { MissionPlanner } from "./components/MissionPlanner.tsx";
 import { SettingsModal } from "./components/SettingsModal.tsx";
 import { OnboardingTour, TourStep } from "./components/OnboardingTour.tsx";
-import { Fabric3D } from "./components/Fabric3D.tsx";
 
-// Workspace lens definitions: one fabric, seven complementary views.
+// Workspace lens definitions: one fabric, five complementary views.
 const WORKSPACE_VIEWS = [
-  { key: "canvas", label: "Board", desc: "Evidence Board — drag, connect & correct findings", Icon: Network },
-  { key: "fabric2d", label: "Flow", desc: "Flow Map — auto-laid intelligence pipeline", Icon: GitBranch },
-  { key: "radar", label: "Radar", desc: "Signal Radar — closer to center = higher confidence", Icon: Radar },
-  { key: "fabric3d", label: "Orbit", desc: "Orbit — immersive 3D constellation of the fabric", Icon: Boxes },
+  { key: "canvas", label: "Board", desc: "Evidence Board — cluster & inspect findings in 2D or 3D", Icon: Network },
+  { key: "fabric2d", label: "Flow", desc: "Flow Map — auto-laid sensing → synthesis pipeline", Icon: GitBranch },
   { key: "vista", label: "Futures", desc: "Temporal Vista — forecast branching scenarios", Icon: Clock },
   { key: "triage", label: "Triage", desc: "Triage lanes — verified / drift / corrected", Icon: Columns3 },
   { key: "replay", label: "Replay", desc: "Replay — watch the fabric weave itself, run by run", Icon: History },
@@ -99,7 +96,7 @@ const TOUR_STEPS: TourStep[] = [
   { target: '[data-tour="rail"]', title: "Watch the swarm work", body: "Eight specialist agents sense, verify, weave and act. Each tile is live: a pulsing ring means that agent is working right now. Click one to open its console." },
   { target: '[data-tour="views"]', title: "Seven lenses, one fabric", body: "Board for evidence, Radar for confidence at a glance, Orbit for the 3D constellation, Futures for forecasts, Triage for verification, Replay for history. Hover any icon to see what it does." },
   { target: '[data-tour="stage"]', title: "Explore your intelligence fabric", body: "Every card is a finding with provenance. Drag to pan, scroll to zoom, click any node to inspect its sources and confidence breakdown." },
-  { target: '[data-tour="inspector"]', title: "Inspect, then act", body: "The Inspector shows the selected node's provenance chain, lets you file human-veto corrections, and tracks mission health when nothing is selected." },
+  { target: '[data-tour="inspector"]', title: "Inspect, then act", body: "The Inspector shows the selected node's provenance chain and confidence, and tracks overall mission health when nothing is selected." },
   { target: '[data-tour="feed"]', title: "Live agent feed", body: "The ticker streams what agents are doing in real time. Expand it for the full intelligence brief and one-click proposed actions." },
 ];
 
@@ -321,12 +318,13 @@ export default function App() {
   };
 
   // Correction Override Form
+  // Retained: several inspector/selection handlers still seed this with the
+  // focused node's text, but the human-veto form that consumed it was removed.
   const [correctionContent, setCorrectionContent] = useState("");
-  const [correctionReason, setCorrectionReason] = useState("");
-  const [isCorrecting, setIsCorrecting] = useState(false);
   const [reweaving, setReweaving] = useState(false);
 
   // Interactive Live Canvas States (for Panning, Zooming, and Positioning)
+  const [boardMode, setBoardMode] = useState<"2d" | "3d">("2d");
   const [canvasPan, setCanvasPan] = useState({ x: 0, y: 0 });
   const [canvasZoom, setCanvasZoom] = useState(1.0);
   const [isPanning, setIsPanning] = useState(false);
@@ -896,38 +894,6 @@ export default function App() {
     }
   };
 
-  const handleSubmitCorrection = async (nodeId: string) => {
-    if (!correctionContent.trim() || !selectedMissionId) return;
-
-    setIsCorrecting(true);
-    try {
-      const res = await fetch(`/api/nodes/${nodeId}/correct`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          content: correctionContent,
-          reason: correctionReason || "Refining details with human verification override.",
-          mission_id: selectedMissionId
-        })
-      });
-
-      if (res.ok) {
-        setCorrectionContent("");
-        setCorrectionReason("");
-        await handleTriggerReweave();
-        // If this mission already has forecasted futures, re-forge them from the
-        // now-corrected present — the Temporal Vista heals with a green bloom.
-        const hasFutures = nodes.some(n => n.time_horizon === "future");
-        if (hasFutures) {
-          await handleForecast();
-        }
-      }
-    } catch (err) {
-      console.error("Failed to post override correction:", err);
-    } finally {
-      setIsCorrecting(false);
-    }
-  };
 
   const handleTriggerReweave = async () => {
     if (!selectedMissionId) return;
@@ -995,18 +961,21 @@ export default function App() {
       return layoutBatteryMap[node.id];
     }
 
-    // Centered Grid coordinates for dynamically spawned user-defined missions
-    const row = Math.floor(index / 3);
-    const col = index % 3;
-    const isScribeNode = node.type === "synthesis";
-    
-    if (isScribeNode) {
-      return { x: 450, y: 220 + row * 180 };
-    }
-    return {
-      x: 180 + col * 280 + (row % 2 === 0 ? 0 : 40),
-      y: 120 + row * 220 + (node.type === "correction" ? 90 : 0)
-    };
+    // Stage lanes for dynamically spawned missions: sense → synthesize → act,
+    // left to right. Each finding sits in the lane for its pipeline stage and
+    // stacks among its peers, so the board reads in one glance instead of the
+    // old index grid where cards collided and edges looked detached.
+    const stageOf = (n: WeaveNode) =>
+      n.type === "synthesis" ? 1
+      : (n.type === "correction" || n.type === "action" || n.type === "output") ? 2
+      : 0;
+    const stage = stageOf(node);
+    const peers = nodes.filter((n) => stageOf(n) === stage);
+    const within = Math.max(0, peers.findIndex((n) => n.id === node.id));
+    const laneX = [205, 525, 845][stage];
+    const gapY = 198;
+    const colHeight = (peers.length - 1) * gapY;
+    return { x: laneX, y: 380 - colHeight / 2 + within * gapY };
   };
 
   // Computes base preset coordinates combined with user-dragged relative offsets 
@@ -1322,7 +1291,7 @@ export default function App() {
         <div className="max-w-7xl mx-auto w-full p-4 md:p-8 flex flex-col gap-8">
 
           {/* HERO INTRODUCTION PLATFORM */}
-          <section className={`relative overflow-hidden grid grid-cols-1 lg:grid-cols-12 gap-8 items-center p-6 md:p-10 rounded-3xl border ${t.bgCard}`}>
+          <section className={`noise relative overflow-hidden grid grid-cols-1 lg:grid-cols-12 gap-8 items-center p-6 md:p-10 rounded-3xl border ${t.bgCard}`}>
             {/* aurora backdrop */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none -z-0">
               <div className="aurora absolute -top-1/3 -left-10 w-[520px] h-[520px] rounded-full bg-blue-600/20 blur-3xl" />
@@ -1520,8 +1489,8 @@ export default function App() {
                     <span className="text-[11px] text-slate-500 dark:text-gray-400">Examine the <span className="font-semibold">Chronological Operations Log Stream</span> at the bottom to see live event payloads and timestamps.</span>
                   </li>
                   <li className="flex gap-2 items-start">
-                    <span className="text-emerald-500 text-[10px] bg-emerald-500/10 px-1 py-0.5 rounded font-mono font-bold uppercase flex-shrink-0">4. Veto</span>
-                    <span className="text-[11px] text-slate-500 dark:text-gray-400">Submit a correction. If the connected nodes immediately shift confidence values on the Canvas, the pipeline is alive!</span>
+                    <span className="text-emerald-500 text-[10px] bg-emerald-500/10 px-1 py-0.5 rounded font-mono font-bold uppercase flex-shrink-0">4. Re-weave</span>
+                    <span className="text-[11px] text-slate-500 dark:text-gray-400">Hit <span className="font-semibold">Re-Weave</span> and watch confidence ripple across the fabric as the Watchdog reconciles contradictions. If the nodes re-score, the pipeline is alive!</span>
                   </li>
                 </ul>
               </div>
@@ -2066,7 +2035,47 @@ export default function App() {
 
             {/* --- COGNITIVE WEAVE INFINITY CANVAS VIEWPORT --- */}
             {workspaceMode === "canvas" && (
-            <div 
+            <div className="flex-1 relative overflow-hidden flex flex-col">
+
+              {/* shared 2D / 3D mode toggle */}
+              <div className={`absolute top-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1 p-1 rounded-xl glass border shadow-lg no-pan ${isDark ? "border-white/10" : "border-slate-200"}`}>
+                {([["2d", "Board", Network], ["3d", "Orbit", Boxes]] as const).map(([m, lbl, Ico]) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setBoardMode(m)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all ${
+                      boardMode === m
+                        ? "bg-indigo-600 text-white shadow-sm"
+                        : isDark ? "text-gray-300 hover:bg-white/10" : "text-slate-600 hover:bg-slate-100"
+                    }`}
+                    title={m === "2d" ? "Flat evidence board — drag to organize" : "Immersive 3D constellation"}
+                  >
+                    <Ico className="w-3.5 h-3.5" />
+                    {lbl}
+                  </button>
+                ))}
+                <div className={`w-px h-4 mx-0.5 ${isDark ? "bg-white/10" : "bg-slate-200"}`} />
+                <button
+                  type="button"
+                  onClick={toggleMaximize}
+                  className={`p-1.5 rounded-lg transition-all ${isDark ? "text-gray-300 hover:bg-white/10" : "text-slate-600 hover:bg-slate-100"}`}
+                  title={isMaximized ? "Restore layout" : "Maximize canvas"}
+                >
+                  {isMaximized ? <Minimize className="w-3.5 h-3.5" /> : <Maximize className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+
+              {boardMode === "3d" ? (
+                <Constellation3D
+                  nodes={nodes}
+                  edges={edges}
+                  isDark={isDark}
+                  selectedNodeId={selectedNodeId}
+                  onSelect={(id) => { setSelectedNodeId(id); const n = nodes.find(x => x.id === id); if (n && (n.type === "web-signal" || n.type === "synthesis")) setCorrectionContent(n.content); }}
+                />
+              ) : (
+            <div
               ref={attachCanvasStage}
               onMouseDown={handleCanvasMouseDown}
               className="flex-1 relative overflow-hidden flex items-center justify-center cursor-grab active:cursor-grabbing p-4"
@@ -2248,7 +2257,7 @@ export default function App() {
                             left: `${pos.x}px`,
                             top: `${pos.y}px`,
                             transform: "translate(-50%, -15px)",
-                            width: "185px",
+                            width: "212px",
                             transition: draggingNodeId === node.id ? "none" : "all 0.15s ease-out"
                           }}
                           onMouseEnter={() => setHoveredNodeId(node.id)}
@@ -2262,49 +2271,46 @@ export default function App() {
                             }
                             handleNodeDragStart(e, node.id);
                           }}
-                          className={`animate-nodePop rounded-xl border p-3 select-none flex flex-col gap-1.5 shadow-md no-pan cursor-grab active:cursor-grabbing hover:shadow-xl transition-all z-10 ${
+                          className={`animate-nodePop rounded-2xl border p-3.5 select-none flex flex-col gap-2 no-pan cursor-grab active:cursor-grabbing transition-all z-10 ${
                             newestRunId && node.run_id === newestRunId ? "new-signal" : ""
                           } ${
                             isHighlighted
-                              ? "ring-2 ring-indigo-500 ring-offset-2 scale-[1.04] dark:ring-offset-black"
+                              ? "ring-2 ring-indigo-500 ring-offset-2 scale-[1.03] dark:ring-offset-[#05070c] shadow-xl"
                               : isSelected
-                              ? "ring-1 ring-indigo-500 scale-[1.03] " + getConfColor(confRating, true)
-                              : getConfColor(confRating, true)
-                          } ${isFocused ? "opacity-100 filter-none" : "opacity-35 scale-[0.96] blur-[0.4px]"} ${
-                            isDark ? "bg-[#0b101b]/95 text-slate-200" : "bg-white text-slate-800"
-                          } hover:border-indigo-400/60`}
+                              ? "ring-1 ring-indigo-500 scale-[1.02] shadow-xl"
+                              : "shadow-md hover:shadow-lg hover:-translate-y-0.5"
+                          } ${isFocused ? "opacity-100 filter-none" : "opacity-30 scale-[0.96] blur-[0.5px]"} ${
+                            isDark ? "bg-[#0b101b]/95 border-white/10 text-slate-200 hover:border-indigo-400/50" : "bg-white border-slate-200 text-slate-800 hover:border-indigo-400/60"
+                          }`}
                         >
                           {/* CARD HEADER */}
-                          <div className="flex items-center justify-between border-b border-slate-200/50 dark:border-white/5 pb-1 text-[8px] leading-none">
-                            <div className="flex items-center gap-1 overflow-hidden">
+                          <div className="flex items-center justify-between gap-2 text-[8.5px] leading-none">
+                            <div className="flex items-center gap-1.5 overflow-hidden">
+                              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: node.flagged_by === "sentinel" ? "#fb7185" : confRating >= 0.8 ? "#34d399" : confRating >= 0.5 ? "#fbbf24" : "#fb7185" }} />
                               {isSynth ? (
-                                <Cpu className="w-3 h-3 text-blue-500" />
+                                <Cpu className="w-3 h-3 text-indigo-400 flex-shrink-0" />
                               ) : isCorr ? (
-                                <Undo className="w-3 h-3 text-emerald-500" />
+                                <Undo className="w-3 h-3 text-emerald-500 flex-shrink-0" />
                               ) : (
-                                <FileText className="w-3 h-3 text-purple-500" />
+                                <FileText className="w-3 h-3 text-violet-400 flex-shrink-0" />
                               )}
-                              <span className="font-mono uppercase tracking-wider text-slate-400 select-none">
-                                {node.type}
+                              <span className="font-mono uppercase tracking-wider text-slate-400 select-none truncate">
+                                {node.type.replace("-", " ")}
                               </span>
-                              {node.pinned && <Pin className="w-2.5 h-2.5 text-blue-500 fill-blue-500" />}
+                              {node.pinned && <Pin className="w-2.5 h-2.5 text-indigo-400 fill-indigo-400 flex-shrink-0" />}
                             </div>
 
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center gap-1 flex-shrink-0">
                               {node.grounded === true && (
-                                <span className="font-mono font-bold px-1 rounded leading-none text-[7px] bg-emerald-500/15 text-emerald-500 border border-emerald-500/30 flex items-center gap-0.5" title="Extracted from a real fetched web page">
-                                  ● LIVE
-                                </span>
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" title="LIVE — extracted from a real fetched web page" />
                               )}
                               {node.grounded === false && (
-                                <span className="font-mono font-bold px-1 rounded leading-none text-[7px] bg-amber-500/10 text-amber-500 border border-amber-500/20" title="LLM-inferred (no live source fetched)">
-                                  ~AI
-                                </span>
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500" title="Inferred — LLM analysis, no live source fetched" />
                               )}
                               {newestRunId && node.run_id === newestRunId && (
-                                <span className="font-mono font-bold px-1 rounded leading-none text-[7px] bg-emerald-500 text-white animate-pulse">NEW</span>
+                                <span className="font-mono font-bold px-1 py-0.5 rounded leading-none text-[7px] bg-emerald-500 text-white animate-pulse">NEW</span>
                               )}
-                              <span className={`font-mono font-bold px-1 rounded leading-none text-[8px] ${getConfColor(confRating)}`}>
+                              <span className={`font-mono font-bold px-1.5 py-0.5 rounded-md leading-none text-[8.5px] ${getConfColor(confRating)}`}>
                                 {Math.round(confRating * 100)}%
                               </span>
                             </div>
@@ -2312,7 +2318,7 @@ export default function App() {
 
                           {/* BODY: dynamic component (metrics / comparison / list / quote / text) */}
                           <div>
-                            <h4 className="text-[10px] sm:text-[10.5px] font-bold tracking-tight leading-tight mb-1 truncate text-slate-900 dark:text-white">
+                            <h4 className="text-[11.5px] font-bold tracking-tight leading-snug mb-1.5 line-clamp-2 text-slate-900 dark:text-white">
                               {node.title}
                             </h4>
                             <DynamicNodeBody node={node} isDark={isDark} compact />
@@ -2379,18 +2385,10 @@ export default function App() {
                 >
                   Reset Layout
                 </button>
-                <div className={`w-[1px] h-4 mx-1 ${isDark ? "bg-white/10" : "bg-slate-200"}`}></div>
-                <button
-                  type="button"
-                  onClick={toggleMaximize}
-                  className="p-1.5 px-3 text-[9.5px] font-mono text-slate-600 dark:text-gray-400 hover:bg-slate-100 dark:hover:bg-white/10 rounded-md transition-all font-bold border border-slate-200 dark:border-white/5 cursor-pointer flex items-center gap-1"
-                  title={isMaximized ? "Restore Layout" : "Maximize Canvas"}
-                >
-                  {isMaximized ? <Minimize className="w-3.5 h-3.5" /> : <Maximize className="w-3.5 h-3.5" />}
-                  <span className="hidden sm:inline">{isMaximized ? "Restore" : "Maximize"}</span>
-                </button>
               </div>
 
+            </div>
+              )}
             </div>
             )}
 
@@ -2424,27 +2422,6 @@ export default function App() {
                 isDark={isDark}
                 onSelect={(id) => { setSelectedNodeId(id); const n = nodes.find(x => x.id === id); if (n && (n.type === "web-signal" || n.type === "synthesis")) setCorrectionContent(n.content); }}
                 onRequestCorrection={(node) => { setSelectedNodeId(node.id); setCorrectionContent(node.content); }}
-              />
-            )}
-
-            {/* --- SIGNAL RADAR VIEWPORT --- */}
-            {workspaceMode === "radar" && (
-              <SignalRadar
-                nodes={nodes}
-                isDark={isDark}
-                selectedNodeId={selectedNodeId}
-                onSelect={(id) => { setSelectedNodeId(id); const n = nodes.find(x => x.id === id); if (n && (n.type === "web-signal" || n.type === "synthesis")) setCorrectionContent(n.content); }}
-              />
-            )}
-
-            {/* --- ORBIT: immersive 3D constellation of the fabric --- */}
-            {workspaceMode === "fabric3d" && (
-              <Fabric3D
-                nodes={nodes}
-                edges={edges}
-                isDark={isDark}
-                selectedNodeId={selectedNodeId}
-                onSelect={(id) => { setSelectedNodeId(id); const n = nodes.find(x => x.id === id); if (n && (n.type === "web-signal" || n.type === "synthesis")) setCorrectionContent(n.content); }}
               />
             )}
 
@@ -3016,62 +2993,6 @@ export default function App() {
                       )}
                     </div>
 
-                    {/* INTERACTIVE MEMORY CORRECTOR VETO FORM */}
-                    {(selectedNode.type === "web-signal" || selectedNode.type === "synthesis") && (
-                      <div className={`flex flex-col gap-3 p-4 rounded-xl no-pan border ${
-                        isDark ? "bg-[#090c12]/90 border-white/5" : "bg-slate-50 border-slate-200"
-                      }`}>
-                        <span className={`text-[10px] font-mono tracking-wider uppercase font-bold flex items-center gap-1.5 select-none leading-none ${
-                          isDark ? "text-teal-400" : "text-teal-700"
-                        }`}>
-                          <Undo className="w-3.5 h-3.5" />
-                          VERIFY COGNITIVE SWARM CLAIM
-                        </span>
-                        
-                        <p className={`text-[10px] leading-relaxed font-sans select-none ${isDark ? "text-gray-400" : "text-slate-500"}`}>
-                          Submit an authoritative human verification veto claim. This injects a high credibility Correction node (100% CF) to bypass drift anomalies in the swarm.
-                        </p>
-
-                        <div className="flex flex-col gap-1">
-                          <label className={`text-[9.5px] font-mono select-none ${isDark ? "text-gray-500" : "text-slate-400"}`}>Corrected claim statement:</label>
-                          <textarea
-                            placeholder="Provide correct verified data values..."
-                            value={correctionContent}
-                            onChange={e => setCorrectionContent(e.target.value)}
-                            className={`w-full h-20 border p-2 rounded text-xs placeholder-slate-400 focus:outline-none focus:border-blue-500 font-sans ${
-                              isDark ? "bg-black/40 border-white/5 text-white" : "bg-white border-slate-200 text-slate-800"
-                            }`}
-                          />
-                        </div>
-
-                        <div className="flex flex-col gap-1">
-                          <label className={`text-[9.5px] font-mono select-none ${isDark ? "text-gray-500" : "text-slate-400"}`}>Operator veto reason:</label>
-                          <input
-                            type="text"
-                            placeholder="e.g., Confirmed waiver applies June 2026"
-                            value={correctionReason}
-                            onChange={e => setCorrectionReason(e.target.value)}
-                            className={`w-full border p-2 rounded text-xs placeholder-slate-400 focus:outline-none focus:border-blue-500 font-sans ${
-                              isDark ? "bg-black/40 border-white/5 text-white" : "bg-white border-slate-200 text-slate-800"
-                            }`}
-                          />
-                        </div>
-
-                        <button
-                          onClick={() => handleSubmitCorrection(selectedNode.id)}
-                          disabled={isCorrecting || !correctionContent.trim()}
-                          className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold py-2 px-3 rounded-lg transition-all flex items-center justify-center gap-1.5 shadow-md disabled:opacity-50 select-none cursor-pointer"
-                        >
-                          {isCorrecting ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          ) : (
-                            <ShieldCheck className="w-3.5 h-3.5 animate-pulse" />
-                          )}
-                          Submit Memory Correction Veto
-                        </button>
-                      </div>
-                    )}
-
                     {/* CITATION AND PROVENANCE LISTS */}
                     {selectedNode.provenance && selectedNode.provenance.length > 0 && (
                       <div className="flex flex-col gap-2 mt-2">
@@ -3460,7 +3381,7 @@ export default function App() {
                   {/* hint */}
                   <p className={`text-[10px] leading-relaxed flex gap-1.5 ${t.textMute}`}>
                     <Info className="w-3 h-3 mt-0.5 flex-shrink-0 text-indigo-400" />
-                    Click any node on the {WORKSPACE_VIEWS.find(v => v.key === workspaceMode)?.label || "board"} to inspect its provenance and file corrections.
+                    Click any node on the {WORKSPACE_VIEWS.find(v => v.key === workspaceMode)?.label || "board"} to trace its provenance and confidence chain.
                   </p>
                 </div>
               </div>

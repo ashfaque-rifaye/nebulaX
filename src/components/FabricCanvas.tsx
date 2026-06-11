@@ -98,36 +98,40 @@ const nodeTypes = {
 // ----------------------
 // Layout Algorithm
 // ----------------------
-const dagreGraph = new dagre.graphlib.Graph();
-dagreGraph.setDefaultEdgeLabel(() => ({}));
+const NODE_W = 288;
+const NODE_H = 168;
 
+// A *fresh* dagre graph per call. The previous module-level singleton kept
+// accumulating nodes/edges from earlier missions, so layouts drifted apart and
+// edges appeared to connect to nothing. Rebuilding each time keeps the pipeline
+// tight and correct.
 const getLayoutedElements = (nodes: any[], edges: any[], direction = 'LR') => {
   const isHorizontal = direction === 'LR';
-  dagreGraph.setGraph({ rankdir: direction, nodesep: 40, ranksep: 200 });
+  const g = new dagre.graphlib.Graph();
+  g.setDefaultEdgeLabel(() => ({}));
+  g.setGraph({ rankdir: direction, nodesep: 56, ranksep: 150, marginx: 24, marginy: 24 });
 
   nodes.forEach((node) => {
-    // Approx node dimensions based on w-72 (288px) and typical height
-    dagreGraph.setNode(node.id, { width: 300, height: 160 });
+    g.setNode(node.id, { width: NODE_W, height: NODE_H });
   });
 
+  // Only wire edges whose endpoints both exist, so a dangling edge can't blow
+  // up the ranking and scatter the graph.
+  const ids = new Set(nodes.map((n) => n.id));
   edges.forEach((edge) => {
-    dagreGraph.setEdge(edge.source, edge.target);
+    if (ids.has(edge.source) && ids.has(edge.target)) g.setEdge(edge.source, edge.target);
   });
 
-  dagre.layout(dagreGraph);
+  dagre.layout(g);
 
   const layoutedNodes = nodes.map((node) => {
-    const nodeWithPosition = dagreGraph.node(node.id);
-    const newNode = {
+    const pos = g.node(node.id);
+    return {
       ...node,
-      position: {
-        x: nodeWithPosition.x - 300 / 2,
-        y: nodeWithPosition.y - 160 / 2,
-      },
+      position: { x: pos.x - NODE_W / 2, y: pos.y - NODE_H / 2 },
       targetPosition: isHorizontal ? 'left' : 'top',
       sourcePosition: isHorizontal ? 'right' : 'bottom',
     };
-    return newNode;
   });
 
   return { nodes: layoutedNodes, edges };
@@ -180,21 +184,20 @@ const FabricFlow = ({ nodes: rawNodes, edges: rawEdges, isDark, selectedNodeId, 
     );
     setNodes(layoutedNodes);
     setEdges(layoutedEdges);
-    
-    // Slight delay to ensure ReactFlow has rendered the DOM nodes before fitting view
-    setTimeout(() => {
-      fitView({ padding: 0.1, duration: 800 });
-    }, 100);
+
+    // Fit once the freshly-laid DOM nodes exist. rAF + a short delay beats a
+    // race where fitView runs against an empty viewport.
+    const raf = requestAnimationFrame(() => {
+      setTimeout(() => fitView({ padding: 0.18, duration: 600, maxZoom: 1 }), 60);
+    });
+    return () => cancelAnimationFrame(raf);
   }, [initialNodes, initialEdges, fitView, setNodes, setEdges]);
 
-  // Center selected node if clicked externally
+  // Ease toward a clicked node without zooming so far that context is lost.
   useEffect(() => {
-    if (selectedNodeId) {
-      const node = rfNodes.find(n => n.id === selectedNodeId);
-      if (node) {
-        fitView({ nodes: [{ id: node.id }], duration: 800, padding: 1.5 });
-      }
-    }
+    if (!selectedNodeId) return;
+    const node = rfNodes.find(n => n.id === selectedNodeId);
+    if (node) fitView({ nodes: [{ id: node.id }], duration: 600, padding: 0.6, maxZoom: 1.1 });
   }, [selectedNodeId, rfNodes, fitView]);
 
   const confColor = (n: any) => {

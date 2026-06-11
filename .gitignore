@@ -8,3 +8,4 @@ coverage/
 !.env.example
 nebula-data.json
 web-cache.json
+_*.mjs

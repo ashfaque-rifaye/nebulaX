@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   X, Cpu, KeyRound, Check, Loader2, Zap, ShieldCheck, AlertTriangle,
-  ChevronDown, Sparkles, Layers, Eye, EyeOff
+  ChevronDown, Sparkles, Layers, Eye, EyeOff, RefreshCw, WifiOff
 } from "lucide-react";
 
 interface ProviderInfo {
@@ -30,11 +30,53 @@ interface SettingsModalProps {
 }
 
 type TestState = { running: boolean; ok?: boolean; latencyMs?: number; error?: string };
+type LoadState = "loading" | "ready" | "error";
+
+// Static last-resort catalogue. Mirrors PROVIDER_CATALOG in src/llm.ts so the
+// control center is never an empty husk if the live config call can't be
+// reached — the operator can still read the lineup and queue key changes.
+const FALLBACK_PROVIDERS: ProviderInfo[] = [
+  { id: "groq", name: "Groq", models: ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3-32b"], defaultModel: "llama-3.3-70b-versatile", keyHint: "console.groq.com/keys", model: "llama-3.3-70b-versatile", configured: false, keySource: null, maskedKey: null },
+  { id: "cerebras", name: "Cerebras", models: ["llama-3.3-70b", "llama3.1-8b", "qwen-3-32b", "gpt-oss-120b"], defaultModel: "llama-3.3-70b", keyHint: "cloud.cerebras.ai", model: "llama-3.3-70b", configured: false, keySource: null, maskedKey: null },
+  { id: "openai", name: "OpenAI", models: ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini", "gpt-4.1"], defaultModel: "gpt-4o-mini", keyHint: "platform.openai.com/api-keys", model: "gpt-4o-mini", configured: false, keySource: null, maskedKey: null },
+  { id: "openrouter", name: "OpenRouter", models: ["meta-llama/llama-3.3-70b-instruct", "anthropic/claude-3.5-haiku", "google/gemini-2.0-flash-001", "deepseek/deepseek-chat-v3-0324"], defaultModel: "meta-llama/llama-3.3-70b-instruct", keyHint: "openrouter.ai/keys", model: "meta-llama/llama-3.3-70b-instruct", configured: false, keySource: null, maskedKey: null },
+  { id: "together", name: "Together AI", models: ["meta-llama/Llama-3.3-70B-Instruct-Turbo", "Qwen/Qwen2.5-72B-Instruct-Turbo", "mistralai/Mixtral-8x7B-Instruct-v0.1"], defaultModel: "meta-llama/Llama-3.3-70B-Instruct-Turbo", keyHint: "api.together.xyz/settings/api-keys", model: "meta-llama/Llama-3.3-70B-Instruct-Turbo", configured: false, keySource: null, maskedKey: null },
+  { id: "mistral", name: "Mistral", models: ["mistral-small-latest", "mistral-large-latest", "open-mistral-nemo"], defaultModel: "mistral-small-latest", keyHint: "console.mistral.ai/api-keys", model: "mistral-small-latest", configured: false, keySource: null, maskedKey: null },
+  { id: "huggingface", name: "Hugging Face", models: ["mistralai/Mistral-7B-Instruct-v0.3", "meta-llama/Llama-3.1-8B-Instruct", "Qwen/Qwen2.5-7B-Instruct"], defaultModel: "mistralai/Mistral-7B-Instruct-v0.3", keyHint: "huggingface.co/settings/tokens", model: "mistralai/Mistral-7B-Instruct-v0.3", configured: false, keySource: null, maskedKey: null },
+];
+
+const FALLBACK_CONFIG: LLMConfig = { activeProviderId: null, chain: [], providers: FALLBACK_PROVIDERS };
+
+// Fetch with a hard timeout so a stalled request can never strand the modal on
+// skeletons. Returns parsed JSON or throws a readable error.
+async function fetchJSON<T>(url: string, init?: RequestInit, timeoutMs = 9000): Promise<T> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { ...init, signal: controller.signal });
+    if (!res.ok) throw new Error(`Server returned ${res.status}`);
+    const text = await res.text();
+    try {
+      return JSON.parse(text) as T;
+    } catch {
+      // A reverse proxy / static host can answer /api/* with the SPA's HTML.
+      throw new Error("Unexpected response (not JSON) — is the API server running?");
+    }
+  } catch (err: any) {
+    if (err?.name === "AbortError") throw new Error("Request timed out — the API server didn't respond.");
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 // Model Control Center: pick the engine the swarm thinks with, bring your own
 // keys, and verify the connection live. Keys live in server memory only.
 export const SettingsModal: React.FC<SettingsModalProps> = ({ isDark, onClose, onSaved }) => {
   const [config, setConfig] = useState<LLMConfig | null>(null);
+  const [status, setStatus] = useState<LoadState>("loading");
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [offline, setOffline] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [keyDrafts, setKeyDrafts] = useState<Record<string, string>>({});
   const [modelDrafts, setModelDrafts] = useState<Record<string, string>>({});
@@ -42,15 +84,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isDark, onClose, o
   const [tests, setTests] = useState<Record<string, TestState>>({});
   const [saving, setSaving] = useState<string | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
+    setStatus("loading");
+    setLoadError(null);
     try {
-      const res = await fetch("/api/llm/config");
-      if (res.ok) setConfig(await res.json());
-    } catch (err) {
-      console.error("Failed to load LLM config:", err);
+      const cfg = await fetchJSON<LLMConfig>("/api/llm/config");
+      setConfig(cfg);
+      setOffline(false);
+      setStatus("ready");
+    } catch (err: any) {
+      setLoadError(err?.message || "Couldn't reach the model server.");
+      setStatus("error");
     }
-  };
-  useEffect(() => { load(); }, []);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -58,17 +106,27 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isDark, onClose, o
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const put = async (body: any) => {
-    const res = await fetch("/api/llm/config", {
-      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
-    });
-    if (res.ok) {
-      const cfg = await res.json();
+  // Work offline against the static catalogue so the operator can still review
+  // the lineup; saves are disabled until the server is reachable again.
+  const continueOffline = () => {
+    setConfig(FALLBACK_CONFIG);
+    setOffline(true);
+    setStatus("ready");
+  };
+
+  const put = async (body: any): Promise<LLMConfig | null> => {
+    try {
+      const cfg = await fetchJSON<LLMConfig>("/api/llm/config", {
+        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+      });
       setConfig(cfg);
+      setOffline(false);
       onSaved?.(cfg);
       return cfg;
+    } catch (err: any) {
+      setLoadError(err?.message || "Couldn't save — the API server is unreachable.");
+      return null;
     }
-    return null;
   };
 
   const setActive = async (id: string | null) => { await put({ activeProviderId: id }); };
@@ -78,18 +136,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isDark, onClose, o
     const overrides: any = { [p.id]: {} };
     if (keyDrafts[p.id] !== undefined) overrides[p.id].apiKey = keyDrafts[p.id];
     if (modelDrafts[p.id] !== undefined) overrides[p.id].model = modelDrafts[p.id];
-    await put({ overrides });
-    setKeyDrafts((d) => { const n = { ...d }; delete n[p.id]; return n; });
+    const ok = await put({ overrides });
+    if (ok) setKeyDrafts((d) => { const n = { ...d }; delete n[p.id]; return n; });
     setSaving(null);
   };
 
   const runTest = async (id: string) => {
     setTests((t) => ({ ...t, [id]: { running: true } }));
     try {
-      const res = await fetch("/api/llm/test", {
+      const data = await fetchJSON<any>("/api/llm/test", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ providerId: id }),
-      });
-      const data = await res.json();
+      }, 20000);
       setTests((t) => ({ ...t, [id]: { running: false, ok: data.ok, latencyMs: data.latencyMs, error: data.error } }));
     } catch (err: any) {
       setTests((t) => ({ ...t, [id]: { running: false, ok: false, error: err?.message || "Test failed" } }));
@@ -129,25 +186,67 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isDark, onClose, o
                 </p>
               </div>
             </div>
-            <button onClick={onClose} className={`p-2 rounded-lg transition-colors ${isDark ? "text-gray-400 hover:bg-white/10 hover:text-white" : "text-slate-400 hover:bg-slate-100"}`} title="Close settings">
-              <X className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-2">
+              {status === "ready" && (
+                <button onClick={load} className={`p-2 rounded-lg transition-colors ${isDark ? "text-gray-400 hover:bg-white/10 hover:text-white" : "text-slate-400 hover:bg-slate-100"}`} title="Reload providers">
+                  <RefreshCw className="w-4 h-4" />
+                </button>
+              )}
+              <button onClick={onClose} className={`p-2 rounded-lg transition-colors ${isDark ? "text-gray-400 hover:bg-white/10 hover:text-white" : "text-slate-400 hover:bg-slate-100"}`} title="Close settings">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
           </div>
+
+          {/* offline banner */}
+          {offline && (
+            <div className="relative z-10 px-6 py-2 bg-amber-500/10 border-b border-amber-500/25 flex items-center gap-2 text-[11px] text-amber-500 font-medium">
+              <WifiOff className="w-3.5 h-3.5 flex-shrink-0" />
+              Offline catalogue — couldn't reach the API server, so saving and testing are paused.
+              <button onClick={load} className="ml-auto underline underline-offset-2 hover:text-amber-400">Reconnect</button>
+            </div>
+          )}
 
           {/* body */}
           <div className="relative z-10 flex-1 overflow-y-auto p-6 flex flex-col gap-5">
-            {!config ? (
-              <div className="flex flex-col gap-3">
+            {status === "loading" && (
+              <div className="flex flex-col gap-3" aria-busy="true">
                 <div className="skeleton h-14" /><div className="skeleton h-14" /><div className="skeleton h-14" />
+                <div className={`flex items-center justify-center gap-2 text-[11px] font-mono pt-1 ${muted}`}>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading provider catalogue…
+                </div>
               </div>
-            ) : (
+            )}
+
+            {status === "error" && (
+              <div className={`rounded-xl border p-6 flex flex-col items-center text-center gap-3 ${isDark ? "border-rose-500/20 bg-rose-500/5" : "border-rose-200 bg-rose-50"}`}>
+                <span className="w-11 h-11 rounded-xl bg-rose-500/15 text-rose-400 flex items-center justify-center">
+                  <AlertTriangle className="w-5 h-5" />
+                </span>
+                <div>
+                  <h3 className={`text-sm font-bold ${title}`}>Couldn't load the model catalogue</h3>
+                  <p className={`text-[11px] mt-1 max-w-sm ${muted}`}>{loadError}</p>
+                </div>
+                <div className="flex items-center gap-2 pt-1">
+                  <button onClick={load} className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold px-3.5 py-2 rounded-lg press">
+                    <RefreshCw className="w-3.5 h-3.5" /> Retry
+                  </button>
+                  <button onClick={continueOffline} className={`flex items-center gap-1.5 text-[11px] font-bold px-3.5 py-2 rounded-lg border press ${isDark ? "border-white/10 text-gray-300 hover:bg-white/5" : "border-slate-200 text-slate-600 hover:bg-slate-100"}`}>
+                    Browse offline
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {status === "ready" && config && (
               <>
                 {/* routing mode */}
                 <div className="flex flex-col gap-2">
                   <span className={`text-[10px] font-mono uppercase tracking-widest font-bold ${muted}`}>Routing</span>
                   <button
                     onClick={() => setActive(null)}
-                    className={`flex items-center gap-3 rounded-xl border p-3 text-left transition-all press ${
+                    disabled={offline}
+                    className={`flex items-center gap-3 rounded-xl border p-3 text-left transition-all press disabled:opacity-60 disabled:cursor-not-allowed ${
                       config.activeProviderId === null
                         ? "border-indigo-500/60 bg-indigo-500/10 ring-1 ring-indigo-500/30"
                         : `${inner} hover:border-indigo-500/30`
@@ -185,7 +284,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isDark, onClose, o
                         <div className="flex items-center gap-3 p-3">
                           <button
                             onClick={() => setActive(isActive ? null : p.id)}
-                            disabled={!p.configured}
+                            disabled={!p.configured || offline}
                             title={p.configured ? (isActive ? "Unpin (return to cascade)" : `Make ${p.name} the primary engine`) : "Add an API key first"}
                             className={`w-4 h-4 rounded-full border-2 flex-shrink-0 transition-all ${
                               isActive ? "border-indigo-400 bg-indigo-500" : p.configured ? "border-slate-400/60 hover:border-indigo-400" : "border-slate-500/25"
@@ -282,7 +381,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isDark, onClose, o
                                 <div className="flex items-center gap-2 pt-0.5">
                                   <button
                                     onClick={() => saveProvider(p)}
-                                    disabled={!dirty || saving === p.id}
+                                    disabled={!dirty || saving === p.id || offline}
                                     className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white text-[11px] font-bold px-3.5 py-1.5 rounded-lg transition-all press"
                                   >
                                     {saving === p.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
@@ -290,7 +389,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isDark, onClose, o
                                   </button>
                                   <button
                                     onClick={() => runTest(p.id)}
-                                    disabled={test?.running || (!p.configured && keyDrafts[p.id] === undefined)}
+                                    disabled={test?.running || offline || (!p.configured && keyDrafts[p.id] === undefined)}
                                     className={`flex items-center gap-1.5 text-[11px] font-bold px-3.5 py-1.5 rounded-lg border transition-all press disabled:opacity-40 ${
                                       isDark ? "border-white/10 text-gray-300 hover:border-cyan-500/50 hover:text-cyan-300" : "border-slate-200 text-slate-600 hover:border-cyan-500"
                                     }`}

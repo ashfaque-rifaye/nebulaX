@@ -50,14 +50,16 @@ export const DynamicNodeBody: React.FC<Props> = ({ node, isDark, compact }) => {
 
   try {
     // ── metrics ──
+    // Borderless label/value pairs — boxing each metric reads as nested cards
+    // and clutters the node. A tabular grid with a faint divider stays calm.
     if (kind === "metrics" && asArray(d.items).length) {
-      const items = asArray(d.items).slice(0, compact ? 3 : 6);
+      const items = asArray(d.items).slice(0, compact ? 4 : 6);
       return (
-        <div className={`grid ${compact ? "grid-cols-2" : "grid-cols-2 sm:grid-cols-3"} gap-1.5`}>
+        <div className={`grid ${compact ? "grid-cols-2" : "grid-cols-2 sm:grid-cols-3"} gap-x-3 gap-y-1.5`}>
           {items.map((it: any, i: number) => (
-            <div key={i} className={`rounded-md border px-2 py-1 ${isDark ? "bg-white/[0.03] border-white/10" : "bg-slate-50 border-slate-200"}`}>
+            <div key={i} className="min-w-0">
               <div className={`text-[7.5px] font-mono uppercase tracking-wide truncate ${sub}`}>{str(it?.label)}</div>
-              <div className={`text-[12px] font-extrabold leading-tight ${isDark ? "text-white" : "text-slate-900"}`}>{str(it?.value)}</div>
+              <div className={`text-[12.5px] font-extrabold leading-tight truncate ${isDark ? "text-white" : "text-slate-900"}`}>{str(it?.value)}</div>
             </div>
           ))}
         </div>
@@ -105,8 +107,8 @@ export const DynamicNodeBody: React.FC<Props> = ({ node, isDark, compact }) => {
     // ── quote ──
     if (kind === "quote" && d.quote) {
       return (
-        <blockquote className={`border-l-2 border-blue-500/50 pl-2 ${muted}`}>
-          <Quote className="w-3 h-3 text-blue-500/60 mb-0.5" />
+        <blockquote className={`rounded-lg px-2.5 py-1.5 ${isDark ? "bg-indigo-500/[0.07]" : "bg-indigo-500/[0.05]"} ${muted}`}>
+          <Quote className="w-3 h-3 text-indigo-400/70 mb-0.5" />
           <p className={`text-[10.5px] italic leading-snug ${compact ? "line-clamp-3" : ""}`}>"{str(d.quote)}"</p>
           {d.attribution && <span className={`text-[8.5px] font-mono ${sub}`}>— {str(d.attribution)}</span>}
         </blockquote>
@@ -120,11 +122,11 @@ export const DynamicNodeBody: React.FC<Props> = ({ node, isDark, compact }) => {
         return (
           <div>
             <div className="flex items-center gap-1 mb-1 text-[8px] font-mono uppercase tracking-wider text-emerald-500"><Hash className="w-2.5 h-2.5" /> key figures</div>
-            <div className="grid grid-cols-2 gap-1.5">
-              {mets.slice(0, compact ? 2 : 4).map((it, i) => (
-                <div key={i} className={`rounded-md border px-2 py-1 ${isDark ? "bg-white/[0.03] border-white/10" : "bg-slate-50 border-slate-200"}`}>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+              {mets.slice(0, compact ? 4 : 4).map((it, i) => (
+                <div key={i} className="min-w-0">
                   <div className={`text-[7.5px] font-mono uppercase tracking-wide truncate ${sub}`}>{it.label}</div>
-                  <div className={`text-[12px] font-extrabold leading-tight ${isDark ? "text-white" : "text-slate-900"}`}>{it.value}</div>
+                  <div className={`text-[12.5px] font-extrabold leading-tight truncate ${isDark ? "text-white" : "text-slate-900"}`}>{it.value}</div>
                 </div>
               ))}
             </div>

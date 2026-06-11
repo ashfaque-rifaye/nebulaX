@@ -96,7 +96,7 @@ const TOUR_STEPS: TourStep[] = [
   { target: '[data-tour="rail"]', title: "Watch the swarm work", body: "Eight specialist agents sense, verify, weave and act. Each tile is live: a pulsing ring means that agent is working right now. Click one to open its console." },
   { target: '[data-tour="views"]', title: "Seven lenses, one fabric", body: "Board for evidence, Radar for confidence at a glance, Orbit for the 3D constellation, Futures for forecasts, Triage for verification, Replay for history. Hover any icon to see what it does." },
   { target: '[data-tour="stage"]', title: "Explore your intelligence fabric", body: "Every card is a finding with provenance. Drag to pan, scroll to zoom, click any node to inspect its sources and confidence breakdown." },
-  { target: '[data-tour="inspector"]', title: "Inspect, then act", body: "The Inspector shows the selected node's provenance chain, lets you file human-veto corrections, and tracks mission health when nothing is selected." },
+  { target: '[data-tour="inspector"]', title: "Inspect, then act", body: "The Inspector shows the selected node's provenance chain and confidence, and tracks overall mission health when nothing is selected." },
   { target: '[data-tour="feed"]', title: "Live agent feed", body: "The ticker streams what agents are doing in real time. Expand it for the full intelligence brief and one-click proposed actions." },
 ];
 
@@ -318,9 +318,9 @@ export default function App() {
   };
 
   // Correction Override Form
+  // Retained: several inspector/selection handlers still seed this with the
+  // focused node's text, but the human-veto form that consumed it was removed.
   const [correctionContent, setCorrectionContent] = useState("");
-  const [correctionReason, setCorrectionReason] = useState("");
-  const [isCorrecting, setIsCorrecting] = useState(false);
   const [reweaving, setReweaving] = useState(false);
 
   // Interactive Live Canvas States (for Panning, Zooming, and Positioning)
@@ -894,38 +894,6 @@ export default function App() {
     }
   };
 
-  const handleSubmitCorrection = async (nodeId: string) => {
-    if (!correctionContent.trim() || !selectedMissionId) return;
-
-    setIsCorrecting(true);
-    try {
-      const res = await fetch(`/api/nodes/${nodeId}/correct`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          content: correctionContent,
-          reason: correctionReason || "Refining details with human verification override.",
-          mission_id: selectedMissionId
-        })
-      });
-
-      if (res.ok) {
-        setCorrectionContent("");
-        setCorrectionReason("");
-        await handleTriggerReweave();
-        // If this mission already has forecasted futures, re-forge them from the
-        // now-corrected present — the Temporal Vista heals with a green bloom.
-        const hasFutures = nodes.some(n => n.time_horizon === "future");
-        if (hasFutures) {
-          await handleForecast();
-        }
-      }
-    } catch (err) {
-      console.error("Failed to post override correction:", err);
-    } finally {
-      setIsCorrecting(false);
-    }
-  };
 
   const handleTriggerReweave = async () => {
     if (!selectedMissionId) return;
@@ -1323,7 +1291,7 @@ export default function App() {
         <div className="max-w-7xl mx-auto w-full p-4 md:p-8 flex flex-col gap-8">
 
           {/* HERO INTRODUCTION PLATFORM */}
-          <section className={`relative overflow-hidden grid grid-cols-1 lg:grid-cols-12 gap-8 items-center p-6 md:p-10 rounded-3xl border ${t.bgCard}`}>
+          <section className={`noise relative overflow-hidden grid grid-cols-1 lg:grid-cols-12 gap-8 items-center p-6 md:p-10 rounded-3xl border ${t.bgCard}`}>
             {/* aurora backdrop */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none -z-0">
               <div className="aurora absolute -top-1/3 -left-10 w-[520px] h-[520px] rounded-full bg-blue-600/20 blur-3xl" />
@@ -1521,8 +1489,8 @@ export default function App() {
                     <span className="text-[11px] text-slate-500 dark:text-gray-400">Examine the <span className="font-semibold">Chronological Operations Log Stream</span> at the bottom to see live event payloads and timestamps.</span>
                   </li>
                   <li className="flex gap-2 items-start">
-                    <span className="text-emerald-500 text-[10px] bg-emerald-500/10 px-1 py-0.5 rounded font-mono font-bold uppercase flex-shrink-0">4. Veto</span>
-                    <span className="text-[11px] text-slate-500 dark:text-gray-400">Submit a correction. If the connected nodes immediately shift confidence values on the Canvas, the pipeline is alive!</span>
+                    <span className="text-emerald-500 text-[10px] bg-emerald-500/10 px-1 py-0.5 rounded font-mono font-bold uppercase flex-shrink-0">4. Re-weave</span>
+                    <span className="text-[11px] text-slate-500 dark:text-gray-400">Hit <span className="font-semibold">Re-Weave</span> and watch confidence ripple across the fabric as the Watchdog reconciles contradictions. If the nodes re-score, the pipeline is alive!</span>
                   </li>
                 </ul>
               </div>
@@ -3413,7 +3381,7 @@ export default function App() {
                   {/* hint */}
                   <p className={`text-[10px] leading-relaxed flex gap-1.5 ${t.textMute}`}>
                     <Info className="w-3 h-3 mt-0.5 flex-shrink-0 text-indigo-400" />
-                    Click any node on the {WORKSPACE_VIEWS.find(v => v.key === workspaceMode)?.label || "board"} to inspect its provenance and file corrections.
+                    Click any node on the {WORKSPACE_VIEWS.find(v => v.key === workspaceMode)?.label || "board"} to trace its provenance and confidence chain.
                   </p>
                 </div>
               </div>

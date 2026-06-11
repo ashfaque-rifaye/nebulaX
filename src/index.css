@@ -350,7 +350,11 @@
   border: 1px solid var(--nx-border-subtle);
   box-shadow: 0 8px 24px rgba(2, 4, 10, 0.4);
 }
-.react-flow__node { animation: nodePop 0.5s cubic-bezier(0.16, 1, 0.3, 1) both; }
+/* Fade nodes in WITHOUT animating transform — ReactFlow owns each node's
+   `transform: translate(x,y)`, and a transform keyframe (even via fill-mode)
+   overrides it, collapsing every node onto the origin. Opacity only. */
+@keyframes rfNodeIn { from { opacity: 0; } to { opacity: 1; } }
+.react-flow__node { animation: rfNodeIn 0.4s ease-out both; }
 .react-flow__attribution { display: none; }
 
 /* ═══════════════════════════════════════════════════════════════════════

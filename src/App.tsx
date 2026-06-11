@@ -76,6 +76,7 @@ import { CommandConsole } from "./components/CommandConsole.tsx";
 import { FabricCanvas } from "./components/FabricCanvas.tsx";
 import { TriageBoard } from "./components/TriageBoard.tsx";
 import { MissionReplay } from "./components/MissionReplay.tsx";
+import { Constellation3D } from "./components/Constellation3D.tsx";
 import { MissionPlanner } from "./components/MissionPlanner.tsx";
 import { SettingsModal } from "./components/SettingsModal.tsx";
 import { OnboardingTour, TourStep } from "./components/OnboardingTour.tsx";
@@ -323,6 +324,7 @@ export default function App() {
   const [reweaving, setReweaving] = useState(false);
 
   // Interactive Live Canvas States (for Panning, Zooming, and Positioning)
+  const [boardMode, setBoardMode] = useState<"2d" | "3d">("2d");
   const [canvasPan, setCanvasPan] = useState({ x: 0, y: 0 });
   const [canvasZoom, setCanvasZoom] = useState(1.0);
   const [isPanning, setIsPanning] = useState(false);
@@ -991,18 +993,21 @@ export default function App() {
       return layoutBatteryMap[node.id];
     }
 
-    // Centered Grid coordinates for dynamically spawned user-defined missions
-    const row = Math.floor(index / 3);
-    const col = index % 3;
-    const isScribeNode = node.type === "synthesis";
-    
-    if (isScribeNode) {
-      return { x: 450, y: 220 + row * 180 };
-    }
-    return {
-      x: 180 + col * 280 + (row % 2 === 0 ? 0 : 40),
-      y: 120 + row * 220 + (node.type === "correction" ? 90 : 0)
-    };
+    // Stage lanes for dynamically spawned missions: sense → synthesize → act,
+    // left to right. Each finding sits in the lane for its pipeline stage and
+    // stacks among its peers, so the board reads in one glance instead of the
+    // old index grid where cards collided and edges looked detached.
+    const stageOf = (n: WeaveNode) =>
+      n.type === "synthesis" ? 1
+      : (n.type === "correction" || n.type === "action" || n.type === "output") ? 2
+      : 0;
+    const stage = stageOf(node);
+    const peers = nodes.filter((n) => stageOf(n) === stage);
+    const within = Math.max(0, peers.findIndex((n) => n.id === node.id));
+    const laneX = [205, 525, 845][stage];
+    const gapY = 198;
+    const colHeight = (peers.length - 1) * gapY;
+    return { x: laneX, y: 380 - colHeight / 2 + within * gapY };
   };
 
   // Computes base preset coordinates combined with user-dragged relative offsets 
@@ -2062,7 +2067,47 @@ export default function App() {
 
             {/* --- COGNITIVE WEAVE INFINITY CANVAS VIEWPORT --- */}
             {workspaceMode === "canvas" && (
-            <div 
+            <div className="flex-1 relative overflow-hidden flex flex-col">
+
+              {/* shared 2D / 3D mode toggle */}
+              <div className={`absolute top-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1 p-1 rounded-xl glass border shadow-lg no-pan ${isDark ? "border-white/10" : "border-slate-200"}`}>
+                {([["2d", "Board", Network], ["3d", "Orbit", Boxes]] as const).map(([m, lbl, Ico]) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setBoardMode(m)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all ${
+                      boardMode === m
+                        ? "bg-indigo-600 text-white shadow-sm"
+                        : isDark ? "text-gray-300 hover:bg-white/10" : "text-slate-600 hover:bg-slate-100"
+                    }`}
+                    title={m === "2d" ? "Flat evidence board — drag to organize" : "Immersive 3D constellation"}
+                  >
+                    <Ico className="w-3.5 h-3.5" />
+                    {lbl}
+                  </button>
+                ))}
+                <div className={`w-px h-4 mx-0.5 ${isDark ? "bg-white/10" : "bg-slate-200"}`} />
+                <button
+                  type="button"
+                  onClick={toggleMaximize}
+                  className={`p-1.5 rounded-lg transition-all ${isDark ? "text-gray-300 hover:bg-white/10" : "text-slate-600 hover:bg-slate-100"}`}
+                  title={isMaximized ? "Restore layout" : "Maximize canvas"}
+                >
+                  {isMaximized ? <Minimize className="w-3.5 h-3.5" /> : <Maximize className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+
+              {boardMode === "3d" ? (
+                <Constellation3D
+                  nodes={nodes}
+                  edges={edges}
+                  isDark={isDark}
+                  selectedNodeId={selectedNodeId}
+                  onSelect={(id) => { setSelectedNodeId(id); const n = nodes.find(x => x.id === id); if (n && (n.type === "web-signal" || n.type === "synthesis")) setCorrectionContent(n.content); }}
+                />
+              ) : (
+            <div
               ref={attachCanvasStage}
               onMouseDown={handleCanvasMouseDown}
               className="flex-1 relative overflow-hidden flex items-center justify-center cursor-grab active:cursor-grabbing p-4"
@@ -2244,7 +2289,7 @@ export default function App() {
                             left: `${pos.x}px`,
                             top: `${pos.y}px`,
                             transform: "translate(-50%, -15px)",
-                            width: "185px",
+                            width: "212px",
                             transition: draggingNodeId === node.id ? "none" : "all 0.15s ease-out"
                           }}
                           onMouseEnter={() => setHoveredNodeId(node.id)}
@@ -2258,49 +2303,46 @@ export default function App() {
                             }
                             handleNodeDragStart(e, node.id);
                           }}
-                          className={`animate-nodePop rounded-xl border p-3 select-none flex flex-col gap-1.5 shadow-md no-pan cursor-grab active:cursor-grabbing hover:shadow-xl transition-all z-10 ${
+                          className={`animate-nodePop rounded-2xl border p-3.5 select-none flex flex-col gap-2 no-pan cursor-grab active:cursor-grabbing transition-all z-10 ${
                             newestRunId && node.run_id === newestRunId ? "new-signal" : ""
                           } ${
                             isHighlighted
-                              ? "ring-2 ring-indigo-500 ring-offset-2 scale-[1.04] dark:ring-offset-black"
+                              ? "ring-2 ring-indigo-500 ring-offset-2 scale-[1.03] dark:ring-offset-[#05070c] shadow-xl"
                               : isSelected
-                              ? "ring-1 ring-indigo-500 scale-[1.03] " + getConfColor(confRating, true)
-                              : getConfColor(confRating, true)
-                          } ${isFocused ? "opacity-100 filter-none" : "opacity-35 scale-[0.96] blur-[0.4px]"} ${
-                            isDark ? "bg-[#0b101b]/95 text-slate-200" : "bg-white text-slate-800"
-                          } hover:border-indigo-400/60`}
+                              ? "ring-1 ring-indigo-500 scale-[1.02] shadow-xl"
+                              : "shadow-md hover:shadow-lg hover:-translate-y-0.5"
+                          } ${isFocused ? "opacity-100 filter-none" : "opacity-30 scale-[0.96] blur-[0.5px]"} ${
+                            isDark ? "bg-[#0b101b]/95 border-white/10 text-slate-200 hover:border-indigo-400/50" : "bg-white border-slate-200 text-slate-800 hover:border-indigo-400/60"
+                          }`}
                         >
                           {/* CARD HEADER */}
-                          <div className="flex items-center justify-between border-b border-slate-200/50 dark:border-white/5 pb-1 text-[8px] leading-none">
-                            <div className="flex items-center gap-1 overflow-hidden">
+                          <div className="flex items-center justify-between gap-2 text-[8.5px] leading-none">
+                            <div className="flex items-center gap-1.5 overflow-hidden">
+                              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: node.flagged_by === "sentinel" ? "#fb7185" : confRating >= 0.8 ? "#34d399" : confRating >= 0.5 ? "#fbbf24" : "#fb7185" }} />
                               {isSynth ? (
-                                <Cpu className="w-3 h-3 text-blue-500" />
+                                <Cpu className="w-3 h-3 text-indigo-400 flex-shrink-0" />
                               ) : isCorr ? (
-                                <Undo className="w-3 h-3 text-emerald-500" />
+                                <Undo className="w-3 h-3 text-emerald-500 flex-shrink-0" />
                               ) : (
-                                <FileText className="w-3 h-3 text-purple-500" />
+                                <FileText className="w-3 h-3 text-violet-400 flex-shrink-0" />
                               )}
-                              <span className="font-mono uppercase tracking-wider text-slate-400 select-none">
-                                {node.type}
+                              <span className="font-mono uppercase tracking-wider text-slate-400 select-none truncate">
+                                {node.type.replace("-", " ")}
                               </span>
-                              {node.pinned && <Pin className="w-2.5 h-2.5 text-blue-500 fill-blue-500" />}
+                              {node.pinned && <Pin className="w-2.5 h-2.5 text-indigo-400 fill-indigo-400 flex-shrink-0" />}
                             </div>
 
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center gap-1 flex-shrink-0">
                               {node.grounded === true && (
-                                <span className="font-mono font-bold px-1 rounded leading-none text-[7px] bg-emerald-500/15 text-emerald-500 border border-emerald-500/30 flex items-center gap-0.5" title="Extracted from a real fetched web page">
-                                  ● LIVE
-                                </span>
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" title="LIVE — extracted from a real fetched web page" />
                               )}
                               {node.grounded === false && (
-                                <span className="font-mono font-bold px-1 rounded leading-none text-[7px] bg-amber-500/10 text-amber-500 border border-amber-500/20" title="LLM-inferred (no live source fetched)">
-                                  ~AI
-                                </span>
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500" title="Inferred — LLM analysis, no live source fetched" />
                               )}
                               {newestRunId && node.run_id === newestRunId && (
-                                <span className="font-mono font-bold px-1 rounded leading-none text-[7px] bg-emerald-500 text-white animate-pulse">NEW</span>
+                                <span className="font-mono font-bold px-1 py-0.5 rounded leading-none text-[7px] bg-emerald-500 text-white animate-pulse">NEW</span>
                               )}
-                              <span className={`font-mono font-bold px-1 rounded leading-none text-[8px] ${getConfColor(confRating)}`}>
+                              <span className={`font-mono font-bold px-1.5 py-0.5 rounded-md leading-none text-[8.5px] ${getConfColor(confRating)}`}>
                                 {Math.round(confRating * 100)}%
                               </span>
                             </div>
@@ -2308,7 +2350,7 @@ export default function App() {
 
                           {/* BODY: dynamic component (metrics / comparison / list / quote / text) */}
                           <div>
-                            <h4 className="text-[10px] sm:text-[10.5px] font-bold tracking-tight leading-tight mb-1 truncate text-slate-900 dark:text-white">
+                            <h4 className="text-[11.5px] font-bold tracking-tight leading-snug mb-1.5 line-clamp-2 text-slate-900 dark:text-white">
                               {node.title}
                             </h4>
                             <DynamicNodeBody node={node} isDark={isDark} compact />
@@ -2375,18 +2417,10 @@ export default function App() {
                 >
                   Reset Layout
                 </button>
-                <div className={`w-[1px] h-4 mx-1 ${isDark ? "bg-white/10" : "bg-slate-200"}`}></div>
-                <button
-                  type="button"
-                  onClick={toggleMaximize}
-                  className="p-1.5 px-3 text-[9.5px] font-mono text-slate-600 dark:text-gray-400 hover:bg-slate-100 dark:hover:bg-white/10 rounded-md transition-all font-bold border border-slate-200 dark:border-white/5 cursor-pointer flex items-center gap-1"
-                  title={isMaximized ? "Restore Layout" : "Maximize Canvas"}
-                >
-                  {isMaximized ? <Minimize className="w-3.5 h-3.5" /> : <Maximize className="w-3.5 h-3.5" />}
-                  <span className="hidden sm:inline">{isMaximized ? "Restore" : "Maximize"}</span>
-                </button>
               </div>
 
+            </div>
+              )}
             </div>
             )}
 

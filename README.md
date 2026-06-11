@@ -4,10 +4,10 @@ NebulaX is a living team-intelligence fabric. You define an **Intelligence Missi
 
 ## Architecture
 
-- **Frontend** — Vite + React 19 + TypeScript + Tailwind v4 + Motion (`src/App.tsx`, `src/components/`). A unified Swarm Workspace: seven lenses over one fabric (Evidence Board, Flow Map, Signal Radar, 3D Orbit, Temporal Vista, Triage, Replay), a docked Inspector panel (node detail / agent console / grounded chat / custom agents / mission pulse), a live agent-activity ticker with an expandable Brief & Actions pane, and a first-run spotlight tour.
+- **Frontend** — Vite + React 19 + TypeScript + Tailwind v4 + Motion (`src/App.tsx`, `src/components/`). A unified Swarm Workspace: five lenses over one fabric (Evidence Board with a 2D/3D constellation toggle, Flow Map, Temporal Vista, Triage, Replay), a docked Inspector panel (node detail / agent console / grounded chat / custom agents / mission pulse), a live agent-activity ticker with an expandable Brief & Actions pane, and a first-run spotlight tour.
 - **Design system** — `src/index.css`: semantic dark/light tokens (deep-charcoal Dark Mode 2.0 + cool light theme), Space Grotesk + Inter + JetBrains Mono variable fonts, noise/glass materials, reduced-motion fallbacks.
 - **Backend** — Express, served alongside Vite from a single process (`server.ts`). REST API for missions, fabric, events, brief, actions, corrections, re-weave, and runtime LLM configuration.
-- **Store** — in-memory DB persisted to `nebula-data.json` (`src/db.ts`), implementing the core IP: confidence propagation + human-veto ground truth.
+- **Store** — in-memory DB persisted to `nebula-data.json` (`src/db.ts`), implementing the core IP: confidence propagation across a provenance graph, healed by the Watchdog on re-weave.
 - **AI swarm** — `src/agents.ts` orchestrates the sensing → reasoning → synthesis → action pipeline.
 
 ## AI providers — Model Control Center

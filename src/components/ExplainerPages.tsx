@@ -26,7 +26,8 @@ const muted = (isDark: boolean) => (isDark ? "text-gray-400" : "text-slate-500")
 
 // ─── HOW IT WORKS ────────────────────────────────────────────────────────────
 export const HowItWorksPage: React.FC<PageProps> = ({ isDark, onLaunch }) => (
-  <main className="flex-1 max-w-6xl mx-auto w-full p-4 md:p-8 flex flex-col gap-8">
+  <main className="flex-1 overflow-y-auto">
+    <div className="max-w-6xl mx-auto w-full p-4 md:p-8 flex flex-col gap-8">
     <header className="text-center flex flex-col items-center gap-3">
       <span className="text-[10px] font-mono tracking-widest text-blue-500 uppercase font-semibold bg-blue-500/10 px-3 py-1 rounded-full">How it works</span>
       <h2 className={`text-3xl md:text-4xl font-extrabold tracking-tight ${title(isDark)}`}>From a sentence to a verified, actionable brief</h2>
@@ -73,12 +74,14 @@ export const HowItWorksPage: React.FC<PageProps> = ({ isDark, onLaunch }) => (
         <Rocket className="w-4 h-4" /> Launch your first mission <ArrowRight className="w-4 h-4" />
       </button>
     </div>
+    </div>
   </main>
 );
 
 // ─── THE TEAM (agents) ───────────────────────────────────────────────────────
 export const AgentsPage: React.FC<PageProps> = ({ isDark, onLaunch }) => (
-  <main className="flex-1 max-w-6xl mx-auto w-full p-4 md:p-8 flex flex-col gap-8">
+  <main className="flex-1 overflow-y-auto">
+    <div className="max-w-6xl mx-auto w-full p-4 md:p-8 flex flex-col gap-8">
     <header className="text-center flex flex-col items-center gap-3">
       <span className="text-[10px] font-mono tracking-widest text-blue-500 uppercase font-semibold bg-blue-500/10 px-3 py-1 rounded-full">Meet the swarm</span>
       <h2 className={`text-3xl md:text-4xl font-extrabold tracking-tight ${title(isDark)}`}>Your AI intelligence team</h2>
@@ -112,12 +115,14 @@ export const AgentsPage: React.FC<PageProps> = ({ isDark, onLaunch }) => (
         See them work <ArrowRight className="w-4 h-4" />
       </button>
     </div>
+    </div>
   </main>
 );
 
 // ─── USE CASES (who it's for + problem statements) ─────────────────────────────
 export const UseCasesPage: React.FC<PageProps> = ({ isDark, onLaunch }) => (
-  <main className="flex-1 max-w-6xl mx-auto w-full p-4 md:p-8 flex flex-col gap-8">
+  <main className="flex-1 overflow-y-auto">
+    <div className="max-w-6xl mx-auto w-full p-4 md:p-8 flex flex-col gap-8">
     <header className="text-center flex flex-col items-center gap-3">
       <span className="text-[10px] font-mono tracking-widest text-blue-500 uppercase font-semibold bg-blue-500/10 px-3 py-1 rounded-full">Who it's for</span>
       <h2 className={`text-3xl md:text-4xl font-extrabold tracking-tight ${title(isDark)}`}>One platform, many missions</h2>
@@ -154,6 +159,7 @@ export const UseCasesPage: React.FC<PageProps> = ({ isDark, onLaunch }) => (
           </button>
         </div>
       ))}
+    </div>
     </div>
   </main>
 );

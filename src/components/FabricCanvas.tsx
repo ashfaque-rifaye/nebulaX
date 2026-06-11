@@ -1,12 +1,13 @@
 import React, { useMemo, useEffect } from 'react';
-import { 
-  ReactFlow, 
-  Controls, 
-  Background, 
-  useNodesState, 
-  useEdgesState, 
-  MarkerType, 
-  Handle, 
+import {
+  ReactFlow,
+  Controls,
+  Background,
+  MiniMap,
+  useNodesState,
+  useEdgesState,
+  MarkerType,
+  Handle,
   Position,
   Panel,
   ReactFlowProvider,
@@ -196,6 +197,14 @@ const FabricFlow = ({ nodes: rawNodes, edges: rawEdges, isDark, selectedNodeId, 
     }
   }, [selectedNodeId, rfNodes, fitView]);
 
+  const confColor = (n: any) => {
+    const conf = (n.data?.node as WeaveNode)?.confidence ?? 0;
+    if ((n.data?.node as WeaveNode)?.flagged_by === 'sentinel') return '#fb7185';
+    if (conf >= 0.8) return '#34d399';
+    if (conf >= 0.5) return '#fbbf24';
+    return '#fb7185';
+  };
+
   return (
     <ReactFlow
       nodes={rfNodes.map(n => ({ ...n, data: { ...n.data, isDark }, selected: n.id === selectedNodeId }))}
@@ -205,20 +214,35 @@ const FabricFlow = ({ nodes: rawNodes, edges: rawEdges, isDark, selectedNodeId, 
       onNodeClick={(_, node) => onSelect(node.id)}
       nodeTypes={nodeTypes}
       fitView
+      fitViewOptions={{ padding: 0.15, maxZoom: 1 }}
       minZoom={0.05}
-      maxZoom={1.5}
-      className={isDark ? 'bg-[#06080d]' : 'bg-[#f8fafc]'}
+      maxZoom={1.6}
+      proOptions={{ hideAttribution: true }}
+      className={isDark ? '!bg-transparent' : '!bg-transparent'}
     >
-      <Background color={isDark ? '#333' : '#cbd5e1'} gap={24} size={1} />
-      <Controls className={isDark ? '!bg-black/50 !border-white/10 !fill-white' : ''} />
-      
-      <Panel position="top-left" className={`p-4 backdrop-blur border rounded-xl m-4 font-mono text-[10px] pointer-events-none shadow-xl ${isDark ? 'bg-[#0b0e14]/80 border-white/10 text-gray-300' : 'bg-white/80 border-slate-200 text-slate-700'}`}>
-        <h3 className="font-bold text-[12px] text-blue-500 mb-1.5 flex items-center gap-1.5">
+      <Background color={isDark ? '#2a3550' : '#cbd5e1'} gap={26} size={1.4} />
+      <Controls className={isDark ? '!bg-[#0a0e17]/90 !border-white/10 !fill-white [&>button]:!border-white/10 [&>button]:!bg-transparent [&>button:hover]:!bg-white/10' : ''} />
+      <MiniMap
+        pannable
+        zoomable
+        nodeColor={confColor}
+        nodeStrokeWidth={3}
+        maskColor={isDark ? 'rgba(5,7,12,0.78)' : 'rgba(244,246,251,0.78)'}
+        className={isDark ? '!bg-[#0a0e17]' : '!bg-white'}
+      />
+
+      <Panel position="top-left" className={`p-3.5 glass border rounded-xl m-4 font-mono text-[10px] pointer-events-none shadow-xl ${isDark ? 'border-white/10 text-gray-300' : 'border-slate-200 text-slate-700'}`}>
+        <h3 className="font-bold text-[12px] text-indigo-400 mb-1.5 flex items-center gap-1.5 font-display tracking-tight">
           <Cpu className="w-4 h-4" />
           Intelligence Flow Map
         </h3>
-        <p className="opacity-80">Left to right logic mapping.</p>
+        <p className="opacity-80">Sensing → reasoning → synthesis, left to right.</p>
         <p className="opacity-80 mt-0.5">Scroll to zoom · Drag to pan · Click to inspect</p>
+        <div className="flex items-center gap-2.5 mt-2 pt-2 border-t border-current/10">
+          <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />≥80%</span>
+          <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-amber-400" />50–79%</span>
+          <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-rose-400" />&lt;50% / drift</span>
+        </div>
       </Panel>
     </ReactFlow>
   );
@@ -227,17 +251,14 @@ const FabricFlow = ({ nodes: rawNodes, edges: rawEdges, isDark, selectedNodeId, 
 export const FabricCanvas: React.FC<FabricCanvasProps> = (props) => {
   if (props.nodes.length === 0) {
     return (
-      <div className="flex-1 w-full h-full flex items-center justify-center font-mono text-xs opacity-50 relative">
-        Awaiting intelligence signals...
-        {props.onToggleMaximize && (
-          <button
-            onClick={props.onToggleMaximize}
-            className="absolute top-4 right-4 p-2 rounded-lg border bg-white/80 dark:bg-black/80 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors z-50 text-slate-700 dark:text-gray-300 shadow-md"
-            title={props.isMaximized ? "Restore view" : "Maximize canvas"}
-          >
-            {props.isMaximized ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
-          </button>
-        )}
+      <div className="flex-1 w-full h-full flex flex-col items-center justify-center gap-3 relative text-center px-6">
+        <div className="w-14 h-14 rounded-2xl border border-indigo-500/30 bg-indigo-500/10 flex items-center justify-center float-y">
+          <Cpu className="w-7 h-7 text-indigo-400" />
+        </div>
+        <h3 className={`text-base font-bold font-display ${props.isDark ? "text-white" : "text-slate-900"}`}>The flow map weaves itself</h3>
+        <p className={`text-xs max-w-sm leading-relaxed ${props.isDark ? "text-[#8b93a7]" : "text-slate-500"}`}>
+          As soon as the swarm senses signals, this view auto-lays the pipeline: raw signals flow into syntheses, corrections and actions, left to right.
+        </p>
       </div>
     );
   }

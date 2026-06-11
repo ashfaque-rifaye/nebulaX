@@ -130,10 +130,8 @@ export const SignalRadar: React.FC<SignalRadarProps> = ({ nodes, isDark, selecte
       const R = Math.min(W, H) / 2 - 24;
 
       // Clear with dark/light themes
-      ctx.fillStyle = isDark ? "#06080d" : "#f8fafc";
+      ctx.fillStyle = isDark ? "#05070c" : "#f4f6fb";
       ctx.fillRect(0, 0, W, H);
-
-      if (nodes.length === 0) return;
 
       // Ring Boundaries (Urgency)
       ctx.lineWidth = 1;
@@ -419,33 +417,72 @@ export const SignalRadar: React.FC<SignalRadarProps> = ({ nodes, isDark, selecte
         {/* Radar Title Bar */}
         <div className={`px-5 py-3 border-b flex items-center justify-between select-none ${isDark ? "border-white/5" : "border-slate-200"}`}>
           <div>
-            <h2 className={`text-base font-bold flex items-center gap-2 ${themeClasses.textBold}`}>
-              <RadarIcon className="w-4 h-4 text-blue-500 animate-pulse" />
+            <h2 className={`text-base font-bold flex items-center gap-2 font-display ${themeClasses.textBold}`}>
+              <RadarIcon className="w-4 h-4 text-indigo-400 animate-pulse" />
               Intelligence Signal Radar
             </h2>
             <p className={`text-[10px] ${themeClasses.textMute}`}>
               Distance: Urgency Level (Core=Action Required) · Angle: Agent Source Sector.
             </p>
           </div>
-          <div className="flex items-center gap-2 select-none font-mono text-[9px]">
-            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping"></span>
-            <span className={themeClasses.textMute}>Telemetry Feed Active</span>
+          <div className="flex items-center gap-3 select-none">
+            {/* active filter chips */}
+            {(searchQuery || confidenceFilter > 0) && (
+              <div className="flex items-center gap-1.5">
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery("")}
+                    title="Clear search filter"
+                    className="flex items-center gap-1 text-[9px] font-mono px-2 py-0.5 rounded-full border border-indigo-500/40 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20"
+                  >
+                    “{searchQuery.slice(0, 14)}{searchQuery.length > 14 ? "…" : ""}” ✕
+                  </button>
+                )}
+                {confidenceFilter > 0 && (
+                  <button
+                    onClick={() => setConfidenceFilter(0)}
+                    title="Clear confidence threshold"
+                    className="flex items-center gap-1 text-[9px] font-mono px-2 py-0.5 rounded-full border border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20"
+                  >
+                    ≥{Math.round(confidenceFilter * 100)}% CF ✕
+                  </button>
+                )}
+              </div>
+            )}
+            <div className="flex items-center gap-2 font-mono text-[9px]">
+              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping"></span>
+              <span className={themeClasses.textMute}>Telemetry Feed Active</span>
+            </div>
           </div>
         </div>
 
-        {nodes.length === 0 ? (
-          <div className="flex-1 flex items-center justify-center text-xs font-mono text-slate-400">
-            No signals on radar yet.
-          </div>
-        ) : (
+        {(
           <div className="flex-1 relative min-h-0 min-w-0">
-            <canvas 
-              ref={canvasRef} 
-              onClick={handleClick} 
+            <canvas
+              ref={canvasRef}
+              onClick={handleClick}
               onMouseMove={handleMouseMove}
               onMouseLeave={handleMouseLeave}
-              className="w-full h-full block cursor-crosshair" 
+              className="w-full h-full block cursor-crosshair"
             />
+
+            {/* Educational empty state over the live sweep */}
+            {nodes.length === 0 && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-center px-6 pointer-events-none">
+                <p className={`text-sm font-bold font-display ${themeClasses.textBold}`}>No signals on radar yet</p>
+                <p className={`text-[11px] max-w-xs leading-relaxed ${themeClasses.textMute}`}>
+                  Your swarm is gathering intelligence. Discovered signals appear as blips: angle = which agent found it, distance = how urgently it needs you.
+                </p>
+              </div>
+            )}
+
+            {/* Color legend */}
+            <div className={`absolute top-3 right-3 z-10 px-3 py-2 rounded-lg border text-[9px] font-mono backdrop-blur pointer-events-none flex flex-col gap-1 ${themeClasses.hudBg}`}>
+              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ background: "#22c55e" }} /> ≥80% verified</span>
+              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ background: "#f59e0b" }} /> 50–79% unsettled</span>
+              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ background: "#ef4444" }} /> &lt;50% / drift</span>
+              <span className={`flex items-center gap-1.5 ${themeClasses.textMute}`}><span className="w-2.5 h-2.5 rounded-full border border-current" /> large = synthesis</span>
+            </div>
 
             {/* Float Coordinates HUD (Bottom Left) */}
             {mousePos && (

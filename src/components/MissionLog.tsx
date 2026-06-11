@@ -24,7 +24,8 @@ export const MissionLog: React.FC<MissionLogProps> = ({ isDark, missions, onOpen
   const sorted = missions.slice().sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
 
   return (
-    <main className="flex-1 max-w-5xl mx-auto w-full p-4 md:p-8 flex flex-col gap-6">
+    <main className="flex-1 overflow-y-auto">
+    <div className="max-w-5xl mx-auto w-full p-4 md:p-8 flex flex-col gap-6">
       <header className="flex flex-col gap-1.5">
         <span className="text-[10px] font-mono tracking-widest text-blue-500 uppercase font-semibold flex items-center gap-1.5">
           <History className="w-3.5 h-3.5" /> Mission Log
@@ -98,6 +99,7 @@ export const MissionLog: React.FC<MissionLogProps> = ({ isDark, missions, onOpen
           );
         })}
       </div>
+    </div>
     </main>
   );
 };

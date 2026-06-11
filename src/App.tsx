@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, FormEvent } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import {
   Bot,
   Loader2,
@@ -54,7 +55,14 @@ import {
   FlaskConical,
   Wand2,
   Maximize,
-  Minimize
+  Minimize,
+  Cpu as CpuChip,
+  PanelRightClose,
+  PanelRightOpen,
+  ChevronUp,
+  ChevronDown,
+  GitBranch,
+  Crosshair
 } from "lucide-react";
 import { Mission, WeaveNode, WeaveEdge, ProposedAction, ActivityFeedEvent, ResearchBrief, AgentStatus, MissionPlanVariant, Profile, ChatTurn, MissionRun, CustomAgent } from "./types.ts";
 import { GreenCredits, PledgeDef } from "./components/GreenCredits.tsx";
@@ -70,6 +78,30 @@ import { TriageBoard } from "./components/TriageBoard.tsx";
 import { MissionReplay } from "./components/MissionReplay.tsx";
 import { SignalRadar } from "./components/SignalRadar.tsx";
 import { MissionPlanner } from "./components/MissionPlanner.tsx";
+import { SettingsModal } from "./components/SettingsModal.tsx";
+import { OnboardingTour, TourStep } from "./components/OnboardingTour.tsx";
+import { Fabric3D } from "./components/Fabric3D.tsx";
+
+// Workspace lens definitions: one fabric, seven complementary views.
+const WORKSPACE_VIEWS = [
+  { key: "canvas", label: "Board", desc: "Evidence Board — drag, connect & correct findings", Icon: Network },
+  { key: "fabric2d", label: "Flow", desc: "Flow Map — auto-laid intelligence pipeline", Icon: GitBranch },
+  { key: "radar", label: "Radar", desc: "Signal Radar — closer to center = higher confidence", Icon: Radar },
+  { key: "fabric3d", label: "Orbit", desc: "Orbit — immersive 3D constellation of the fabric", Icon: Boxes },
+  { key: "vista", label: "Futures", desc: "Temporal Vista — forecast branching scenarios", Icon: Clock },
+  { key: "triage", label: "Triage", desc: "Triage lanes — verified / drift / corrected", Icon: Columns3 },
+  { key: "replay", label: "Replay", desc: "Replay — watch the fabric weave itself, run by run", Icon: History },
+] as const;
+
+type WorkspaceMode = typeof WORKSPACE_VIEWS[number]["key"];
+
+const TOUR_STEPS: TourStep[] = [
+  { target: '[data-tour="rail"]', title: "Watch the swarm work", body: "Eight specialist agents sense, verify, weave and act. Each tile is live: a pulsing ring means that agent is working right now. Click one to open its console." },
+  { target: '[data-tour="views"]', title: "Seven lenses, one fabric", body: "Board for evidence, Radar for confidence at a glance, Orbit for the 3D constellation, Futures for forecasts, Triage for verification, Replay for history. Hover any icon to see what it does." },
+  { target: '[data-tour="stage"]', title: "Explore your intelligence fabric", body: "Every card is a finding with provenance. Drag to pan, scroll to zoom, click any node to inspect its sources and confidence breakdown." },
+  { target: '[data-tour="inspector"]', title: "Inspect, then act", body: "The Inspector shows the selected node's provenance chain, lets you file human-veto corrections, and tracks mission health when nothing is selected." },
+  { target: '[data-tour="feed"]', title: "Live agent feed", body: "The ticker streams what agents are doing in real time. Expand it for the full intelligence brief and one-click proposed actions." },
+];
 
 // Per-agent glyphs for the swarm rail.
 const AGENT_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -95,7 +127,7 @@ export default function App() {
     setFocusedAgent(null);
     setCurrentView("workspace");
   };
-  const [workspaceMode, setWorkspaceMode] = useState<"canvas" | "fabric2d" | "replay" | "triage" | "radar" | "vista">("canvas");
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("canvas");
   const [isMaximized, setIsMaximized] = useState(false);
   const workspaceContainerRef = useRef<HTMLDivElement>(null);
 
@@ -131,6 +163,23 @@ export default function App() {
   const [launched, setLaunched] = useState(false);
   // Live LLM provider chain (Groq → Cerebras → HuggingFace) reported by the backend.
   const [llmProviders, setLlmProviders] = useState<string[]>([]);
+  // Model Control Center (switch provider/model, bring your own keys)
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [activeEngine, setActiveEngine] = useState<{ provider: string; model: string } | null>(null);
+  // Workspace shell: collapsible inspector + expandable intelligence pane
+  const [inspectorOpen, setInspectorOpen] = useState(true);
+  const [footerOpen, setFooterOpen] = useState(false);
+
+  const fetchLlmConfig = async () => {
+    try {
+      const res = await fetch("/api/llm/config");
+      if (res.ok) {
+        const cfg = await res.json();
+        if (cfg?.chain?.length) setActiveEngine({ provider: cfg.chain[0].name, model: cfg.chain[0].model });
+        else setActiveEngine(null);
+      }
+    } catch (err) { console.error("Failed to load LLM config:", err); }
+  };
   
   // Theme State ("dark" | "light")
   const [theme, setTheme] = useState<"dark" | "light">(() => {
@@ -296,6 +345,10 @@ export default function App() {
 
   const selectedMission = missions.find(m => m.id === selectedMissionId) || missions[0];
   const missionRuns = selectedMission?.runs || [];
+  // Which panel the docked inspector shows; most specific selection wins,
+  // falling back to the always-useful Mission Pulse overview.
+  const inspectorContent: "node" | "agent" | "chat" | "agents" | "pulse" =
+    selectedNodeId ? "node" : focusedAgent ? "agent" : chatOpen ? "chat" : customOpen ? "agents" : "pulse";
   // Highlight nodes from the latest run only once a re-sense has happened.
   const newestRunId = missionRuns.length > 1 ? missionRuns[missionRuns.length - 1].id : null;
   const parentMission = selectedMission?.parent_id ? missions.find(m => m.id === selectedMission.parent_id) : undefined;
@@ -312,16 +365,17 @@ export default function App() {
     fetchMissions();
     fetchAgents();
     fetchLlmStatus();
+    fetchLlmConfig();
     fetchPledges();
     fetchProfile(handle);
 
     // Sync theme class to document element
     if (theme === "dark") {
       document.documentElement.classList.add("dark");
-      document.body.className = "bg-[#07090e] text-gray-200 antialiased";
+      document.body.className = "bg-[#05070c] text-[#e6eaf4] antialiased";
     } else {
       document.documentElement.classList.remove("dark");
-      document.body.className = "bg-[#f8fafc] text-slate-800 antialiased";
+      document.body.className = "bg-[#f4f6fb] text-slate-800 antialiased";
     }
     
     try {
@@ -444,23 +498,22 @@ export default function App() {
     };
   }, [draggingNodeId, isPanning, canvasZoom]);
 
-  // Hook to attach non-passive wheel zoom
-  useEffect(() => {
-    const el = canvasRef.current;
-    if (!el) return;
-
-    const onWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      const zoomIntensity = 0.05;
-      const nextZoom = Math.min(Math.max(canvasZoom - e.deltaY * zoomIntensity * 0.01, 0.4), 2.5);
-      setCanvasZoom(nextZoom);
-    };
-
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => {
-      el.removeEventListener("wheel", onWheel);
-    };
-  }, [canvasZoom]);
+  // Non-passive wheel zoom, bound via callback ref so it survives the
+  // animated unmount/remount cycle when switching workspace lenses.
+  const attachCanvasStage = (el: HTMLDivElement | null) => {
+    const prev = canvasRef.current as (HTMLDivElement & { __wheel?: (e: WheelEvent) => void }) | null;
+    if (prev?.__wheel) prev.removeEventListener("wheel", prev.__wheel);
+    (canvasRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
+    if (el) {
+      const onWheel = (e: WheelEvent) => {
+        e.preventDefault();
+        const zoomIntensity = 0.05;
+        setCanvasZoom(z => Math.min(Math.max(z - e.deltaY * zoomIntensity * 0.01, 0.4), 2.5));
+      };
+      (el as HTMLDivElement & { __wheel?: (e: WheelEvent) => void }).__wheel = onWheel;
+      el.addEventListener("wheel", onWheel, { passive: false });
+    }
+  };
 
   // API fetches
   const fetchMissions = async () => {
@@ -554,7 +607,7 @@ export default function App() {
   };
 
   // Open a mission into the live workspace (used by deploy, mission cards, selector).
-  const launchMission = (missionId: string, mode: "canvas" | "fabric2d" | "replay" | "triage" | "radar" | "vista" = "canvas") => {
+  const launchMission = (missionId: string, mode: WorkspaceMode = "canvas") => {
     setSelectedMissionId(missionId);
     setSelectedNodeId(null);
     setFocusedAgent(null);
@@ -1048,60 +1101,48 @@ export default function App() {
   const isDark = theme === "dark";
 
   const t = {
-    bgCanvas: isDark ? "bg-[#07090e]" : "bg-[#f8fafc]",
-    bgContainer: isDark ? "bg-[#07090e] text-gray-200" : "bg-[#f1f5f9] text-slate-800",
-    bgHeader: isDark ? "bg-[#0b0e14]/90 border-white/5" : "bg-white border-slate-200/80 shadow-[0_1px_2px_rgba(0,0,0,0.03)]",
-    bgRail: isDark ? "bg-[#090c12]/80 border-white/5" : "bg-[#f8fafc] border-slate-200/80",
-    bgPane: isDark ? "bg-[#0a0d14]/90 border-white/5" : "bg-white border-slate-200 shadow-[0_-4px_24px_rgba(15,23,42,0.05)]",
-    bgSubBar: isDark ? "bg-[#0b0e15]/60 border-white/5" : "bg-[#f8fafc] border-slate-100",
-    bgCard: isDark ? "bg-[#0b0f19]/90 border-white/5 text-gray-200 shadow-xl" : "bg-white border-slate-200/90 text-slate-800 shadow-[0_4px_12px_rgba(15,23,42,0.04)]",
+    bgCanvas: isDark ? "bg-[#05070c]" : "bg-[#f4f6fb]",
+    bgContainer: isDark ? "bg-[#05070c] text-[#e6eaf4]" : "bg-[#f4f6fb] text-slate-800",
+    bgHeader: isDark ? "border-white/[0.06]" : "border-slate-200/80 shadow-[0_1px_2px_rgba(0,0,0,0.03)]",
+    bgRail: isDark ? "bg-[#07090f]/90 border-white/[0.06]" : "bg-[#fbfcfe] border-slate-200/80",
+    bgPane: isDark ? "bg-[#0a0e17]/95 border-white/[0.06]" : "bg-white border-slate-200 shadow-[0_-4px_24px_rgba(15,23,42,0.05)]",
+    bgSubBar: isDark ? "bg-[#080b12]/85 border-white/[0.06]" : "bg-[#fbfcfe] border-slate-200/70",
+    bgCard: isDark ? "bg-[#0b101b]/90 border-white/[0.06] text-gray-200 shadow-xl shadow-black/20" : "bg-white border-slate-200/90 text-slate-800 shadow-[0_4px_12px_rgba(15,23,42,0.04)]",
     textTitle: isDark ? "text-white" : "text-slate-900 font-semibold",
-    textDesc: isDark ? "text-gray-300" : "text-slate-600",
-    textMute: isDark ? "text-gray-400" : "text-slate-500",
-    bgInner: isDark ? "bg-[#111622]" : "bg-slate-50/90",
-    borderTheme: isDark ? "border-white/5" : "border-slate-100",
-    textOption: isDark ? "bg-[#111622] text-[#e6edf3]" : "bg-white text-slate-800",
-    shadow: isDark ? "shadow-2xl shadow-blue-500/5" : "shadow-md shadow-slate-200",
+    textDesc: isDark ? "text-[#aeb6c8]" : "text-slate-600",
+    textMute: isDark ? "text-[#8b93a7]" : "text-slate-500",
+    bgInner: isDark ? "bg-[#10162a]" : "bg-slate-50/90",
+    borderTheme: isDark ? "border-white/[0.06]" : "border-slate-100",
+    textOption: isDark ? "bg-[#10162a] text-[#e6eaf4]" : "bg-white text-slate-800",
+    shadow: isDark ? "shadow-2xl shadow-indigo-500/5" : "shadow-md shadow-slate-200",
     glow: isDark ? "glow-bg" : "hidden",
-    svgLines: isDark ? "#1e293b" : "#cbd5e1",
-    gridOpacity: isDark ? "opacity-20" : "opacity-[0.06]"
+    svgLines: isDark ? "#23304d" : "#cbd5e1",
+    gridOpacity: isDark ? "opacity-25" : "opacity-[0.05]"
   };
 
   return (
-    <div className={`min-h-screen flex flex-col font-sans transition-colors duration-300 ${t.bgContainer}`}>
-      <style>{`
-        @keyframes scan {
-          0% { top: 0%; opacity: 0; }
-          10% { opacity: 1; }
-          90% { opacity: 1; }
-          100% { top: 100%; opacity: 0; }
-        }
-        .animate-scanner {
-          animation: scan 2.5s linear infinite;
-        }
-      `}</style>
+    <div className={`h-screen flex flex-col font-sans overflow-hidden transition-colors duration-300 ${t.bgContainer}`}>
       {/* Decorative Blur (only shown in dark mode context) */}
       <div className={t.glow}></div>
 
       {/* --- RE-ENGINEERED NAVBAR GLOBAL PANEL --- */}
       {!isMaximized && (
-      <header className={`px-6 py-3.5 sticky top-0 z-40 flex flex-wrap items-center justify-between gap-4 border-b backdrop-blur-md ${t.bgHeader}`}>
+      <header className={`px-6 py-3 sticky top-0 z-30 flex flex-wrap items-center justify-between gap-4 border-b glass ${t.bgHeader}`}>
         {/* LOGO TITLE SECTION */}
         <div className="flex items-center gap-3">
           <div className="relative">
-            <div className="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
+            <div className="w-9 h-9 rounded-xl holo-ring bg-gradient-to-br from-indigo-600 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/25">
               <Network className="w-5 h-5 text-white" />
             </div>
-            {isDark && <div className="absolute -inset-1 rounded-lg bg-blue-500/20 blur opacity-70 -z-10"></div>}
           </div>
           <div>
-            <h1 className={`text-lg font-extrabold tracking-tight flex items-center gap-2 ${t.textTitle}`}>
-              NEBULA
-              <span className="text-[9px] font-mono tracking-widest text-blue-500 bg-blue-100 dark:text-blue-400 dark:bg-blue-900/40 px-1.5 py-0.5 rounded uppercase font-medium">
+            <h1 className={`text-lg font-bold tracking-tight flex items-center gap-2 font-display ${t.textTitle}`}>
+              NEBULA<span className="text-indigo-400">X</span>
+              <span className="text-[9px] font-mono tracking-widest text-indigo-500 bg-indigo-100 dark:text-indigo-300 dark:bg-indigo-500/15 px-1.5 py-0.5 rounded uppercase font-medium">
                 Team Fabric
               </span>
             </h1>
-            <p className="text-[10px] text-slate-400 dark:text-gray-400 font-mono">Autonomous Self-Correcting Web Intelligence Swarm</p>
+            <p className={`text-[10px] font-mono ${t.textMute}`}>Autonomous Self-Correcting Web Intelligence Swarm</p>
           </div>
         </div>
 
@@ -1171,7 +1212,7 @@ export default function App() {
             <div className={`w-px h-4 ${isDark ? "bg-white/10" : "bg-slate-300"}`}></div>
             <div className="flex items-center gap-1.5">
               <div className={`w-2 h-2 rounded-full ${selectedMission?.status === "ready" ? "bg-emerald-500 animate-pulse" : "bg-amber-500 animate-bounce"}`}></div>
-              <span className={`text-[10px] font-mono tracking-wider uppercase ${isDark ? "text-gray-450" : "text-slate-400"}`}>Focus:</span>
+              <span className={`text-[10px] font-mono tracking-wider uppercase ${isDark ? "text-gray-400" : "text-slate-400"}`}>Focus:</span>
             </div>
             <select
               value={selectedMissionId || ""}
@@ -1200,7 +1241,7 @@ export default function App() {
                 value={newPrompt}
                 onChange={e => setNewPrompt(e.target.value)}
                 className={`w-full border rounded-lg py-1.5 pl-8 pr-8 text-xs focus:outline-none focus:border-blue-500 transition-all font-sans ${
-                  isDark ? "bg-[#111622] border-white/5 text-white placeholder-gray-505" : "bg-slate-100 border-slate-200/60 text-slate-800 placeholder-slate-400"
+                  isDark ? "bg-[#111622] border-white/5 text-white placeholder-gray-500" : "bg-slate-100 border-slate-200/60 text-slate-800 placeholder-slate-400"
                 }`}
               />
               <button
@@ -1242,11 +1283,27 @@ export default function App() {
           </button>
         )}
 
+        {/* MODEL CONTROL CENTER */}
+        <button
+          onClick={() => setSettingsOpen(true)}
+          title={activeEngine ? `Engine: ${activeEngine.provider} · ${activeEngine.model} — click to switch models or add API keys` : "Configure an AI model & API keys"}
+          className={`flex items-center gap-2 rounded-lg border px-2.5 py-1.5 transition-all press ${
+            isDark ? "border-white/[0.08] bg-white/[0.03] hover:border-indigo-500/40 hover:bg-indigo-500/10" : "border-slate-200 bg-white hover:border-indigo-400 hover:bg-indigo-50"
+          }`}
+        >
+          <CpuChip className={`w-3.5 h-3.5 ${activeEngine ? "text-indigo-400" : "text-amber-500"}`} />
+          <span className="hidden md:flex flex-col items-start leading-none gap-0.5">
+            <span className={`text-[10px] font-bold ${t.textTitle}`}>{activeEngine ? activeEngine.provider : "No model"}</span>
+            <span className={`text-[8px] font-mono max-w-[110px] truncate ${t.textMute}`}>{activeEngine ? activeEngine.model : "add API key"}</span>
+          </span>
+          <span className={`w-1.5 h-1.5 rounded-full ${activeEngine ? "bg-emerald-400 animate-pulse" : "bg-amber-500"}`} />
+        </button>
+
         {/* LIGHT/DARK MODE TOGGLE BUTTON */}
         <button
           onClick={() => setTheme(prev => prev === "dark" ? "light" : "dark")}
-          className={`p-2 rounded-lg border transition-all outline-none cursor-pointer ${
-            isDark ? "border-white/5 hover:bg-white/5" : "border-slate-200 hover:bg-slate-100"
+          className={`p-2 rounded-lg border transition-all outline-none cursor-pointer press ${
+            isDark ? "border-white/[0.08] hover:bg-white/5" : "border-slate-200 hover:bg-slate-100"
           }`}
           title={`Switch to ${theme === "dark" ? "Light" : "Dark"} Mode`}
         >
@@ -1261,8 +1318,9 @@ export default function App() {
 
       {/* --- VIEW 1: HOME PORTAL / EXPLAINER COCKPIT --- */}
       {currentView === "home" && (
-        <main className="flex-1 max-w-7xl mx-auto w-full p-4 md:p-8 flex flex-col gap-8">
-          
+        <main className="flex-1 overflow-y-auto stage-glow">
+        <div className="max-w-7xl mx-auto w-full p-4 md:p-8 flex flex-col gap-8">
+
           {/* HERO INTRODUCTION PLATFORM */}
           <section className={`relative overflow-hidden grid grid-cols-1 lg:grid-cols-12 gap-8 items-center p-6 md:p-10 rounded-3xl border ${t.bgCard}`}>
             {/* aurora backdrop */}
@@ -1284,12 +1342,10 @@ export default function App() {
                 </span>
               </div>
 
-              <h2 className="text-3xl md:text-5xl font-extrabold tracking-tight leading-[1.05]">
+              <h2 className="text-3xl md:text-5xl font-bold tracking-tight leading-[1.05] font-display">
                 <span className={t.textTitle}>The self-correcting</span>
                 <br />
-                <span className="bg-gradient-to-r from-blue-500 via-cyan-400 to-fuchsia-500 bg-clip-text text-transparent">
-                  team-intelligence fabric
-                </span>
+                <span className="text-indigo-400">team-intelligence fabric</span>
               </h2>
 
               <p className={`text-sm md:text-[15px] leading-relaxed max-w-xl ${t.textDesc}`}>
@@ -1483,22 +1539,30 @@ export default function App() {
               
               {/* Render dynamic missions from database state */}
               {missions.map(mission => {
-                const isPayments = mission.id === "mission-payments";
+                const lastRun = mission.runs?.[mission.runs.length - 1];
+                const freshSignals = (mission.runs?.length || 0) > 1 ? (lastRun?.newSignals || 0) : 0;
                 return (
                   <div
                     key={mission.id}
-                    className={`p-5 rounded-xl border flex flex-col justify-between gap-4 select-none hover:scale-[1.01] transition-all duration-200 cursor-pointer ${
-                      selectedMissionId === mission.id ? "ring-2 ring-blue-500 " + t.bgCard : t.bgCard
+                    className={`p-5 rounded-xl border flex flex-col justify-between gap-4 select-none card-hover cursor-pointer noise relative overflow-hidden ${
+                      selectedMissionId === mission.id ? "ring-2 ring-indigo-500 " + t.bgCard : t.bgCard
                     }`}
                     onClick={() => launchMission(mission.id, "canvas")}
                   >
-                    <div className="flex flex-col gap-1.5">
+                    <div className="relative z-10 flex flex-col gap-1.5">
                       <div className="flex justify-between items-center text-[10px] font-mono leading-none">
-                        <span className="text-blue-500 font-bold uppercase">Mission ID: {mission.id.split("-").pop()}</span>
-                        <span className={`px-2 py-0.5 rounded font-bold uppercase ${
-                          mission.status === "ready" ? "bg-emerald-500/10 text-emerald-500" : "bg-amber-500/10 text-amber-500"
-                        }`}>
-                          {mission.status}
+                        <span className="text-indigo-400 font-bold uppercase">Mission ID: {mission.id.split("-").pop()}</span>
+                        <span className="flex items-center gap-1.5">
+                          {freshSignals > 0 && (
+                            <span className="px-1.5 py-0.5 rounded-full font-bold bg-emerald-500 text-white animate-pulse" title={`${freshSignals} new signal(s) since the previous run`}>
+                              +{freshSignals} new
+                            </span>
+                          )}
+                          <span className={`px-2 py-0.5 rounded font-bold uppercase ${
+                            mission.status === "ready" ? "bg-emerald-500/10 text-emerald-500" : "bg-amber-500/10 text-amber-500"
+                          }`}>
+                            {mission.status}
+                          </span>
                         </span>
                       </div>
                       
@@ -1553,6 +1617,7 @@ export default function App() {
             </div>
           </section>
 
+        </div>
         </main>
       )}
 
@@ -1635,18 +1700,18 @@ export default function App() {
       {currentView === "workspace" && launched && (
         <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative select-none">
           
-          {/* --- LEFT SIDE: SWARM MONITORING RAIL --- */}
+          {/* --- LEFT SIDE: LIVE AGENT STATUS RAIL --- */}
           {!isMaximized && (
-          <aside className={`w-full md:w-36 px-2.5 py-4 flex flex-row md:flex-col gap-3 justify-between md:justify-start items-stretch border-r overflow-x-auto select-none ${t.bgRail}`}>
+          <aside data-tour="rail" className={`w-full md:w-44 px-2.5 py-3 flex flex-row md:flex-col gap-2 justify-start items-stretch border-r overflow-x-auto md:overflow-y-auto select-none ${t.bgRail}`}>
             <div className="flex items-center gap-2 pb-2 md:border-b border-slate-200/50 dark:border-white/5 px-1 flex-shrink-0 select-none">
-              <Bot className="w-4 h-4 text-blue-500 dark:text-blue-400" />
-              <span className="text-[10px] font-mono tracking-widest text-slate-500 dark:text-gray-400 uppercase font-bold">
-                SWARM RAILS
+              <Bot className="w-4 h-4 text-indigo-400" />
+              <span className={`text-[10px] font-mono tracking-widest uppercase font-bold ${t.textMute}`}>
+                Agent Swarm
               </span>
             </div>
 
-            <div className="flex flex-row md:flex-col gap-2 w-full flex-shrink-0">
-              {agents.map(a => {
+            <div className="flex flex-row md:flex-col gap-1.5 w-full flex-shrink-0">
+              {agents.map((a, ai) => {
                 const currentWork = getAgentWorkingLabel(a.id);
                 const isWorking = currentWork === "working" || runningAgentId === a.id;
                 const isFocused = focusedAgent?.id === a.id;
@@ -1657,87 +1722,87 @@ export default function App() {
                   e => e.sender.toLowerCase() === a.id.toLowerCase() || e.sender.toLowerCase() === a.name.toLowerCase()
                 );
 
-                let completeStatus = "STANDBY";
-                let completeLabel = "Listening signals";
+                let completeLabel = "Standing by";
                 if (selectedMission?.status === "ready") {
-                  completeStatus = "STABLE";
                   if (a.id === "conductor") completeLabel = "Orchestration OK";
-                  else if (a.id === "pathfinder") completeLabel = "Signal files crawled";
+                  else if (a.id === "pathfinder") completeLabel = "Signals crawled";
                   else if (a.id === "veritas") completeLabel = "Citations verified";
-                  else if (a.id === "cartographer") completeLabel = "Weave graph laid out";
-                  else if (a.id === "sentinel") completeLabel = "Contradictions resolved";
+                  else if (a.id === "cartographer") completeLabel = "Graph laid out";
+                  else if (a.id === "sentinel") completeLabel = "Drift watch clear";
                   else if (a.id === "oracle") completeLabel = "Strategy ready";
                   else if (a.id === "scribe") completeLabel = "Provenance indexed";
-                  else if (a.id === "actor") completeLabel = "Proposed action ready";
+                  else if (a.id === "actor") completeLabel = "Actions drafted";
                 }
-
                 const subLine = isWorking ? (liveEvent?.message || a.task) : (liveEvent?.message || completeLabel);
+                const nodesByAgent = nodes.filter(n => n.source.toLowerCase().includes(a.id)).length;
 
                 return (
-                  <div
+                  <motion.button
                     key={a.id}
+                    initial={{ opacity: 0, x: -14 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: ai * 0.04, duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
                     onClick={() => {
-                      setSelectedNodeId(null);
-                      setFocusedAgent(a);
+                      setSelectedNodeId(null); setChatOpen(false); setCustomOpen(false);
+                      setFocusedAgent(isFocused ? null : a);
                     }}
-                    title={`${a.name}: ${a.task} (Click to inspect console)`}
-                    className={`flex flex-col gap-1 p-2 rounded-lg border text-left transition-all relative cursor-pointer select-none overflow-hidden ${
+                    title={`${a.name}: ${a.task} — click to open console`}
+                    className={`flex flex-col gap-1 p-2 rounded-xl border text-left transition-all relative cursor-pointer select-none overflow-hidden min-w-[148px] md:min-w-0 press ${
                       isWorking ? "agent-working" : ""
                     } ${
                       isFocused
-                        ? "bg-blue-600/10 border-blue-500 ring-1 ring-blue-500/35 shadow-lg shadow-blue-500/10 active:scale-[0.98]"
+                        ? "bg-indigo-600/10 border-indigo-500/70 ring-1 ring-indigo-500/35 shadow-lg shadow-indigo-500/10"
                         : isWorking
-                        ? "bg-blue-500/10 border-blue-500/50 active:scale-[0.98]"
-                        : "bg-black/5 border-slate-200 dark:bg-[#0f1420]/30 dark:border-white/5 hover:bg-slate-100 dark:hover:bg-[#0f1420]/60 hover:shadow-md hover:border-slate-300 dark:hover:border-white/10 active:scale-[0.98]"
+                        ? "bg-indigo-500/10 border-indigo-500/50"
+                        : "bg-black/5 border-slate-200 dark:bg-white/[0.02] dark:border-white/[0.06] hover:bg-slate-100 dark:hover:bg-white/[0.05] hover:border-slate-300 dark:hover:border-white/15"
                     }`}
                   >
                     {/* Active Laser Sweep */}
                     {isWorking && (
-                      <div className="absolute inset-x-0 h-[1.5px] bg-blue-500/80 animate-scanner pointer-events-none" />
+                      <div className="absolute inset-x-0 h-[1.5px] bg-indigo-400/80 animate-scanner pointer-events-none" />
                     )}
 
-                    <div className="flex items-center gap-1.5 select-none">
-                      {/* glowing agent avatar */}
-                      <span
-                        className={`relative w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 transition-all ${
-                          isWorking
-                            ? "bg-blue-500 text-white"
-                            : selectedMission?.status === "ready"
-                            ? "bg-emerald-500/15 text-emerald-500"
-                            : isDark ? "bg-white/5 text-gray-400" : "bg-slate-200 text-slate-500"
-                        }`}
-                      >
-                        <AgentIcon className={`w-3 h-3 ${isWorking ? "animate-pulse" : ""}`} />
-                        {isWorking && <span className="absolute -inset-0.5 rounded-md bg-blue-500/40 blur animate-pulse -z-10" />}
+                    <div className="flex items-center gap-2 select-none">
+                      {/* agent avatar with status ring */}
+                      <span className="relative flex-shrink-0">
+                        <span
+                          className={`relative w-6 h-6 rounded-lg flex items-center justify-center transition-all ${
+                            isWorking
+                              ? "bg-indigo-500 text-white"
+                              : selectedMission?.status === "ready"
+                              ? "bg-emerald-500/15 text-emerald-400"
+                              : isDark ? "bg-white/5 text-gray-400" : "bg-slate-200 text-slate-500"
+                          }`}
+                        >
+                          <AgentIcon className="w-3.5 h-3.5" />
+                        </span>
+                        {isWorking && (
+                          <span className="absolute -inset-[3px] rounded-lg border-2 border-transparent border-t-indigo-400 spin-ring pointer-events-none" />
+                        )}
                       </span>
-                      <span className="text-[11px] font-bold text-slate-900 dark:text-white font-display truncate flex-1">
+                      <span className={`text-[11px] font-bold font-display truncate flex-1 ${t.textTitle}`}>
                         {a.name}
                       </span>
-                      <div
+                      <span
                         className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
                           isWorking
-                            ? "bg-blue-400 animate-ping"
+                            ? "bg-indigo-400 animate-ping"
                             : selectedMission?.status === "ready"
-                            ? "bg-emerald-500/60 animate-pulse"
-                            : "bg-slate-400"
+                            ? "bg-emerald-400 animate-pulse"
+                            : "bg-slate-400/70"
                         }`}
-                      ></div>
+                      />
                     </div>
 
-                    <span className={`text-[7.5px] font-mono truncate tracking-wide flex items-center gap-1 ${
-                      isWorking
-                        ? "text-blue-500 dark:text-blue-400 font-bold"
-                        : selectedMission?.status === "ready"
-                        ? "text-emerald-500 dark:text-emerald-400"
-                        : "text-slate-400 dark:text-gray-400"
+                    <p className={`text-[8.5px] leading-snug line-clamp-2 min-h-[20px] ${
+                      isWorking ? "text-indigo-500 dark:text-indigo-300 font-semibold" : t.textMute
                     }`}>
-                      <span className={`w-1 h-1 rounded-full ${isWorking ? "bg-blue-400 animate-pulse" : "bg-current"}`} />
-                      {isWorking ? "DECODING" : completeStatus}
-                    </span>
-                    <p className="text-[7.5px] text-slate-400 dark:text-slate-500 leading-snug line-clamp-2 min-h-[18px]">
                       {subLine}
                     </p>
-                  </div>
+                    {nodesByAgent > 0 && (
+                      <span className={`text-[7.5px] font-mono tabular ${t.textMute}`}>{nodesByAgent} node{nodesByAgent > 1 ? "s" : ""} woven</span>
+                    )}
+                  </motion.button>
                 );
               })}
             </div>
@@ -1745,87 +1810,82 @@ export default function App() {
           )}
 
           {/* --- MAIN CENTER: VIEWPORT, CANVAS AND GRAPH PANEL --- */}
-          <main className={`flex-1 flex flex-col min-w-0 ${t.bgCanvas} overflow-hidden relative ${isMaximized ? 'bg-[#06080d] dark:bg-[#06080d] z-[100]' : ''}`} ref={workspaceContainerRef}>
+          <main className={`flex-1 flex flex-col min-w-0 ${t.bgCanvas} overflow-hidden relative ${isMaximized ? 'bg-[#05070c] dark:bg-[#05070c] z-[100]' : ''}`} ref={workspaceContainerRef}>
 
-            {/* BACKGROUND MATRIX GRID */}
-            <div
-              className={`absolute inset-0 pointer-events-none transition-opacity ${t.gridOpacity}`}
-              style={{
-                backgroundImage: "radial-gradient(rgba(148,163,184,0.15) 1.5px, transparent 1.5px)",
-                backgroundSize: `${24 * canvasZoom}px ${24 * canvasZoom}px`,
-                backgroundPosition: `${canvasPan.x}px ${canvasPan.y}px`
-              }}
-            ></div>
-            
             {/* STATIC SUBBAR STATUS NOTIFIER */}
             {!isMaximized && (
-            <section className={`px-4 py-2 block xl:flex items-center justify-between z-10 text-xs border-b ${t.bgSubBar}`}>
-              <div className="flex items-center gap-2 mb-2 xl:mb-0">
-                <span className="text-slate-400 dark:text-gray-400 font-mono hidden sm:inline">Telemetry Focus:</span>
+            <section className={`px-3 py-1.5 flex items-center justify-between gap-3 z-10 text-xs border-b glass ${t.bgSubBar}`}>
+              {/* mission focus + run history */}
+              <div className="flex items-center gap-2 min-w-0 flex-1">
                 {parentMission && (
                   <button
                     onClick={() => launchMission(parentMission.id, workspaceMode)}
                     title={`Deep-dive of: ${parentMission.prompt}`}
-                    className="flex items-center gap-1 text-[10px] font-mono text-fuchsia-500 bg-fuchsia-500/10 border border-fuchsia-500/20 rounded px-1.5 py-0.5 hover:bg-fuchsia-500/20"
+                    className="flex-shrink-0 flex items-center gap-1 text-[10px] font-mono text-fuchsia-500 bg-fuchsia-500/10 border border-fuchsia-500/20 rounded px-1.5 py-0.5 hover:bg-fuchsia-500/20"
                   >
                     <FlaskConical className="w-3 h-3" />
                     deep-dive ↑
                   </button>
                 )}
-                <span className="font-extrabold text-blue-600 dark:text-blue-300 truncate max-w-[200px] sm:max-w-xs md:max-w-md xl:max-w-lg">
-                  "{selectedMission?.prompt}"
+                <Crosshair className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0 hidden sm:block" />
+                <span className={`font-bold truncate font-display ${t.textTitle}`} title={selectedMission?.prompt}>
+                  {selectedMission?.prompt}
                 </span>
+                {/* run timeline strip: one dot per sensing pass */}
+                {missionRuns.length > 0 && (
+                  <span className="hidden xl:flex items-center gap-1 flex-shrink-0 pl-1" title={missionRuns[missionRuns.length - 1]?.summary || "Run history"}>
+                    {missionRuns.slice(-8).map((r, i) => (
+                      <span
+                        key={r.id}
+                        title={`Run ${r.index} · ${r.trigger} · ${r.newSignals} new signal(s)`}
+                        className={`w-1.5 h-1.5 rounded-full transition-all ${
+                          i === Math.min(missionRuns.length, 8) - 1 ? "bg-indigo-400 scale-125" : isDark ? "bg-white/20" : "bg-slate-300"
+                        }`}
+                      />
+                    ))}
+                    <span className={`text-[9px] font-mono tabular ${t.textMute}`}>{missionRuns.length} run{missionRuns.length > 1 ? "s" : ""}</span>
+                  </span>
+                )}
               </div>
-              
-              <div className="flex items-center flex-wrap gap-3 mt-2 md:mt-0 select-none">
-                
-                {/* VIEW TABS — five interactive lenses over the same fabric */}
-                <div className={`flex items-center rounded-lg p-0.5 border ${
-                  isDark ? "bg-[#0b0e14]/80 border-white/5" : "bg-slate-100 border-slate-200"
+
+              <div className="flex items-center gap-2 select-none flex-shrink-0">
+                {/* VIEW SWITCHER — six lenses over the same fabric */}
+                <div data-tour="views" className={`flex items-center rounded-lg p-0.5 border ${
+                  isDark ? "bg-black/30 border-white/[0.07]" : "bg-slate-100 border-slate-200"
                 }`}>
-                  {([
-                    { key: "canvas", label: "Canvas", Icon: Network },
-                    { key: "fabric2d", label: "2D Fabric", Icon: Boxes },
-                    { key: "replay", label: "Replay", Icon: History },
-                    { key: "triage", label: "Triage", Icon: Columns3 },
-                    { key: "radar", label: "Radar", Icon: Radar },
-                    { key: "vista", label: "Vista", Icon: Clock }
-                  ] as const).map(({ key, label, Icon }) => (
+                  {WORKSPACE_VIEWS.map(({ key, label, desc, Icon }) => (
                     <button
                       key={key}
                       onClick={() => setWorkspaceMode(key)}
-                      className={`px-2.5 py-1 text-[10px] sm:text-xs font-mono rounded-md transition-colors flex items-center gap-1.5 ${
+                      title={desc}
+                      className={`relative px-2 py-1 text-[10px] font-semibold rounded-md transition-colors flex items-center gap-1.5 ${
                         workspaceMode === key
-                          ? isDark ? "bg-white/10 text-white shadow" : "bg-white text-blue-700 shadow border-slate-200/50"
-                          : isDark ? "text-slate-400 hover:text-gray-300" : "text-slate-500 hover:text-slate-700"
+                          ? "text-white"
+                          : isDark ? "text-slate-400 hover:text-gray-200" : "text-slate-500 hover:text-slate-800"
                       }`}
                     >
-                      <Icon className="w-3 h-3" />
-                      <span className="hidden sm:inline">{label}</span>
+                      {workspaceMode === key && (
+                        <motion.span
+                          layoutId="viewPill"
+                          transition={{ type: "spring", stiffness: 480, damping: 36 }}
+                          className="absolute inset-0 rounded-md bg-indigo-600 shadow-md shadow-indigo-600/30"
+                        />
+                      )}
+                      <Icon className="w-3.5 h-3.5 relative z-10" />
+                      <span className="hidden lg:inline relative z-10">{label}</span>
                     </button>
                   ))}
                 </div>
 
-                {/* runs badge */}
-                {(selectedMission?.runs?.length || 0) > 0 && (
-                  <span
-                    title={selectedMission?.runs?.[selectedMission.runs.length - 1]?.summary || "Run history"}
-                    className={`hidden sm:flex items-center gap-1 rounded px-2 py-0.5 border text-[10px] font-mono ${
-                      isDark ? "bg-white/5 text-gray-400 border-white/10" : "bg-slate-100 text-slate-500 border-slate-200"
-                    }`}
-                  >
-                    <History className="w-3 h-3" />
-                    {selectedMission!.runs!.length} run{selectedMission!.runs!.length > 1 ? "s" : ""}
-                  </span>
-                )}
+                <div className={`w-px h-5 ${isDark ? "bg-white/10" : "bg-slate-200"}`} />
 
                 {/* Re-sense */}
                 <button
                   onClick={() => handleResense("resense")}
                   disabled={resensing || selectedMission?.status !== "ready"}
                   title={`Re-sense for fresh signals (${deployCost} credits)`}
-                  className={`text-[10px] sm:text-xs font-mono px-2.5 py-1.5 border rounded-lg transition-all flex items-center gap-1.5 disabled:opacity-50 select-none cursor-pointer ${
-                    isDark ? "text-blue-300 hover:text-white bg-blue-500/10 border-blue-500/20 hover:border-blue-500/40" : "text-blue-600 hover:text-blue-700 bg-blue-50 border-blue-200 hover:border-blue-300"
+                  className={`text-[10px] font-semibold px-2.5 py-1.5 border rounded-lg transition-all flex items-center gap-1.5 disabled:opacity-50 select-none press ${
+                    isDark ? "text-indigo-300 hover:text-white bg-indigo-500/10 border-indigo-500/25 hover:border-indigo-500/50" : "text-indigo-600 hover:text-indigo-700 bg-indigo-50 border-indigo-200 hover:border-indigo-300"
                   }`}
                 >
                   <RotateCcw className={`w-3 h-3 ${resensing ? "animate-spin" : ""}`} />
@@ -1837,10 +1897,10 @@ export default function App() {
                   onClick={toggleMonitor}
                   disabled={!selectedMission}
                   title={selectedMission?.monitoring ? "Live monitor ON — auto re-senses every 45s. Click to stop." : "Turn on live monitoring (auto re-sense)"}
-                  className={`text-[10px] sm:text-xs font-mono px-2.5 py-1.5 border rounded-lg transition-all flex items-center gap-1.5 select-none cursor-pointer ${
+                  className={`text-[10px] font-semibold px-2.5 py-1.5 border rounded-lg transition-all flex items-center gap-1.5 select-none press ${
                     selectedMission?.monitoring
-                      ? "text-emerald-500 bg-emerald-500/10 border-emerald-500/40"
-                      : isDark ? "text-gray-300 hover:text-white bg-white/5 border-white/5 hover:border-white/10" : "text-slate-600 hover:text-emerald-600 bg-slate-200/55 border-slate-300/40"
+                      ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/40"
+                      : isDark ? "text-gray-300 hover:text-white bg-white/5 border-white/[0.07] hover:border-white/15" : "text-slate-600 hover:text-emerald-600 bg-white border-slate-200"
                   }`}
                 >
                   <Radio className={`w-3 h-3 ${selectedMission?.monitoring ? "animate-pulse" : ""}`} />
@@ -1849,12 +1909,12 @@ export default function App() {
 
                 {/* Ask the Fabric */}
                 <button
-                  onClick={() => { setSelectedNodeId(null); setFocusedAgent(null); setChatOpen(v => !v); }}
-                  title="Chat with this mission's fabric"
-                  className={`text-[10px] sm:text-xs font-mono px-2.5 py-1.5 border rounded-lg transition-all flex items-center gap-1.5 select-none cursor-pointer ${
+                  onClick={() => { setSelectedNodeId(null); setFocusedAgent(null); setCustomOpen(false); setChatOpen(v => !v); }}
+                  title="Chat with this mission's fabric — answers cite their evidence"
+                  className={`text-[10px] font-semibold px-2.5 py-1.5 border rounded-lg transition-all flex items-center gap-1.5 select-none press ${
                     chatOpen
-                      ? "text-blue-500 bg-blue-500/10 border-blue-500/40"
-                      : isDark ? "text-gray-300 hover:text-white bg-white/5 border-white/5 hover:border-white/10" : "text-slate-600 hover:text-blue-600 bg-slate-200/55 border-slate-300/40"
+                      ? "text-indigo-400 bg-indigo-500/10 border-indigo-500/40"
+                      : isDark ? "text-gray-300 hover:text-white bg-white/5 border-white/[0.07] hover:border-white/15" : "text-slate-600 hover:text-indigo-600 bg-white border-slate-200"
                   }`}
                 >
                   <MessageSquare className="w-3 h-3" />
@@ -1864,11 +1924,11 @@ export default function App() {
                 {/* Custom agents */}
                 <button
                   onClick={() => { setSelectedNodeId(null); setFocusedAgent(null); setChatOpen(false); setCustomOpen(v => !v); }}
-                  title="Build & run your own agents on this mission"
-                  className={`text-[10px] sm:text-xs font-mono px-2.5 py-1.5 border rounded-lg transition-all flex items-center gap-1.5 select-none cursor-pointer ${
+                  title="Build & run your own specialist agents on this mission"
+                  className={`text-[10px] font-semibold px-2.5 py-1.5 border rounded-lg transition-all flex items-center gap-1.5 select-none press ${
                     customOpen
-                      ? "text-fuchsia-500 bg-fuchsia-500/10 border-fuchsia-500/40"
-                      : isDark ? "text-gray-300 hover:text-white bg-white/5 border-white/5 hover:border-white/10" : "text-slate-600 hover:text-fuchsia-600 bg-slate-200/55 border-slate-300/40"
+                      ? "text-fuchsia-400 bg-fuchsia-500/10 border-fuchsia-500/40"
+                      : isDark ? "text-gray-300 hover:text-white bg-white/5 border-white/[0.07] hover:border-white/15" : "text-slate-600 hover:text-fuchsia-600 bg-white border-slate-200"
                   }`}
                 >
                   <Wand2 className="w-3 h-3" />
@@ -1878,64 +1938,136 @@ export default function App() {
                 <button
                   onClick={handleTriggerReweave}
                   disabled={reweaving || selectedMission?.status !== "ready"}
-                  className={`text-[10px] sm:text-xs font-mono px-2.5 py-1.5 border rounded-lg transition-all flex items-center gap-1.5 disabled:opacity-50 select-none cursor-pointer ${
-                    isDark ? "text-gray-300 hover:text-white bg-white/5 border-white/5 hover:border-white/10" : "text-slate-600 hover:text-blue-600 bg-slate-200/55 border-slate-300/40 hover:border-slate-300"
+                  title="Re-weave: heal confidence propagation across the fabric"
+                  className={`text-[10px] font-semibold px-2.5 py-1.5 border rounded-lg transition-all flex items-center gap-1.5 disabled:opacity-50 select-none press ${
+                    isDark ? "text-gray-300 hover:text-white bg-white/5 border-white/[0.07] hover:border-white/15" : "text-slate-600 hover:text-indigo-600 bg-white border-slate-200"
                   }`}
                 >
                   <RefreshCw className={`w-3 h-3 ${reweaving ? "animate-spin" : ""}`} />
                   <span className="hidden lg:inline">Re-Weave</span>
                 </button>
+
+                <div className={`w-px h-5 ${isDark ? "bg-white/10" : "bg-slate-200"}`} />
+
+                {/* Inspector dock toggle */}
+                <button
+                  onClick={() => setInspectorOpen(v => !v)}
+                  title={inspectorOpen ? "Hide inspector panel" : "Show inspector panel"}
+                  className={`hidden lg:flex p-1.5 border rounded-lg transition-all press ${
+                    isDark ? "text-gray-300 hover:text-white bg-white/5 border-white/[0.07] hover:border-white/15" : "text-slate-600 bg-white border-slate-200 hover:border-slate-300"
+                  }`}
+                >
+                  {inspectorOpen ? <PanelRightClose className="w-3.5 h-3.5" /> : <PanelRightOpen className="w-3.5 h-3.5" />}
+                </button>
+
+                {/* Fullscreen */}
+                <button
+                  onClick={toggleMaximize}
+                  title="Fullscreen workspace"
+                  className={`p-1.5 border rounded-lg transition-all press ${
+                    isDark ? "text-gray-300 hover:text-white bg-white/5 border-white/[0.07] hover:border-white/15" : "text-slate-600 bg-white border-slate-200 hover:border-slate-300"
+                  }`}
+                >
+                  <Maximize className="w-3.5 h-3.5" />
+                </button>
               </div>
             </section>
             )}
 
-            {/* --- WORKSPACE GUIDE (dismissible "what am I looking at?") --- */}
-            {showGuide && !isMaximized && (
-              <div className={`flex items-center gap-3 px-4 py-2 border-b text-[11px] z-10 ${isDark ? "bg-blue-500/[0.06] border-blue-500/15 text-gray-300" : "bg-blue-50/70 border-blue-100 text-slate-600"}`}>
-                <Info className="w-4 h-4 text-blue-500 flex-shrink-0" />
-                <div className="flex-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <span><span className="font-bold text-blue-500">①</span> Each card is a verified finding (●&nbsp;LIVE = real source).</span>
-                  <span><span className="font-bold text-blue-500">②</span> <span className="font-semibold">Re-sense</span> for fresh data · <span className="font-semibold">Ask Fabric</span> to query it · <span className="font-semibold">Monitor</span> to auto-track.</span>
-                  <span><span className="font-bold text-blue-500">③</span> Read the brief &amp; approve next steps in <span className="font-semibold">Proposed Actions</span> below.</span>
+            {/* --- PIPELINE STAGE LOADER --- */}
+            {selectedMission && ["queued", "sensing", "reasoning", "synthesizing"].includes(selectedMission.status) && (
+              <div className={`relative overflow-hidden border-b py-2 px-4 flex items-center justify-between gap-3 z-10 select-none ${
+                isDark ? "bg-indigo-500/[0.06] border-indigo-500/15" : "bg-indigo-50/70 border-indigo-100"
+              }`}>
+                <div className="absolute inset-x-0 bottom-0 h-[2px] overflow-hidden">
+                  <div className="h-full w-1/3 bg-gradient-to-r from-transparent via-indigo-400 to-transparent sweep-x" />
                 </div>
-                <button onClick={dismissGuide} className={`flex-shrink-0 p-1 rounded ${isDark ? "hover:bg-white/10 text-gray-400" : "hover:bg-blue-100 text-slate-400"}`} title="Got it">
-                  <X className="w-3.5 h-3.5" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin text-indigo-400 flex-shrink-0" />
+                  <span className={`text-[11px] font-semibold ${t.textTitle}`}>
+                    {selectedMission.status === "sensing"
+                      ? "Pathfinder is reading live web pages…"
+                      : selectedMission.status === "reasoning"
+                      ? "Veritas is verifying claims & scoring credibility…"
+                      : selectedMission.status === "synthesizing"
+                      ? "Scribe is weaving the traceable brief…"
+                      : "Conductor is planning the swarm deployment…"}
+                  </span>
+                </div>
+                <div className="hidden sm:flex items-center gap-1">
+                  {(["sensing", "reasoning", "synthesizing"] as const).map((stage, i) => {
+                    const order = ["queued", "sensing", "reasoning", "synthesizing"];
+                    const cur = order.indexOf(selectedMission.status);
+                    const mine = order.indexOf(stage);
+                    const state = cur > mine ? "done" : cur === mine ? "active" : "wait";
+                    return (
+                      <span key={stage} className={`flex items-center gap-1 text-[9px] font-mono uppercase tracking-wide px-2 py-0.5 rounded-full border ${
+                        state === "done" ? "text-emerald-400 border-emerald-500/30 bg-emerald-500/10"
+                        : state === "active" ? "text-indigo-300 border-indigo-500/40 bg-indigo-500/15 animate-pulse"
+                        : isDark ? "text-gray-500 border-white/10" : "text-slate-400 border-slate-200"
+                      }`}>
+                        {state === "done" ? <Check className="w-2.5 h-2.5" /> : <span className={`w-1.5 h-1.5 rounded-full ${state === "active" ? "bg-indigo-400" : "bg-current opacity-40"}`} />}
+                        {stage}
+                      </span>
+                    );
+                  })}
+                </div>
               </div>
             )}
 
-            {/* --- PIPELINE ANIMATION STEP LOADER --- */}
-            {selectedMission && ["queued", "sensing", "reasoning", "synthesizing"].includes(selectedMission.status) && (
-              <div className="bg-blue-500/5 border-b border-blue-500/20 py-2.5 px-6 flex items-center justify-between z-10 animate-pulse text-xs text-blue-700 dark:text-blue-200 select-none">
-                <div className="flex items-center gap-3">
-                  <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
-                  <div className="font-mono">
-                    <span className="text-blue-600 dark:text-blue-400 font-bold uppercase mr-1.5">
-                      [Swarm Mining Web Signals]
-                    </span>
-                    Conductor cell active:
-                    <span className="text-emerald-600 dark:text-teal-300 ml-1">
-                      {selectedMission.status === "sensing"
-                        ? "Pathfinder scanning crawled indexed URLs..."
-                        : selectedMission.status === "reasoning"
-                        ? "Veritas executing credibility metrics check..."
-                        : "Scribe writing traceable brief telemetry..."}
-                    </span>
+            {/* ════ INNER ROW: stage column + docked inspector ════ */}
+            <div className="flex-1 flex min-h-0 relative">
+              {/* ── STAGE COLUMN ── */}
+              <div className="flex-1 flex flex-col min-w-0 relative">
+
+                {/* BACKGROUND MATRIX GRID (pan-aware) */}
+                <div
+                  className={`absolute inset-0 pointer-events-none transition-opacity ${t.gridOpacity}`}
+                  style={{
+                    backgroundImage: "radial-gradient(ellipse 60% 50% at 50% 40%, var(--nx-glow-accent), transparent 70%), radial-gradient(rgba(148,163,184,0.16) 1.5px, transparent 1.5px)",
+                    backgroundSize: `100% 100%, ${24 * canvasZoom}px ${24 * canvasZoom}px`,
+                    backgroundPosition: `0 0, ${canvasPan.x}px ${canvasPan.y}px`
+                  }}
+                ></div>
+
+                {/* Floating fullscreen HUD: restore + view switching while maximized */}
+                {isMaximized && (
+                  <div className="absolute top-3 right-3 z-30 flex items-center gap-1.5 p-1.5 rounded-xl border glass border-white/10 shadow-2xl">
+                    {WORKSPACE_VIEWS.map(({ key, desc, Icon }) => (
+                      <button
+                        key={key}
+                        onClick={() => setWorkspaceMode(key)}
+                        title={desc}
+                        className={`p-1.5 rounded-lg transition-colors ${
+                          workspaceMode === key ? "bg-indigo-600 text-white" : "text-gray-400 hover:text-white hover:bg-white/10"
+                        }`}
+                      >
+                        <Icon className="w-3.5 h-3.5" />
+                      </button>
+                    ))}
+                    <div className="w-px h-4 bg-white/10" />
+                    <button onClick={toggleMaximize} title="Exit fullscreen" className="p-1.5 rounded-lg text-gray-300 hover:text-white hover:bg-white/10">
+                      <Minimize className="w-3.5 h-3.5" />
+                    </button>
                   </div>
-                </div>
-                
-                <div className={`text-[10px] font-mono px-2 py-0.5 border rounded ${
-                  isDark ? "bg-blue-900/30 text-blue-350 border-blue-500/20" : "bg-blue-100 text-blue-750 border-blue-550/10"
-                }`}>
-                  PIPELINE: {selectedMission.status.toUpperCase()}
-                </div>
-              </div>
-            )}
+                )}
+
+                {/* ── VIEW STAGE with animated lens transitions ── */}
+                <div data-tour="stage" className="flex-1 min-h-0 relative">
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={workspaceMode}
+                      initial={{ opacity: 0, x: 18, scale: 0.995 }}
+                      animate={{ opacity: 1, x: 0, scale: 1 }}
+                      exit={{ opacity: 0, x: -12, scale: 0.995 }}
+                      transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+                      className="absolute inset-0 flex flex-col"
+                    >
 
             {/* --- COGNITIVE WEAVE INFINITY CANVAS VIEWPORT --- */}
             {workspaceMode === "canvas" && (
             <div 
-              ref={canvasRef}
+              ref={attachCanvasStage}
               onMouseDown={handleCanvasMouseDown}
               className="flex-1 relative overflow-hidden flex items-center justify-center cursor-grab active:cursor-grabbing p-4"
               style={{ cursor: isPanning ? 'grabbing' : 'grab' }}
@@ -1950,7 +2082,7 @@ export default function App() {
                 </div>
                 <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col gap-1.5 p-3.5 w-full">
                   <span className={`font-extrabold mb-1.5 border-b pb-1 flex items-center gap-1.5 select-none text-[10px] ${
-                    isDark ? "text-gray-200 border-white/5" : "text-slate-850 border-slate-200/80"
+                    isDark ? "text-gray-200 border-white/5" : "text-slate-800 border-slate-200/80"
                   }`}>
                     <Info className="w-3.5 h-3.5 text-blue-500" />
                     CANVAS INTERACTION PROTOCOL
@@ -1975,16 +2107,30 @@ export default function App() {
 
               {/* EMPTY WORKSPACE STATE */}
               {nodes.length === 0 && (
-                <div className="text-center p-6 z-10 select-none">
-                  <div className="w-14 h-14 rounded-full bg-slate-200/50 dark:bg-[#111622] border border-slate-200 dark:border-white/5 flex items-center justify-center mx-auto mb-4 animate-bounce">
-                    <Network className="w-7 h-7 text-blue-500" />
+                <div className="text-center p-6 z-10 select-none max-w-md">
+                  <div className="w-16 h-16 rounded-2xl holo-ring bg-indigo-500/10 border border-indigo-500/25 flex items-center justify-center mx-auto mb-4 float-y">
+                    <Network className="w-8 h-8 text-indigo-400" />
                   </div>
-                  <h3 className="text-base font-extrabold text-slate-900 dark:text-white font-display mb-1">
-                    Swarm Network Idle
+                  <h3 className={`text-lg font-bold font-display mb-1.5 ${t.textTitle}`}>
+                    Your intelligence fabric starts here
                   </h3>
-                  <p className="text-xs text-slate-400 dark:text-gray-450 max-w-sm mx-auto leading-relaxed">
-                    Sensing grids have not deployed signals for this mission yet. Initiating swarm threads takes ~3 to 8 seconds. Please deploy above or track event streams.
+                  <p className={`text-xs max-w-sm mx-auto leading-relaxed mb-4 ${t.textMute}`}>
+                    {selectedMission && selectedMission.status !== "ready"
+                      ? "The swarm is deploying — first signals usually land within seconds and weave themselves into this board."
+                      : "Deploy a mission and every finding appears here as a draggable, correctable evidence card."}
                   </p>
+                  {(!selectedMission || selectedMission.status === "ready") && (
+                    <button
+                      onClick={() => {
+                        setNewPrompt("Track how OpenAI and Anthropic are competing on enterprise pricing");
+                        setLaunched(false);
+                      }}
+                      className="no-pan inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-lg shadow-indigo-600/25 press"
+                    >
+                      <Rocket className="w-3.5 h-3.5" />
+                      Try: “Track how OpenAI and Anthropic compete on pricing”
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -2116,15 +2262,17 @@ export default function App() {
                             }
                             handleNodeDragStart(e, node.id);
                           }}
-                          className={`rounded-lg border p-3 select-none flex flex-col gap-1.5 shadow-md no-pan cursor-grab active:cursor-grabbing hover:shadow-lg transition-all z-10 ${
+                          className={`animate-nodePop rounded-xl border p-3 select-none flex flex-col gap-1.5 shadow-md no-pan cursor-grab active:cursor-grabbing hover:shadow-xl transition-all z-10 ${
+                            newestRunId && node.run_id === newestRunId ? "new-signal" : ""
+                          } ${
                             isHighlighted
-                              ? "ring-2 ring-blue-500 ring-offset-2 scale-[1.04] dark:ring-offset-black"
+                              ? "ring-2 ring-indigo-500 ring-offset-2 scale-[1.04] dark:ring-offset-black"
                               : isSelected
-                              ? "ring-1 ring-blue-500 scale-[1.03] " + getConfColor(confRating, true)
+                              ? "ring-1 ring-indigo-500 scale-[1.03] " + getConfColor(confRating, true)
                               : getConfColor(confRating, true)
                           } ${isFocused ? "opacity-100 filter-none" : "opacity-35 scale-[0.96] blur-[0.4px]"} ${
-                            isDark ? "bg-[#0b0f19]/95 text-slate-200" : "bg-white text-slate-800"
-                          } hover:border-slate-400`}
+                            isDark ? "bg-[#0b101b]/95 text-slate-200" : "bg-white text-slate-800"
+                          } hover:border-indigo-400/60`}
                         >
                           {/* CARD HEADER */}
                           <div className="flex items-center justify-between border-b border-slate-200/50 dark:border-white/5 pb-1 text-[8px] leading-none">
@@ -2289,6 +2437,17 @@ export default function App() {
               />
             )}
 
+            {/* --- ORBIT: immersive 3D constellation of the fabric --- */}
+            {workspaceMode === "fabric3d" && (
+              <Fabric3D
+                nodes={nodes}
+                edges={edges}
+                isDark={isDark}
+                selectedNodeId={selectedNodeId}
+                onSelect={(id) => { setSelectedNodeId(id); const n = nodes.find(x => x.id === id); if (n && (n.type === "web-signal" || n.type === "synthesis")) setCorrectionContent(n.content); }}
+              />
+            )}
+
             {/* --- TEMPORAL VISTA (EchoForge: past → present → futures) --- */}
             {workspaceMode === "vista" && (
               <TemporalVista
@@ -2300,84 +2459,134 @@ export default function App() {
                 forecasting={forecasting}
               />
             )}
+                    </motion.div>
+                  </AnimatePresence>
+                </div>
 
-            {/* --- BOTTOM DASHBOARD PANE / EVENT TRACE STREAM --- */}
+            {/* --- LIVE FEED BAR + EXPANDABLE INTELLIGENCE PANE --- */}
             {!isMaximized && (
-            <footer className={`h-60 border-t flex flex-col z-20 relative select-none ${t.bgPane}`}>
-              {/* DECISION COCKPIT — at-a-glance health of this mission */}
+            <footer data-tour="feed" className={`border-t flex flex-col z-20 relative select-none ${t.bgPane} ${footerOpen ? "h-72" : "h-auto"}`}>
+              {/* ── LIVE TICKER ROW (always visible) ── */}
               {(() => {
                 const sig = nodes.filter(n => n.type === "web-signal");
-                const grounded = sig.filter(n => n.grounded === true).length;
                 const contra = nodes.filter(n => n.flagged_by === "sentinel").length;
                 const futs = nodes.filter(n => n.time_horizon === "future").length;
                 const avg = sig.length ? Math.round((sig.reduce((s, n) => s + n.confidence, 0) / sig.length) * 100) : 0;
-                const avgColor = avg >= 80 ? "bg-emerald-500" : avg >= 50 ? "bg-amber-500" : "bg-red-500";
-                const Stat = ({ label, value, color }: { label: string; value: any; color?: string }) => (
-                  <div className="flex items-center gap-1.5">
-                    <span className={`text-sm font-extrabold ${color || (isDark ? "text-white" : "text-slate-900")}`}>{value}</span>
-                    <span className="text-[9px] font-mono uppercase tracking-wide text-slate-400">{label}</span>
-                  </div>
-                );
+                const proposedCount = actions.filter(a => a.status === "proposed").length;
+                const latest = events.slice(-3).reverse();
+                const levelDot: Record<string, string> = { info: "bg-indigo-400", success: "bg-emerald-400", warn: "bg-amber-400", error: "bg-rose-400" };
                 return (
-                  <div className="flex items-center gap-4 px-6 py-2 border-b border-slate-200/50 dark:border-white/5 flex-shrink-0 overflow-x-auto">
-                    <div className="flex items-center gap-2 min-w-[150px]">
-                      <span className="text-[9px] font-mono uppercase tracking-wide text-slate-400">Confidence</span>
-                      <div className="flex-1 h-1.5 rounded-full overflow-hidden bg-slate-200 dark:bg-white/10 min-w-[60px]">
-                        <div className={`h-full ${avgColor} transition-all`} style={{ width: `${avg}%` }} />
-                      </div>
-                      <span className={`text-xs font-bold ${avg >= 80 ? "text-emerald-500" : avg >= 50 ? "text-amber-500" : "text-red-500"}`}>{avg}%</span>
+                  <div className="flex items-center gap-3 px-4 h-10 flex-shrink-0 overflow-hidden">
+                    {/* live dot + latest events ticker */}
+                    <span className="flex items-center gap-1.5 flex-shrink-0">
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60" />
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
+                      </span>
+                      <span className={`text-[9px] font-mono font-bold uppercase tracking-widest ${t.textMute}`}>Live</span>
+                    </span>
+                    <div className="flex-1 min-w-0 flex items-center gap-4 overflow-hidden">
+                      <AnimatePresence mode="popLayout">
+                        {latest.length === 0 ? (
+                          <span className={`text-[10.5px] font-mono ${t.textMute}`}>Agents standing by — deploy or re-sense to stream activity…</span>
+                        ) : latest.map((ev, i) => (
+                          <motion.span
+                            key={ev.id}
+                            layout
+                            initial={{ opacity: 0, x: 24 }}
+                            animate={{ opacity: i === 0 ? 1 : 0.55 - i * 0.15, x: 0 }}
+                            exit={{ opacity: 0, x: -16 }}
+                            transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                            className={`flex items-center gap-1.5 text-[10.5px] min-w-0 ${i > 0 ? "hidden md:flex" : "flex"}`}
+                          >
+                            <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${levelDot[ev.level]}`} />
+                            <span className={`font-mono font-bold uppercase text-[9px] flex-shrink-0 ${t.textMute}`}>{ev.sender}</span>
+                            <span className={`truncate max-w-[320px] ${t.textDesc}`}>{ev.message}</span>
+                          </motion.span>
+                        ))}
+                      </AnimatePresence>
                     </div>
-                    <div className="w-px h-5 bg-slate-200 dark:bg-white/10" />
-                    <Stat label="findings" value={sig.length} />
-                    <Stat label="live" value={grounded} color="text-emerald-500" />
-                    <Stat label="conflicts" value={contra} color={contra ? "text-red-500" : undefined} />
-                    <Stat label="futures" value={futs} color="text-fuchsia-500" />
-                    {futs === 0 && (
-                      <button onClick={() => setWorkspaceMode("vista")} className="ml-auto flex-shrink-0 text-[10px] font-mono font-bold text-fuchsia-500 hover:underline flex items-center gap-1">
-                        <Clock className="w-3 h-3" /> Forecast futures →
-                      </button>
-                    )}
+
+                    {/* compact mission health */}
+                    <div className="hidden sm:flex items-center gap-3 flex-shrink-0">
+                      <span className="flex items-center gap-1.5" title="Average signal confidence">
+                        <span className={`w-14 h-1.5 rounded-full overflow-hidden ${isDark ? "bg-white/10" : "bg-slate-200"}`}>
+                          <motion.span
+                            className={`block h-full rounded-full ${avg >= 80 ? "bg-emerald-400" : avg >= 50 ? "bg-amber-400" : "bg-rose-400"}`}
+                            animate={{ width: `${avg}%` }}
+                            transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+                          />
+                        </span>
+                        <span className={`text-[10px] font-bold tabular ${avg >= 80 ? "text-emerald-400" : avg >= 50 ? "text-amber-400" : "text-rose-400"}`}>{avg}%</span>
+                      </span>
+                      <span className={`text-[10px] font-mono tabular ${t.textMute}`} title="Findings woven into the fabric">{sig.length} findings</span>
+                      {contra > 0 && <span className="text-[10px] font-mono font-bold text-rose-400 animate-pulse" title="Sentinel-flagged contradictions">{contra} drift</span>}
+                      {futs > 0 && <span className="text-[10px] font-mono text-fuchsia-400" title="Forecasted future scenarios">{futs} futures</span>}
+                    </div>
+
+                    {/* expand / collapse the intelligence pane */}
+                    <button
+                      onClick={() => setFooterOpen(v => !v)}
+                      className={`flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1.5 rounded-lg border transition-all press flex-shrink-0 ${
+                        proposedCount > 0 && !footerOpen
+                          ? "text-indigo-300 bg-indigo-500/15 border-indigo-500/40"
+                          : isDark ? "text-gray-300 bg-white/5 border-white/[0.07] hover:border-white/15" : "text-slate-600 bg-white border-slate-200"
+                      }`}
+                      title={footerOpen ? "Collapse the intelligence pane" : "Open brief, actions & full activity log"}
+                    >
+                      <FileCheck className="w-3.5 h-3.5" />
+                      <span className="hidden md:inline">Brief & Actions</span>
+                      {proposedCount > 0 && (
+                        <span className="min-w-[16px] h-4 px-1 rounded-full bg-indigo-500 text-white text-[9px] font-bold flex items-center justify-center tabular">{proposedCount}</span>
+                      )}
+                      {footerOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+                    </button>
                   </div>
                 );
               })()}
 
-              <div className="flex items-center justify-between border-b px-6 py-2 border-slate-200/50 dark:border-white/5 flex-shrink-0 select-none">
+              {footerOpen && (
+              <div className={`flex items-center justify-between border-y px-4 py-1.5 border-slate-200/50 dark:border-white/5 flex-shrink-0 select-none`}>
                 <div className="flex gap-4">
                   <button
                     onClick={() => setActiveTab("analysis")}
-                    className={`text-xs font-extrabold py-1.5 border-b-2 transition-all flex items-center gap-1.5 ${
+                    className={`text-xs font-bold py-1 border-b-2 transition-all flex items-center gap-1.5 ${
                       activeTab === "analysis"
-                        ? "border-blue-500 text-slate-900 dark:text-white"
+                        ? "border-indigo-500 text-slate-900 dark:text-white"
                         : "border-transparent text-slate-400 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white"
                     }`}
                   >
-                    <FileCheck className="w-3.5 h-3.5 text-blue-500" />
+                    <FileCheck className="w-3.5 h-3.5 text-indigo-400" />
                     Intelligence Brief
                   </button>
-                  
+
                   <button
                     onClick={() => setActiveTab("actions")}
-                    className={`text-xs font-extrabold py-1.5 border-b-2 transition-all flex items-center gap-1.5 relative ${
+                    className={`text-xs font-bold py-1 border-b-2 transition-all flex items-center gap-1.5 relative ${
                       activeTab === "actions"
-                        ? "border-blue-500 text-slate-900 dark:text-white"
+                        ? "border-indigo-500 text-slate-900 dark:text-white"
                         : "border-transparent text-slate-400 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white"
                     }`}
                   >
-                    <Mail className="w-3.5 h-3.5 text-blue-500" />
+                    <Mail className="w-3.5 h-3.5 text-indigo-400" />
                     Action Plan
                     {actions.filter(a => a.status === "proposed").length > 0 && (
-                      <span className="absolute -top-0.5 -right-2 w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce"></span>
+                      <span className="min-w-[15px] h-[15px] px-0.5 rounded-full bg-indigo-500 text-white text-[8.5px] font-bold flex items-center justify-center tabular">
+                        {actions.filter(a => a.status === "proposed").length}
+                      </span>
                     )}
                   </button>
                 </div>
 
                 <div className="flex items-center gap-1.5 text-[10px] text-slate-400 dark:text-gray-500 font-mono">
-                  <Activity className="w-3.5 h-3.5 text-emerald-500 animate-pulse" />
-                  <span>Interactive Provenance Tracing Ready</span>
+                  <Activity className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+                  <span className="hidden sm:inline">hover findings to trace their sources</span>
                 </div>
               </div>
+              )}
 
               {/* GRID SECTIONS */}
+              {footerOpen && (
               <div className="flex-1 overflow-hidden grid grid-cols-1 md:grid-cols-12">
                 
                 {/* CONTAINER COLUMN (span 8) */}
@@ -2443,7 +2652,7 @@ export default function App() {
                         </span>
                         <ul className="list-none flex flex-col gap-1.5 font-sans">
                           {brief.recommendations.map((rec, i) => (
-                            <li key={i} className="text-xs text-slate-700 dark:text-gray-350 flex items-start gap-2 pl-1 leading-relaxed">
+                            <li key={i} className="text-xs text-slate-700 dark:text-gray-300 flex items-start gap-2 pl-1 leading-relaxed">
                               <span className="text-blue-500 select-none font-bold">↳</span>
                               {rec}
                             </li>
@@ -2454,17 +2663,27 @@ export default function App() {
                   )}
 
                   {activeTab === "analysis" && !brief && (
-                    <p className="text-xs text-slate-400 dark:text-gray-500 text-center py-8">
-                      Wait compilation index. Swarm conducts are scanning.
-                    </p>
+                    <div className="flex flex-col gap-2 py-2">
+                      <div className="skeleton h-3 w-2/3" />
+                      <div className="skeleton h-3 w-full" />
+                      <div className="skeleton h-3 w-5/6" />
+                      <p className={`text-xs text-center pt-4 ${t.textMute}`}>
+                        The Scribe is composing a traceable brief — every sentence will link to the evidence behind it.
+                      </p>
+                    </div>
                   )}
 
                   {activeTab === "actions" && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {actions.length === 0 && (
-                        <p className="text-xs text-slate-400 dark:text-gray-500 text-center py-8 col-span-2">
-                          No proposed Action-Drafts. Swarm Conductor standing by.
-                        </p>
+                        <div className="col-span-2 flex flex-col items-center gap-2 py-8 text-center">
+                          <span className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/25 flex items-center justify-center">
+                            <Mail className="w-5 h-5 text-indigo-400" />
+                          </span>
+                          <p className={`text-xs max-w-sm leading-relaxed ${t.textMute}`}>
+                            The Actor agent turns verified findings into ready-to-send email drafts, briefs and reminders. Approve one and it's on your clipboard.
+                          </p>
+                        </div>
                       )}
                       {actions.map(act => (
                         <div
@@ -2503,25 +2722,57 @@ export default function App() {
                             "{act.rationale}"
                           </p>
 
-                          <div className={`border p-2 rounded text-[10px] font-mono leading-normal h-24 overflow-y-auto whitespace-pre-wrap ${
-                            isDark ? "bg-black/40 border-white/5 text-gray-300" : "bg-slate-50 border-slate-200/60 text-slate-700"
-                          }`}>
-                            {act.payload.body}
+                          {/* document / email preview */}
+                          <div className={`border rounded-lg overflow-hidden ${isDark ? "bg-black/40 border-white/5" : "bg-slate-50 border-slate-200/60"}`}>
+                            {act.kind === "draft-email" && (act.payload.to || act.payload.subject) && (
+                              <div className={`px-2 py-1.5 border-b text-[9px] font-mono flex flex-col gap-0.5 ${isDark ? "border-white/5 bg-white/[0.03] text-gray-400" : "border-slate-200/60 bg-white text-slate-500"}`}>
+                                {act.payload.to && <span><span className="opacity-60">To:</span> <span className={t.textTitle}>{act.payload.to}</span></span>}
+                                {act.payload.subject && <span><span className="opacity-60">Subject:</span> <span className={t.textTitle}>{act.payload.subject}</span></span>}
+                              </div>
+                            )}
+                            <div className={`p-2 text-[10px] font-mono leading-normal h-20 overflow-y-auto whitespace-pre-wrap ${isDark ? "text-gray-300" : "text-slate-700"}`}>
+                              {act.payload.body}
+                            </div>
                           </div>
+
+                          {/* action provenance: which signals earned this draft */}
+                          {act.provenance && act.provenance.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-1 select-none no-pan">
+                              <span className={`text-[8px] font-mono uppercase ${t.textMute}`}>Based on {act.provenance.length} signal{act.provenance.length > 1 ? "s" : ""}:</span>
+                              {act.provenance.slice(0, 3).map(pid => {
+                                const pn = nodes.find(n => n.id === pid);
+                                if (!pn) return null;
+                                return (
+                                  <button
+                                    key={pid}
+                                    onClick={() => { setSelectedNodeId(pid); setCorrectionContent(pn.content); }}
+                                    title={pn.title}
+                                    className={`text-[8px] font-mono px-1.5 py-0.5 rounded border transition-all ${getConfColor(pn.confidence)}`}
+                                  >
+                                    ↗ {pn.title.slice(0, 18)}{pn.title.length > 18 ? "…" : ""}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
 
                           {act.status === "proposed" && (
                             <div className="flex gap-2 mt-1 select-none no-pan">
                               <button
-                                onClick={() => handleApproveAction(act.id)}
-                                className="flex-1 bg-blue-600 text-white hover:bg-blue-500 text-[10px] font-bold py-1 px-2 rounded-md transition-all flex items-center justify-center gap-1 shadow-sm"
+                                onClick={() => {
+                                  try { navigator.clipboard.writeText(act.payload.body); } catch (e) { console.error(e); }
+                                  handleApproveAction(act.id);
+                                }}
+                                className="flex-1 bg-indigo-600 text-white hover:bg-indigo-500 text-[10px] font-bold py-1.5 px-2 rounded-md transition-all flex items-center justify-center gap-1 shadow-sm press"
+                                title="Approve this draft and copy its content to the clipboard"
                               >
                                 <Check className="w-3.5 h-3.5" />
-                                Approve Proposed Action
+                                Approve & Copy
                               </button>
                               <button
                                 onClick={() => handleDismissAction(act.id)}
-                                className="bg-slate-100 border border-slate-200 text-slate-500 hover:text-red-500 hover:bg-red-50/50 p-1 px-2 rounded-md text-[10px] dark:bg-white/5 dark:border-white/5 dark:text-gray-400 dark:hover:border-red-900/20 transition-all flex items-center"
-                                title="Dismiss Proposal"
+                                className="bg-slate-100 border border-slate-200 text-slate-500 hover:text-rose-500 hover:bg-rose-50/50 p-1 px-2 rounded-md text-[10px] dark:bg-white/5 dark:border-white/5 dark:text-gray-400 dark:hover:border-rose-900/20 transition-all flex items-center press"
+                                title="Dismiss to archive (kept, never deleted)"
                               >
                                 <X className="w-3.5 h-3.5" />
                               </button>
@@ -2603,19 +2854,31 @@ export default function App() {
                 </div>
 
               </div>
+              )}
             </footer>
             )}
 
-          </main>
+              </div>
 
-          {/* --- RIGHT SIDE: INSPECTOR AND MEMORY CORRECTOR PANE --- */}
-          {selectedNodeId && (
-            <aside className={`absolute top-0 right-0 h-full w-full sm:w-[350px] md:w-[400px] border-l shadow-2xl flex flex-col overflow-y-auto select-none z-50 ${
-              isDark ? "bg-[#0d1017]" : "bg-white"
-            }`}>
-              
-              <div className={`p-4 border-b flex justify-between items-center select-none ${
-                isDark ? "bg-black/25" : "bg-slate-50"
+              {/* ── DOCKED INSPECTOR: node detail / agent console / chat / custom agents / mission pulse ── */}
+              <aside
+                data-tour="inspector"
+                className={`${inspectorContent !== "pulse" ? "flex" : inspectorOpen && !isMaximized ? "hidden lg:flex" : "hidden"} flex-col absolute lg:relative lg:flex-shrink-0 inset-y-0 right-0 z-40 w-full sm:w-[400px] lg:w-[360px] xl:w-[400px] border-l shadow-2xl overflow-hidden select-none ${
+                  isDark ? "bg-[#090d15] border-white/[0.06]" : "bg-white border-slate-200"
+                }`}
+              >
+
+          {/* --- INSPECTOR CONTENT: NODE DETAIL + MEMORY CORRECTOR --- */}
+          {inspectorContent === "node" && (
+            <motion.div
+              key={selectedNodeId}
+              initial={{ opacity: 0, x: 16 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+              className="flex flex-col h-full overflow-y-auto"
+            >
+              <div className={`p-4 border-b flex justify-between items-center select-none flex-shrink-0 ${
+                isDark ? "bg-black/25 border-white/[0.06]" : "bg-slate-50 border-slate-200"
               }`}>
                 <h3 className="text-sm font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-2 font-display">
                   <Bot className="w-4 h-4 text-blue-500" />
@@ -2759,7 +3022,7 @@ export default function App() {
                         isDark ? "bg-[#090c12]/90 border-white/5" : "bg-slate-50 border-slate-200"
                       }`}>
                         <span className={`text-[10px] font-mono tracking-wider uppercase font-bold flex items-center gap-1.5 select-none leading-none ${
-                          isDark ? "text-teal-400" : "text-teal-650"
+                          isDark ? "text-teal-400" : "text-teal-700"
                         }`}>
                           <Undo className="w-3.5 h-3.5" />
                           VERIFY COGNITIVE SWARM CLAIM
@@ -2812,7 +3075,7 @@ export default function App() {
                     {/* CITATION AND PROVENANCE LISTS */}
                     {selectedNode.provenance && selectedNode.provenance.length > 0 && (
                       <div className="flex flex-col gap-2 mt-2">
-                        <span className="text-[10px] font-mono tracking-wider text-slate-400 dark:text-gray-450 uppercase font-bold select-none leading-none">
+                        <span className="text-[10px] font-mono tracking-wider text-slate-400 dark:text-gray-400 uppercase font-bold select-none leading-none">
                           PROVENANCE SIGNALS CHAIN
                         </span>
                         
@@ -2853,16 +3116,21 @@ export default function App() {
                 );
               })()}
 
-            </aside>
+            </motion.div>
           )}
 
-          {focusedAgent && (
-            <aside className={`absolute top-0 right-0 h-full w-full sm:w-[350px] md:w-[400px] border-l shadow-2xl flex flex-col overflow-y-auto select-none z-50 ${
-              isDark ? "bg-[#0d1017] border-white/5" : "bg-white border-slate-200"
-            }`}>
+          {/* --- INSPECTOR CONTENT: AGENT COGNITIVE CONSOLE --- */}
+          {inspectorContent === "agent" && focusedAgent && (
+            <motion.div
+              key={focusedAgent.id}
+              initial={{ opacity: 0, x: 16 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+              className="flex flex-col h-full overflow-y-auto"
+            >
               {/* Header */}
-              <div className={`p-4 border-b flex justify-between items-center select-none ${
-                isDark ? "bg-black/25 border-white/5" : "bg-slate-50 border-slate-200"
+              <div className={`p-4 border-b flex justify-between items-center select-none flex-shrink-0 ${
+                isDark ? "bg-black/25 border-white/[0.06]" : "bg-slate-50 border-slate-200"
               }`}>
                 <div className="flex items-center gap-2">
                   <div className={`w-2 h-2 rounded-full ${
@@ -3027,11 +3295,11 @@ export default function App() {
                   </div>
                 </div>
               </div>
-            </aside>
+            </motion.div>
           )}
 
-          {/* --- FABRIC CHAT: grounded assistant over this mission --- */}
-          {chatOpen && (
+          {/* --- INSPECTOR CONTENT: FABRIC CHAT (grounded assistant) --- */}
+          {inspectorContent === "chat" && (
             <FabricChat
               isDark={isDark}
               messages={chatMessages}
@@ -3045,8 +3313,8 @@ export default function App() {
             />
           )}
 
-          {/* --- CUSTOM AGENTS: user-built specialists that act on the fabric --- */}
-          {customOpen && (
+          {/* --- INSPECTOR CONTENT: CUSTOM AGENTS --- */}
+          {inspectorContent === "agents" && (
             <CustomAgents
               isDark={isDark}
               agents={customAgentsList}
@@ -3059,6 +3327,151 @@ export default function App() {
             />
           )}
 
+          {/* --- INSPECTOR CONTENT: MISSION PULSE (default overview) --- */}
+          {inspectorContent === "pulse" && (() => {
+            const sig = nodes.filter(n => n.type === "web-signal");
+            const grounded = sig.filter(n => n.grounded === true).length;
+            const contra = nodes.filter(n => n.flagged_by === "sentinel").length;
+            const futs = nodes.filter(n => n.time_horizon === "future").length;
+            const corrections = nodes.filter(n => n.type === "correction").length;
+            const avg = sig.length ? Math.round((sig.reduce((s, n) => s + n.confidence, 0) / sig.length) * 100) : 0;
+            const proposed = actions.filter(a => a.status === "proposed");
+            const fp = selectedMission?.footprint;
+            return (
+              <div className="flex flex-col h-full overflow-y-auto">
+                <div className={`p-4 border-b flex justify-between items-center select-none flex-shrink-0 ${
+                  isDark ? "bg-black/25 border-white/[0.06]" : "bg-slate-50 border-slate-200"
+                }`}>
+                  <h3 className={`text-sm font-bold tracking-tight flex items-center gap-2 font-display ${t.textTitle}`}>
+                    <PulseIcon className="w-4 h-4 text-indigo-400" />
+                    Mission Pulse
+                  </h3>
+                  <button
+                    onClick={() => setInspectorOpen(false)}
+                    className={`p-1.5 rounded-lg ${isDark ? "text-gray-400 hover:bg-white/10 hover:text-white" : "text-slate-400 hover:bg-slate-100"}`}
+                    title="Hide inspector panel"
+                  >
+                    <PanelRightClose className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="p-4 flex flex-col gap-4">
+                  {/* status + persona */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-mono font-bold uppercase ${
+                      selectedMission?.status === "ready" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/25" : "bg-amber-500/10 text-amber-400 border border-amber-500/25 animate-pulse"
+                    }`}>{selectedMission?.status}</span>
+                    {selectedMission?.persona && (
+                      <span className={`flex items-center gap-1 text-[9px] font-mono px-2 py-0.5 rounded-full border ${isDark ? "border-white/10 text-gray-400" : "border-slate-200 text-slate-500"}`}>
+                        <User className="w-2.5 h-2.5" />{selectedMission.persona}
+                      </span>
+                    )}
+                    {selectedMission?.monitoring && (
+                      <span className="flex items-center gap-1 text-[9px] font-mono text-emerald-400"><Radio className="w-2.5 h-2.5 animate-pulse" /> monitoring</span>
+                    )}
+                  </div>
+
+                  {/* fabric trust gauge */}
+                  <div className={`rounded-xl border p-4 flex flex-col gap-2 noise relative overflow-hidden ${isDark ? "bg-[#0b101b] border-white/[0.06]" : "bg-slate-50 border-slate-200"}`}>
+                    <span className={`relative z-10 text-[9px] font-mono uppercase tracking-widest font-bold ${t.textMute}`}>Fabric trust</span>
+                    <div className="relative z-10 flex items-end gap-2">
+                      <span className={`text-3xl font-bold font-display tabular leading-none ${avg >= 80 ? "text-emerald-400" : avg >= 50 ? "text-amber-400" : "text-rose-400"}`}>{avg}%</span>
+                      <span className={`text-[10px] pb-0.5 ${t.textMute}`}>avg signal confidence</span>
+                    </div>
+                    <div className={`relative z-10 h-2 rounded-full overflow-hidden ${isDark ? "bg-white/10" : "bg-slate-200"}`}>
+                      <motion.div
+                        className={`h-full rounded-full ${avg >= 80 ? "bg-gradient-to-r from-emerald-500 to-emerald-300" : avg >= 50 ? "bg-gradient-to-r from-amber-500 to-amber-300" : "bg-gradient-to-r from-rose-500 to-rose-300"}`}
+                        initial={{ width: 0 }}
+                        animate={{ width: `${avg}%` }}
+                        transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
+                      />
+                    </div>
+                    <div className="relative z-10 grid grid-cols-2 gap-x-4 gap-y-1.5 pt-1.5">
+                      {[
+                        { label: "findings", value: sig.length, cls: t.textTitle },
+                        { label: "live sources", value: grounded, cls: "text-emerald-400" },
+                        { label: "contradictions", value: contra, cls: contra ? "text-rose-400" : t.textTitle },
+                        { label: "corrections", value: corrections, cls: corrections ? "text-cyan-400" : t.textTitle },
+                      ].map(s => (
+                        <div key={s.label} className="flex items-baseline justify-between gap-2">
+                          <span className={`text-[9.5px] font-mono ${t.textMute}`}>{s.label}</span>
+                          <span className={`text-sm font-bold tabular ${s.cls}`}>{s.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* proposed actions preview */}
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center justify-between">
+                      <span className={`text-[9px] font-mono uppercase tracking-widest font-bold ${t.textMute}`}>Proposed actions</span>
+                      {proposed.length > 0 && (
+                        <button onClick={() => { setFooterOpen(true); setActiveTab("actions"); }} className="text-[10px] font-bold text-indigo-400 hover:underline">
+                          Open all ({proposed.length}) →
+                        </button>
+                      )}
+                    </div>
+                    {proposed.length === 0 ? (
+                      <p className={`text-[10.5px] leading-relaxed rounded-lg border border-dashed px-3 py-2.5 ${isDark ? "border-white/10 text-gray-500" : "border-slate-200 text-slate-400"}`}>
+                        The Actor agent drafts emails, briefs and reminders from verified findings. They appear here for one-click approval.
+                      </p>
+                    ) : (
+                      proposed.slice(0, 2).map(act => (
+                        <button
+                          key={act.id}
+                          onClick={() => { setFooterOpen(true); setActiveTab("actions"); }}
+                          className={`text-left rounded-lg border p-2.5 transition-all card-hover ${isDark ? "bg-[#0b101b] border-white/[0.06]" : "bg-white border-slate-200"}`}
+                        >
+                          <span className="text-[8.5px] font-mono uppercase text-indigo-400">{act.kind}</span>
+                          <p className={`text-[11px] font-bold leading-snug line-clamp-2 ${t.textTitle}`}>{act.title}</p>
+                        </button>
+                      ))
+                    )}
+                  </div>
+
+                  {/* run history */}
+                  {missionRuns.length > 0 && (
+                    <div className="flex flex-col gap-1.5">
+                      <span className={`text-[9px] font-mono uppercase tracking-widest font-bold ${t.textMute}`}>Sensing runs</span>
+                      {missionRuns.slice(-3).reverse().map(run => (
+                        <div key={run.id} className={`flex items-center gap-2 text-[10px] rounded-lg px-2.5 py-1.5 border ${isDark ? "border-white/[0.05] bg-white/[0.02]" : "border-slate-100 bg-slate-50"}`}>
+                          <span className={`w-5 h-5 rounded-md flex items-center justify-center text-[9px] font-bold tabular flex-shrink-0 ${isDark ? "bg-indigo-500/15 text-indigo-300" : "bg-indigo-50 text-indigo-600"}`}>{run.index}</span>
+                          <span className={`truncate flex-1 ${t.textDesc}`}>{run.summary || `${run.newSignals} new signal(s)`}</span>
+                          <span className={`font-mono flex-shrink-0 ${t.textMute}`}>{run.trigger}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* footprint */}
+                  {fp && (
+                    <div className={`rounded-xl border p-3 flex items-center justify-between gap-2 ${isDark ? "bg-emerald-500/[0.05] border-emerald-500/15" : "bg-emerald-50/60 border-emerald-200/60"}`}>
+                      <div className="flex items-center gap-2">
+                        <Leaf className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                        <div className="flex flex-col">
+                          <span className={`text-[10px] font-bold ${t.textTitle}`}>{(fp.co2Saved_g).toFixed(1)} g CO₂ saved</span>
+                          <span className={`text-[9px] font-mono ${t.textMute}`}>{fp.tokens.toLocaleString()} tokens · {fp.provider}</span>
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-bold text-emerald-400 tabular">+{fp.creditsEarned} cr</span>
+                    </div>
+                  )}
+
+                  {/* hint */}
+                  <p className={`text-[10px] leading-relaxed flex gap-1.5 ${t.textMute}`}>
+                    <Info className="w-3 h-3 mt-0.5 flex-shrink-0 text-indigo-400" />
+                    Click any node on the {WORKSPACE_VIEWS.find(v => v.key === workspaceMode)?.label || "board"} to inspect its provenance and file corrections.
+                  </p>
+                </div>
+              </div>
+            );
+          })()}
+
+              </aside>
+            </div>
+
+          </main>
+
         </div>
       )}
 
@@ -3067,6 +3480,8 @@ export default function App() {
         <MissionPlanner
           isDark={isDark}
           prompt={planPrompt}
+          persona={selectedPersona}
+          deployCost={deployCost}
           loading={planLoading}
           variants={planVariants}
           deployingId={planDeployingId}
@@ -3074,6 +3489,24 @@ export default function App() {
           onRunAsIs={() => createAndLaunchMission(planPrompt, "as-is")}
           onCancel={closePlanner}
         />
+      )}
+
+      {/* --- MODEL CONTROL CENTER: switch engines, bring your own keys --- */}
+      {settingsOpen && (
+        <SettingsModal
+          isDark={isDark}
+          onClose={() => setSettingsOpen(false)}
+          onSaved={(cfg) => {
+            if (cfg?.chain?.length) setActiveEngine({ provider: cfg.chain[0].name, model: cfg.chain[0].model });
+            else setActiveEngine(null);
+            fetchLlmStatus();
+          }}
+        />
+      )}
+
+      {/* --- FIRST-RUN SPOTLIGHT TOUR over the live workspace --- */}
+      {currentView === "workspace" && launched && showGuide && !isMaximized && (
+        <OnboardingTour isDark={isDark} steps={TOUR_STEPS} onFinish={dismissGuide} />
       )}
 
     </div>

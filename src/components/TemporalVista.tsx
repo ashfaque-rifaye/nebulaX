@@ -89,17 +89,24 @@ export const TemporalVista: React.FC<TemporalVistaProps> = ({ nodes, isDark, sel
     <div className="flex-1 overflow-hidden flex flex-col">
       <div className={`px-5 py-3 border-b flex items-center justify-between gap-3 ${isDark ? "border-white/5" : "border-slate-200"}`}>
         <div>
-          <h2 className={`text-base font-bold flex items-center gap-2 ${title}`}><Clock className="w-4 h-4 text-blue-500" /> Temporal Vista</h2>
+          <h2 className={`text-base font-bold flex items-center gap-2 font-display ${title}`}><Clock className="w-4 h-4 text-indigo-400" /> Temporal Vista</h2>
           <p className={`text-[11px] ${muted}`}>Verified history on the left → branching futures on the right. Hover a finding to see the futures it influences.</p>
         </div>
         <button
           onClick={onForecast}
           disabled={forecasting || present.length === 0}
-          className="flex-shrink-0 bg-gradient-to-r from-blue-600 to-fuchsia-600 hover:opacity-90 disabled:opacity-50 text-white text-xs font-bold px-4 py-2 rounded-lg flex items-center gap-1.5 shadow-lg"
+          className={`flex-shrink-0 bg-gradient-to-r from-indigo-600 to-fuchsia-600 hover:opacity-90 disabled:opacity-50 text-white text-xs font-bold px-4 py-2 rounded-lg flex items-center gap-1.5 shadow-lg shadow-fuchsia-600/20 press ${present.length > 0 && futures.length === 0 && !forecasting ? "animate-pulse" : ""}`}
         >
           {forecasting ? <Loader2 className="w-4 h-4 animate-spin" /> : <GitBranch className="w-4 h-4" />}
           {futures.length ? "Re-forge futures" : "Forecast futures"}
         </button>
+      </div>
+
+      {/* temporal axis: orient the reader in time */}
+      <div className={`flex items-center px-5 py-1 border-b text-[8.5px] font-mono uppercase tracking-widest select-none ${isDark ? "border-white/5 text-gray-500" : "border-slate-100 text-slate-400"}`}>
+        <span className="flex-1 flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> verified past → present</span>
+        <span className="px-4 text-indigo-400 font-bold">now</span>
+        <span className="flex-1 flex items-center justify-end gap-1.5 text-right">+6 – 18 months <span className="w-1.5 h-1.5 rounded-full bg-fuchsia-400" /></span>
       </div>
 
       <div ref={containerRef} className="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_64px_minmax(0,1.2fr)] relative">
@@ -184,8 +191,8 @@ export const TemporalVista: React.FC<TemporalVistaProps> = ({ nodes, isDark, sel
                 onMouseEnter={() => setHoverFuture(f.id)}
                 onMouseLeave={() => setHoverFuture(null)}
                 onClick={() => onSelect(f.id)}
-                style={{ borderLeftColor: rs.c, animationDelay: `${i * 0.08}s` }}
-                className={`text-left rounded-xl border border-l-4 p-3.5 transition-all hover:-translate-y-0.5 ${bloom ? "vista-bloom" : ""} ${selectedNodeId === f.id ? "ring-1 ring-fuchsia-500" : ""} ${lit ? "ring-1 ring-fuchsia-500 scale-[1.01]" : ""} ${active && !lit && hoverFuture !== f.id ? "opacity-50" : "opacity-100"} ${isDark ? "bg-[#0c111c] border-white/5" : "bg-white border-slate-200 shadow-sm"}`}
+                style={{ borderColor: `${rs.c}4d`, animationDelay: `${i * 0.08}s` }}
+                className={`text-left rounded-xl border p-3.5 transition-all hover:-translate-y-0.5 ${bloom ? "vista-bloom" : ""} ${selectedNodeId === f.id ? "ring-1 ring-fuchsia-500" : ""} ${lit ? "ring-1 ring-fuchsia-500 scale-[1.01]" : ""} ${active && !lit && hoverFuture !== f.id ? "opacity-50" : "opacity-100"} ${isDark ? "bg-[#0c111c]" : "bg-white shadow-sm"}`}
               >
                 <div className="flex items-center justify-between gap-2 mb-1">
                   <span className="flex items-center gap-1 text-[9px] font-mono font-bold uppercase" style={{ color: rs.c }}><rs.Icon className="w-3 h-3" /> {rs.label}</span>

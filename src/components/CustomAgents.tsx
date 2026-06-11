@@ -35,8 +35,8 @@ export const CustomAgents: React.FC<CustomAgentsProps> = ({ isDark, agents, crea
   };
 
   return (
-    <aside className={`absolute top-0 right-0 h-full w-full sm:w-[380px] md:w-[420px] border-l shadow-2xl flex flex-col z-50 ${isDark ? "bg-[#0d1017] border-white/10" : "bg-white border-slate-200"}`}>
-      <div className={`p-4 border-b flex justify-between items-center ${isDark ? "bg-black/25 border-white/5" : "bg-slate-50 border-slate-200"}`}>
+    <div className="flex flex-col h-full overflow-hidden">
+      <div className={`p-4 border-b flex justify-between items-center flex-shrink-0 ${isDark ? "bg-black/25 border-white/5" : "bg-slate-50 border-slate-200"}`}>
         <div>
           <h3 className="text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-2"><Wand2 className="w-4 h-4 text-fuchsia-500" /> Your Custom Agents</h3>
           <span className={`text-[10px] font-mono ${muted}`}>build a specialist that works on this mission · 6 cr/run</span>
@@ -99,6 +99,6 @@ export const CustomAgents: React.FC<CustomAgentsProps> = ({ isDark, agents, crea
           })}
         </div>
       </div>
-    </aside>
+    </div>
   );
 };

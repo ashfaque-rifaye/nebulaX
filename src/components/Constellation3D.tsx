@@ -16,7 +16,7 @@ interface Constellation3DProps {
 function nodeColor(n: WeaveNode): string {
   if (n.type === "correction") return "#34d399";
   if (n.flagged_by === "sentinel") return "#fb7185";
-  if (n.type === "synthesis") return "#818cf8";
+  if (n.type === "synthesis") return "#a18fff";
   if (n.confidence >= 0.8) return "#34d399";
   if (n.confidence >= 0.5) return "#fbbf24";
   return "#fb7185";
@@ -26,7 +26,7 @@ const LEGEND = [
   { c: "#34d399", label: "Verified ≥80%" },
   { c: "#fbbf24", label: "Review 50–79%" },
   { c: "#fb7185", label: "Low / drift" },
-  { c: "#818cf8", label: "Synthesis" },
+  { c: "#a18fff", label: "Synthesis" },
 ];
 
 // A deliberately calm 3D constellation: same fabric as the 2D board, given
@@ -68,7 +68,7 @@ export const Constellation3D: React.FC<Constellation3DProps> = ({ nodes, edges, 
           source: e.source,
           target: e.target,
           relation: e.relation,
-          color: e.relation === "contradicts" ? "#fb7185" : e.relation === "correction-applied" ? "#34d399" : isDark ? "#4f6bd8" : "#6366f1",
+          color: e.relation === "contradicts" ? "#fb7185" : e.relation === "correction-applied" ? "#34d399" : isDark ? "#7261d6" : "#7c5cff",
         })),
     };
   }, [nodes, edges, isDark]);
@@ -143,7 +143,7 @@ export const Constellation3D: React.FC<Constellation3DProps> = ({ nodes, edges, 
     if (isSel) {
       const ring = new THREE.Mesh(
         new THREE.RingGeometry(r * 2.2, r * 2.5, 32),
-        new THREE.MeshBasicMaterial({ color: isDark ? "#a5b4fc" : "#6366f1", side: THREE.DoubleSide, transparent: true, opacity: 0.9 })
+        new THREE.MeshBasicMaterial({ color: isDark ? "#bfa6ff" : "#7c5cff", side: THREE.DoubleSide, transparent: true, opacity: 0.9 })
       );
       ring.lookAt(new THREE.Vector3(0, 0, 1));
       group.add(ring);
@@ -160,7 +160,7 @@ export const Constellation3D: React.FC<Constellation3DProps> = ({ nodes, edges, 
           <Boxes className="w-7 h-7 text-indigo-400" />
         </div>
         <h3 className={`text-base font-bold font-display ${isDark ? "text-white" : "text-slate-900"}`}>The constellation is empty</h3>
-        <p className={`text-xs max-w-sm leading-relaxed ${isDark ? "text-[#8b93a7]" : "text-slate-500"}`}>
+        <p className={`text-xs max-w-sm leading-relaxed ${isDark ? "text-[#9298b4]" : "text-slate-500"}`}>
           Deploy a mission and each finding becomes a star here — depth and proximity show how the swarm clustered the evidence.
         </p>
       </div>
@@ -174,13 +174,13 @@ export const Constellation3D: React.FC<Constellation3DProps> = ({ nodes, edges, 
         width={dims.w}
         height={dims.h}
         graphData={graphData as any}
-        backgroundColor={isDark ? "#05070c" : "#eef1f8"}
+        backgroundColor={isDark ? "#080b16" : "#efecfa"}
         nodeThreeObject={buildNode}
-        nodeLabel={(n: any) => (active ? "" : `<div style="font:600 11px Inter,sans-serif;color:#fff;background:rgba(10,14,23,.92);padding:4px 8px;border-radius:6px;border:1px solid rgba(129,140,248,.4)">${n.label}</div>`)}
+        nodeLabel={(n: any) => (active ? "" : `<div style="font:600 11px Inter,sans-serif;color:#fff;background:rgba(10,12,20,.92);padding:4px 8px;border-radius:6px;border:1px solid rgba(161,143,255,.4)">${n.label}</div>`)}
         linkColor={(l: any) => {
           const s = typeof l.source === "object" ? l.source.id : l.source;
           const t = typeof l.target === "object" ? l.target.id : l.target;
-          if (highlight.size > 0 && !(highlight.has(s) && highlight.has(t))) return isDark ? "rgba(79,107,216,0.06)" : "rgba(99,102,241,0.08)";
+          if (highlight.size > 0 && !(highlight.has(s) && highlight.has(t))) return isDark ? "rgba(114, 97, 214,0.06)" : "rgba(124,92,255,0.08)";
           return l.color;
         }}
         linkWidth={(l: any) => (l.relation === "contradicts" ? 1.6 : 0.8)}
@@ -205,7 +205,7 @@ export const Constellation3D: React.FC<Constellation3DProps> = ({ nodes, edges, 
           <Boxes className="w-4 h-4 text-indigo-400" />
           <span className={`text-[12px] font-bold font-display tracking-tight ${isDark ? "text-white" : "text-slate-900"}`}>3D Constellation</span>
         </div>
-        <p className={`text-[10px] mt-0.5 ${isDark ? "text-[#8b93a7]" : "text-slate-500"}`}>Drag to orbit · scroll to zoom · click a star to inspect</p>
+        <p className={`text-[10px] mt-0.5 ${isDark ? "text-[#9298b4]" : "text-slate-500"}`}>Drag to orbit · scroll to zoom · click a star to inspect</p>
       </div>
 
       {/* minimal controls */}

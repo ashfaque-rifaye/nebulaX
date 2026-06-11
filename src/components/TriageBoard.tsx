@@ -29,7 +29,7 @@ const accentClasses: Record<string, { head: string; ring: string; dot: string }>
   slate: { head: "text-slate-500", ring: "border-slate-300/40", dot: "bg-slate-400" },
   emerald: { head: "text-emerald-500", ring: "border-emerald-500/40", dot: "bg-emerald-500" },
   red: { head: "text-red-500", ring: "border-red-500/40", dot: "bg-red-500" },
-  blue: { head: "text-blue-500", ring: "border-blue-500/40", dot: "bg-blue-500" },
+  blue: { head: "text-violet-500", ring: "border-violet-500/40", dot: "bg-violet-500" },
 };
 
 export const TriageBoard: React.FC<TriageBoardProps> = ({ nodes, isDark, onSelect, onRequestCorrection }) => {
@@ -88,7 +88,7 @@ export const TriageBoard: React.FC<TriageBoardProps> = ({ nodes, isDark, onSelec
                 onDragLeave={() => setOverLane((l) => (l === lane.key ? null : l))}
                 onDrop={() => handleDrop(lane.key)}
                 className={`flex flex-col rounded-xl border transition-colors min-h-0 ${
-                  isOver ? ac.ring + " " + (isDark ? "bg-white/[0.04]" : "bg-slate-50") : isDark ? "border-white/5 bg-[#0b0e14]/50" : "border-slate-200 bg-slate-50/50"
+                  isOver ? ac.ring + " " + (isDark ? "bg-white/[0.04]" : "bg-slate-50") : isDark ? "border-white/5 bg-[#0b0e1c]/50" : "border-slate-200 bg-slate-50/50"
                 }`}
               >
                 <div className={`flex items-center justify-between px-3 py-2 border-b ${isDark ? "border-white/5" : "border-slate-200"}`}>
@@ -115,7 +115,7 @@ export const TriageBoard: React.FC<TriageBoardProps> = ({ nodes, isDark, onSelec
                       onClick={() => onSelect(n.id)}
                       className={`group cursor-grab active:cursor-grabbing rounded-lg border p-2.5 transition-all ${
                         dragId === n.id ? "opacity-40" : "opacity-100"
-                      } ${isDark ? "bg-[#0c111c] border-white/5 hover:border-white/15" : "bg-white border-slate-200 hover:border-slate-300 shadow-sm"}`}
+                      } ${isDark ? "bg-[#0d1122] border-white/5 hover:border-white/15" : "bg-white border-slate-200 hover:border-slate-300 shadow-sm"}`}
                     >
                       <div className="flex items-start justify-between gap-1">
                         <span className={`text-[7.5px] font-mono uppercase tracking-wider ${isDark ? "text-gray-500" : "text-slate-400"}`}>

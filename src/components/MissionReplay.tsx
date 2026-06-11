@@ -12,8 +12,8 @@ interface MissionReplayProps {
 function stageOf(n: WeaveNode): { key: string; label: string; color: string; icon: React.ReactNode } {
   if (n.type === "correction") return { key: "act", label: "Correct", color: "#10b981", icon: <Undo className="w-3 h-3" /> };
   if (n.flagged_by === "sentinel") return { key: "reason", label: "Reason", color: "#ef4444", icon: <ShieldCheck className="w-3 h-3" /> };
-  if (n.type === "synthesis") return { key: "synth", label: "Synthesize", color: "#38bdf8", icon: <Cpu className="w-3 h-3" /> };
-  return { key: "sense", label: "Sense", color: "#a855f7", icon: <Search className="w-3 h-3" /> };
+  if (n.type === "synthesis") return { key: "synth", label: "Synthesize", color: "#bfa6ff", icon: <Cpu className="w-3 h-3" /> };
+  return { key: "sense", label: "Sense", color: "#9d85ff", icon: <Search className="w-3 h-3" /> };
 }
 
 export const MissionReplay: React.FC<MissionReplayProps> = ({ nodes, events, isDark, onSelect }) => {
@@ -89,7 +89,7 @@ export const MissionReplay: React.FC<MissionReplayProps> = ({ nodes, events, isD
                   onClick={() => onSelect(n.id)}
                   style={{ animation: i === revealed.length - 1 ? "replayIn 0.5s ease-out" : undefined }}
                   className={`cursor-pointer flex items-stretch gap-3 rounded-xl border p-3 transition-all hover:shadow-md ${
-                    isDark ? "bg-[#0b0e14]/60 border-white/5 hover:border-white/15" : "bg-white border-slate-200 hover:border-slate-300"
+                    isDark ? "bg-[#0b0e1c]/60 border-white/5 hover:border-white/15" : "bg-white border-slate-200 hover:border-slate-300"
                   }`}
                 >
                   <div className="flex flex-col items-center gap-1 pt-0.5">
@@ -128,8 +128,8 @@ export const MissionReplay: React.FC<MissionReplayProps> = ({ nodes, events, isD
       </div>
 
       {/* transport controls */}
-      <div className={`border-t px-5 py-3 flex flex-col gap-2 ${isDark ? "border-white/5 bg-[#0b0e14]/60" : "border-slate-200 bg-slate-50"}`}>
-        <div className={`text-[10px] font-mono truncate ${isDark ? "text-blue-300" : "text-blue-600"}`}>{caption}</div>
+      <div className={`border-t px-5 py-3 flex flex-col gap-2 ${isDark ? "border-white/5 bg-[#0b0e1c]/60" : "border-slate-200 bg-slate-50"}`}>
+        <div className={`text-[10px] font-mono truncate ${isDark ? "text-violet-300" : "text-violet-600"}`}>{caption}</div>
         <div className="flex items-center gap-3">
           <button
             onClick={startReplay}
@@ -140,7 +140,7 @@ export const MissionReplay: React.FC<MissionReplayProps> = ({ nodes, events, isD
           </button>
           <button
             onClick={() => (cursor >= ordered.length ? startReplay() : setPlaying((p) => !p))}
-            className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-4 py-1.5 rounded-lg shadow"
+            className="flex items-center gap-1.5 bg-violet-600 hover:bg-violet-500 text-white text-xs font-bold px-4 py-1.5 rounded-lg shadow"
           >
             {playing ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 fill-current" />}
             {playing ? "Pause" : cursor >= ordered.length ? "Replay" : "Play"}
@@ -154,7 +154,7 @@ export const MissionReplay: React.FC<MissionReplayProps> = ({ nodes, events, isD
               setPlaying(false);
               setCursor(Number(e.target.value));
             }}
-            className="flex-1 accent-blue-500 cursor-pointer"
+            className="flex-1 accent-violet-500 cursor-pointer"
           />
           <span className={`text-[10px] font-mono tabular-nums ${isDark ? "text-gray-400" : "text-slate-500"}`}>
             {cursor}/{ordered.length}

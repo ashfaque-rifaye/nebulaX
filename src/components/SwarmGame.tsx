@@ -291,11 +291,11 @@ export const SwarmGame: React.FC<SwarmGameProps> = ({ isDark }) => {
 
       const st = stateRef.current;
       const themeColors = {
-        core: isDark ? "#3b82f6" : "#2563eb",
-        shield: isDark ? "rgba(59, 130, 246, 0.2)" : "rgba(37, 99, 235, 0.15)",
+        core: isDark ? "#7c5cff" : "#6a48f5",
+        shield: isDark ? "rgba(124, 92, 255, 0.2)" : "rgba(106, 72, 245, 0.15)",
         grid: isDark ? "rgba(255, 255, 255, 0.03)" : "rgba(15, 23, 42, 0.03)",
         text: isDark ? "#94a3b8" : "#475569",
-        bg: isDark ? "#080c14" : "#f8fafc",
+        bg: isDark ? "#080c14" : "#faf9fe",
       };
 
       // 1. Clear Screen & Draw Grid with optional shockwave screen shake
@@ -343,7 +343,7 @@ export const SwarmGame: React.FC<SwarmGameProps> = ({ isDark }) => {
             y: Math.random() * st.height,
             vx: (Math.random() - 0.5) * 0.4,
             vy: (Math.random() - 0.5) * 0.4,
-            color: isDark ? "rgba(59, 130, 246, 0.2)" : "rgba(37, 99, 235, 0.1)",
+            color: isDark ? "rgba(124, 92, 255, 0.2)" : "rgba(106, 72, 245, 0.1)",
             size: Math.random() * 3 + 1,
             alpha: 1,
             decay: 0.005,
@@ -369,7 +369,7 @@ export const SwarmGame: React.FC<SwarmGameProps> = ({ isDark }) => {
         const standbyPulse = 1 + Math.sin(Date.now() * 0.003) * 0.15;
         ctx.beginPath();
         ctx.arc(coreX, coreY, coreRadius * standbyPulse, 0, Math.PI * 2);
-        ctx.strokeStyle = "rgba(59, 130, 246, 0.3)";
+        ctx.strokeStyle = "rgba(124, 92, 255, 0.3)";
         ctx.lineWidth = 1.5;
         ctx.stroke();
 
@@ -413,7 +413,7 @@ export const SwarmGame: React.FC<SwarmGameProps> = ({ isDark }) => {
         // Setup progressive threat speeds
         const waveSpeedFactor = 1 + (st.score / 1000) * 0.2;
         const bugHp = 1 + Math.floor(st.score / 400); // tougher enemies later
-        const colorPalette = ["#f43f5e", "#ff007f", "#ec4899", "#d946ef"];
+        const colorPalette = ["#f43f5e", "#ff5fae", "#ff84c1", "#ff5fae"];
         const waveColor = colorPalette[Math.floor(Math.random() * colorPalette.length)];
 
         st.anomalies.push({
@@ -439,7 +439,7 @@ export const SwarmGame: React.FC<SwarmGameProps> = ({ isDark }) => {
       ctx.arc(coreX, coreY, coreRadius * 2, 0, Math.PI * 2);
       ctx.fillStyle = themeColors.shield;
       ctx.fill();
-      ctx.strokeStyle = isDark ? "rgba(59, 130, 246, 0.15)" : "rgba(37, 99, 235, 0.1)";
+      ctx.strokeStyle = isDark ? "rgba(124, 92, 255, 0.15)" : "rgba(106, 72, 245, 0.1)";
       ctx.stroke();
 
       // Main core ball
@@ -471,7 +471,7 @@ export const SwarmGame: React.FC<SwarmGameProps> = ({ isDark }) => {
         ctx.beginPath();
         ctx.moveTo(b.x, b.y);
         ctx.lineTo(coreX, coreY);
-        ctx.strokeStyle = isDark ? "rgba(59, 130, 246, 0.08)" : "rgba(37, 99, 235, 0.05)";
+        ctx.strokeStyle = isDark ? "rgba(124, 92, 255, 0.08)" : "rgba(106, 72, 245, 0.05)";
         ctx.lineWidth = 1;
         ctx.stroke();
 
@@ -503,11 +503,11 @@ export const SwarmGame: React.FC<SwarmGameProps> = ({ isDark }) => {
           ctx.lineWidth = 3;
           ctx.stroke();
         } else if (b.type === "conductor") {
-          ctx.fillStyle = "#8b5cf6"; // purple lightning machine
+          ctx.fillStyle = "#7c5cff"; // purple lightning machine
           ctx.fill();
           // Electric coil details
           ctx.lineWidth = 2;
-          ctx.strokeStyle = "#c084fc";
+          ctx.strokeStyle = "#bfa6ff";
           ctx.beginPath();
           ctx.moveTo(-6, -6); ctx.lineTo(6, 6);
           ctx.moveTo(-6, 6); ctx.lineTo(6, -6);
@@ -588,7 +588,7 @@ export const SwarmGame: React.FC<SwarmGameProps> = ({ isDark }) => {
                     y: (currentSource.y + (currentTarget as Anomaly).y) / 2,
                     vx: 0,
                     vy: 0,
-                    color: "rgba(167, 139, 250, 0.8)",
+                    color: "rgba(191, 166, 255, 0.8)",
                     size: 4,
                     alpha: 1.0,
                     decay: 0.12, // fast flash
@@ -598,7 +598,7 @@ export const SwarmGame: React.FC<SwarmGameProps> = ({ isDark }) => {
                   ctx.beginPath();
                   ctx.moveTo(currentSource.x, currentSource.y);
                   ctx.lineTo((currentTarget as Anomaly).x, (currentTarget as Anomaly).y);
-                  ctx.strokeStyle = "#a78bfa";
+                  ctx.strokeStyle = "#9d85ff";
                   ctx.lineWidth = 3;
                   ctx.stroke();
 
@@ -880,7 +880,7 @@ export const SwarmGame: React.FC<SwarmGameProps> = ({ isDark }) => {
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
         speed,
-        color: isDark ? "#38bdf8" : "#2563eb",
+        color: isDark ? "#bfa6ff" : "#6a48f5",
         size: 4.5,
       });
       
@@ -957,10 +957,10 @@ export const SwarmGame: React.FC<SwarmGameProps> = ({ isDark }) => {
     <div className="w-full flex flex-col h-full bg-[#faeffc]/0 relative" id="swarm-minigame-container">
       {/* HUD DASH HEADER */}
       <div className={`p-2 px-3 border-b flex items-center justify-between backdrop-blur-md select-none ${
-        isDark ? "bg-[#0b0f19]/90 border-white/5" : "bg-white/90 border-slate-200"
+        isDark ? "bg-[#0b0e1c]/90 border-white/5" : "bg-white/90 border-slate-200"
       }`}>
         <div className="flex items-center gap-1.5">
-          <Gamepad2 className="w-3.5 h-3.5 text-blue-500 animate-pulse" />
+          <Gamepad2 className="w-3.5 h-3.5 text-violet-500 animate-pulse" />
           <span className={`text-[10px] font-bold font-mono tracking-wider ${isDark ? "text-gray-300" : "text-slate-800"}`}>
             SWARM DEFENDER v1.0
           </span>
@@ -1004,7 +1004,7 @@ export const SwarmGame: React.FC<SwarmGameProps> = ({ isDark }) => {
           <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] flex flex-col items-center justify-center p-4 text-center">
             
             <div className="max-w-xs flex flex-col items-center justify-center gap-2 select-none animate-fade-in animate-duration-300">
-              <div className="w-10 h-10 rounded-full bg-blue-500/15 border border-blue-500 flex items-center justify-center text-blue-400 mb-1">
+              <div className="w-10 h-10 rounded-full bg-violet-500/15 border border-violet-500 flex items-center justify-center text-violet-400 mb-1">
                 <Cpu className="w-5 h-5 animate-spin" />
               </div>
 
@@ -1024,7 +1024,7 @@ export const SwarmGame: React.FC<SwarmGameProps> = ({ isDark }) => {
 
               <button
                 onClick={startActivation}
-                className="mt-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-extrabold px-6 py-2 rounded-lg transition-all flex items-center justify-center gap-1.5 shadow-lg cursor-pointer"
+                className="mt-1.5 bg-violet-600 hover:bg-violet-500 text-white text-xs font-extrabold px-6 py-2 rounded-lg transition-all flex items-center justify-center gap-1.5 shadow-lg cursor-pointer"
               >
                 <Play className="w-3 h-3 fill-current" />
                 {score > 0 ? "RE-ARM SWARM DEFENSES" : "ENGAGE SIMULATOR"}
@@ -1055,13 +1055,13 @@ export const SwarmGame: React.FC<SwarmGameProps> = ({ isDark }) => {
             }}
             className={`p-1.5 rounded-lg border text-left flex flex-col justify-between transition-all cursor-pointer ${
               selectedTool === "blast"
-                ? "bg-blue-500/10 border-blue-500 text-blue-600 dark:text-blue-400"
+                ? "bg-violet-500/10 border-violet-500 text-violet-600 dark:text-violet-400"
                 : (isDark ? "border-transparent text-gray-400 hover:bg-white/5" : "border-transparent text-slate-600 hover:bg-slate-100")
             }`}
           >
             <div className="flex items-center justify-between w-full">
               <Sparkles className="w-3.5 h-3.5" />
-              <span className="text-[8px] font-mono px-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded">FREE</span>
+              <span className="text-[8px] font-mono px-1 bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400 rounded">FREE</span>
             </div>
             <span className="text-[9px] font-bold mt-1 font-mono leading-none">Blaster</span>
           </button>

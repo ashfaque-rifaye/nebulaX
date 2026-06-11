@@ -153,9 +153,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isDark, onClose, o
     }
   };
 
-  const surface = isDark ? "bg-[#0a0e17] border-white/10" : "bg-white border-slate-200";
-  const inner = isDark ? "bg-[#0f1522] border-white/8" : "bg-slate-50 border-slate-200";
-  const muted = isDark ? "text-[#8b93a7]" : "text-slate-500";
+  const surface = isDark ? "bg-[#0a0d1a] border-white/10" : "bg-white border-slate-200";
+  const inner = isDark ? "bg-[#101427] border-white/8" : "bg-slate-50 border-slate-200";
+  const muted = isDark ? "text-[#9298b4]" : "text-slate-500";
   const title = isDark ? "text-white" : "text-slate-900";
   const headChain = config?.chain || [];
 

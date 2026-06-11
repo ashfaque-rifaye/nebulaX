@@ -19,7 +19,7 @@ export const MissionLog: React.FC<MissionLogProps> = ({ isDark, missions, onOpen
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const title = isDark ? "text-white" : "text-slate-900";
   const muted = isDark ? "text-gray-400" : "text-slate-500";
-  const card = isDark ? "bg-[#0b0f19]/90 border-white/5" : "bg-white border-slate-200 shadow-sm";
+  const card = isDark ? "bg-[#0b0e1c]/90 border-white/5" : "bg-white border-slate-200 shadow-sm";
 
   const sorted = missions.slice().sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
 
@@ -27,7 +27,7 @@ export const MissionLog: React.FC<MissionLogProps> = ({ isDark, missions, onOpen
     <main className="flex-1 overflow-y-auto">
     <div className="max-w-5xl mx-auto w-full p-4 md:p-8 flex flex-col gap-6">
       <header className="flex flex-col gap-1.5">
-        <span className="text-[10px] font-mono tracking-widest text-blue-500 uppercase font-semibold flex items-center gap-1.5">
+        <span className="text-[10px] font-mono tracking-widest text-violet-500 uppercase font-semibold flex items-center gap-1.5">
           <History className="w-3.5 h-3.5" /> Mission Log
         </span>
         <h2 className={`text-2xl md:text-3xl font-extrabold tracking-tight ${title}`}>Every mission, every run — fully tracked</h2>
@@ -71,7 +71,7 @@ export const MissionLog: React.FC<MissionLogProps> = ({ isDark, missions, onOpen
                 </button>
                 <button
                   onClick={() => onOpen(m.id)}
-                  className="flex-shrink-0 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-4 py-2 rounded-lg flex items-center gap-1.5"
+                  className="flex-shrink-0 bg-violet-600 hover:bg-violet-500 text-white text-xs font-bold px-4 py-2 rounded-lg flex items-center gap-1.5"
                 >
                   Open <ArrowRight className="w-3.5 h-3.5" />
                 </button>
@@ -82,7 +82,7 @@ export const MissionLog: React.FC<MissionLogProps> = ({ isDark, missions, onOpen
                   {runs.slice().reverse().map((run) => (
                     <div key={run.id} className="flex items-start gap-2.5">
                       <span className={`w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0 ${isDark ? "bg-white/5" : "bg-slate-100"}`}>
-                        {run.trigger === "monitor" ? <Radio className="w-3 h-3 text-emerald-500" /> : run.trigger === "initial" ? <Sparkles className="w-3 h-3 text-blue-500" /> : <RotateCcw className="w-3 h-3 text-blue-400" />}
+                        {run.trigger === "monitor" ? <Radio className="w-3 h-3 text-emerald-500" /> : run.trigger === "initial" ? <Sparkles className="w-3 h-3 text-violet-500" /> : <RotateCcw className="w-3 h-3 text-violet-400" />}
                       </span>
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">

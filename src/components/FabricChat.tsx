@@ -61,8 +61,8 @@ export const FabricChat: React.FC<FabricChatProps> = ({
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
         {messages.length === 0 && !loading && (
           <div className="flex flex-col items-center justify-center gap-3 text-center mt-6 px-2">
-            <div className="w-11 h-11 rounded-2xl bg-blue-500/15 flex items-center justify-center">
-              <Sparkles className="w-5 h-5 text-blue-500" />
+            <div className="w-11 h-11 rounded-2xl bg-violet-500/15 flex items-center justify-center">
+              <Sparkles className="w-5 h-5 text-violet-500" />
             </div>
             <p className={`text-xs leading-relaxed ${isDark ? "text-gray-400" : "text-slate-500"}`}>
               Ask anything about this mission. Answers are grounded in the woven evidence, with clickable citations.
@@ -73,7 +73,7 @@ export const FabricChat: React.FC<FabricChatProps> = ({
                   key={i}
                   onClick={() => onAsk(s)}
                   className={`text-[11px] text-left px-3 py-2 rounded-lg border transition-all ${
-                    isDark ? "bg-white/[0.03] border-white/10 text-gray-300 hover:border-blue-500/40" : "bg-white border-slate-200 text-slate-600 hover:border-blue-400"
+                    isDark ? "bg-white/[0.03] border-white/10 text-gray-300 hover:border-violet-500/40" : "bg-white border-slate-200 text-slate-600 hover:border-violet-400"
                   }`}
                 >
                   {s}
@@ -87,7 +87,7 @@ export const FabricChat: React.FC<FabricChatProps> = ({
           <div key={m.id} className={`flex flex-col gap-1 ${m.role === "user" ? "items-end" : "items-start"}`}>
             <div className={`max-w-[88%] rounded-2xl px-3.5 py-2.5 text-[12.5px] leading-relaxed whitespace-pre-wrap ${
               m.role === "user"
-                ? "bg-blue-600 text-white rounded-br-sm"
+                ? "bg-violet-600 text-white rounded-br-sm"
                 : isDark ? "bg-[#141a26] text-gray-200 rounded-bl-sm border border-white/5" : "bg-slate-100 text-slate-800 rounded-bl-sm"
             }`}>
               {m.content}
@@ -104,7 +104,7 @@ export const FabricChat: React.FC<FabricChatProps> = ({
                       onClick={() => onCiteClick(cid)}
                       title={n?.title || cid}
                       className={`text-[9px] font-mono px-1.5 py-0.5 rounded border transition-all ${
-                        isDark ? "bg-blue-500/10 border-blue-500/30 text-blue-300 hover:bg-blue-500/20" : "bg-blue-50 border-blue-200 text-blue-600 hover:bg-blue-100"
+                        isDark ? "bg-violet-500/10 border-violet-500/30 text-violet-300 hover:bg-violet-500/20" : "bg-violet-50 border-violet-200 text-violet-600 hover:bg-violet-100"
                       }`}
                     >
                       ↗ {n ? n.title.slice(0, 22) : cid.split("-").pop()}
@@ -131,7 +131,7 @@ export const FabricChat: React.FC<FabricChatProps> = ({
 
         {loading && (
           <div className="flex items-center gap-2 text-xs text-slate-400 font-mono">
-            <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" />
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-500" />
             Reasoning over the fabric…
           </div>
         )}
@@ -139,7 +139,7 @@ export const FabricChat: React.FC<FabricChatProps> = ({
 
       {/* input */}
       <div className={`p-3 border-t ${isDark ? "border-white/5 bg-black/20" : "border-slate-200 bg-slate-50"}`}>
-        <div className={`flex items-end gap-2 rounded-xl border px-3 py-2 ${isDark ? "bg-[#0b0f19] border-white/10" : "bg-white border-slate-200"}`}>
+        <div className={`flex items-end gap-2 rounded-xl border px-3 py-2 ${isDark ? "bg-[#0b0e1c] border-white/10" : "bg-white border-slate-200"}`}>
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -151,7 +151,7 @@ export const FabricChat: React.FC<FabricChatProps> = ({
           <button
             onClick={submit}
             disabled={loading || !input.trim()}
-            className="bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white p-1.5 rounded-lg flex-shrink-0"
+            className="bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white p-1.5 rounded-lg flex-shrink-0"
           >
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
           </button>

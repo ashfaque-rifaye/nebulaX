@@ -80,9 +80,9 @@ export const DynamicNodeBody: React.FC<Props> = ({ node, isDark, compact }) => {
       );
       return (
         <div>
-          <div className="flex items-center gap-1 mb-1 text-[8px] font-mono uppercase tracking-wider text-blue-500"><ArrowLeftRight className="w-2.5 h-2.5" /> comparison</div>
+          <div className="flex items-center gap-1 mb-1 text-[8px] font-mono uppercase tracking-wider text-violet-500"><ArrowLeftRight className="w-2.5 h-2.5" /> comparison</div>
           <div className="flex gap-2 items-start">
-            {col(d.left, "text-blue-500")}
+            {col(d.left, "text-violet-500")}
             <div className={`w-px self-stretch ${isDark ? "bg-white/10" : "bg-slate-200"}`} />
             {col(d.right, "text-fuchsia-500")}
           </div>
@@ -96,7 +96,7 @@ export const DynamicNodeBody: React.FC<Props> = ({ node, isDark, compact }) => {
         <ul className="flex flex-col gap-1">
           {asArray(d.items).slice(0, compact ? 3 : 6).map((p: any, i: number) => (
             <li key={i} className={`text-[10px] leading-snug flex gap-1.5 ${muted}`}>
-              <span className="text-blue-500 font-bold flex-shrink-0">›</span>
+              <span className="text-violet-500 font-bold flex-shrink-0">›</span>
               <span className={compact ? "line-clamp-1" : ""}>{str(p)}</span>
             </li>
           ))}

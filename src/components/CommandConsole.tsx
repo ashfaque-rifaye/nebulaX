@@ -59,7 +59,7 @@ export const CommandConsole: React.FC<CommandConsoleProps> = ({
               : isDark
               ? "border-white/10 shadow-black/40"
               : "border-slate-200 shadow-slate-200/60"
-          } ${isDark ? "bg-[#0b0f19]" : "bg-white"}`}
+          } ${isDark ? "bg-[#0b0e1c]" : "bg-white"}`}
         >
           {/* animated glow ring while listening */}
           {isListening && (
@@ -88,7 +88,7 @@ export const CommandConsole: React.FC<CommandConsoleProps> = ({
               {/* persona selector */}
               <div
                 className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 ${
-                  isDark ? "bg-[#111622] border-white/10" : "bg-slate-50 border-slate-200"
+                  isDark ? "bg-[#12152a] border-white/10" : "bg-slate-50 border-slate-200"
                 }`}
               >
                 <Bot className="w-3.5 h-3.5 text-indigo-400" />
@@ -100,7 +100,7 @@ export const CommandConsole: React.FC<CommandConsoleProps> = ({
                   }`}
                 >
                   {personas.map((p) => (
-                    <option key={p} value={p} className={isDark ? "bg-[#111622] text-white" : "bg-white text-slate-800"}>
+                    <option key={p} value={p} className={isDark ? "bg-[#12152a] text-white" : "bg-white text-slate-800"}>
                       {p}
                     </option>
                   ))}

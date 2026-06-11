@@ -1,48 +1,79 @@
 @import "tailwindcss";
 
 /* ═══════════════════════════════════════════════════════════════════════
-   NEBULAX DESIGN SYSTEM — Premium Intelligence Console
-   Dark Mode 2.0: deep charcoal + rich navy slate + electric accents.
-   Light mode: cool paper-white with the same semantic roles.
+   NEBULAX DESIGN SYSTEM — LUNA
+   Deep-navy night sky (#080b16), luna-purple → luna-pink brand gradient,
+   lavender accents, glass morphism, starfield + moon ambience.
+   Light mode is the daylit counterpart of the same semantic roles.
    ═══════════════════════════════════════════════════════════════════════ */
 
 @theme {
-  /* ── Typography ── */
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Space Grotesk", "Inter", sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  /* ── Typography (deliberately NOT Inter — Luna uses Inter) ── */
+  --font-sans: "Figtree", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Bricolage Grotesque", "Figtree", sans-serif;
+  --font-mono: "Spline Sans Mono", ui-monospace, SFMono-Regular, monospace;
+
+  /* ── LUNA brand palette ── */
+  --color-luna-purple: #7c5cff;
+  --color-luna-pink: #ff84c1;
+  --color-luna-lavender: #bfa6ff;
+  --color-luna-navy: #080b16;
 
   /* ── Confidence system (identical meaning in every view) ── */
   --color-conf-high: #34d399;
   --color-conf-mid: #fbbf24;
   --color-conf-low: #fb7185;
 
-  /* ── Brand accent palette — electric ── */
-  --color-nebula-blue: #6366f1;
-  --color-nebula-indigo: #818cf8;
-  --color-nebula-violet: #a78bfa;
-  --color-nebula-cyan: #22d3ee;
-  --color-nebula-rose: #fb7185;
-  --color-nebula-emerald: #34d399;
-  --color-nebula-amber: #fbbf24;
+  /* ── Re-anchor Tailwind accent scales onto the LUNA hues so every
+        existing `violet-*` / `indigo-*` / `fuchsia-*` / `cyan-*` utility
+        across the app lands exactly on-brand ── */
+  --color-violet-300: #cfbdff;
+  --color-violet-400: #9d85ff;
+  --color-violet-500: #7c5cff;
+  --color-violet-600: #6a48f5;
+  --color-violet-700: #5936d6;
+
+  --color-indigo-300: #bfa6ff;
+  --color-indigo-400: #a18fff;
+  --color-indigo-500: #7c5cff;
+  --color-indigo-600: #6347e8;
+  --color-indigo-700: #5331c8;
+
+  --color-fuchsia-300: #ffa7d2;
+  --color-fuchsia-400: #ff84c1;
+  --color-fuchsia-500: #ff5fae;
+  --color-fuchsia-600: #ee3d95;
+
+  --color-cyan-300: #d3c3ff;
+  --color-cyan-400: #bfa6ff;
+  --color-cyan-500: #ab8fff;
+  --color-cyan-600: #9d7bff;
+
+  --color-sky-300: #d3c3ff;
+  --color-sky-400: #bfa6ff;
+  --color-sky-500: #ab8fff;
 
   /* ── Surfaces (dark defaults; runtime vars flip per theme) ── */
-  --color-nx-deep: #05070c;
-  --color-nx-surface: #0a0e17;
-  --color-nx-elevated: #0f1522;
-  --color-nx-overlay: #131a2b;
+  --color-nx-deep: #080b16;
+  --color-nx-surface: #0a0c14;
+  --color-nx-elevated: #0d1020;
+  --color-nx-overlay: #111527;
 }
 
 /* ── Semantic runtime tokens (theme-switched) ─────────────────────────── */
 :root {
-  --nx-bg-deep: #f4f6fb;
+  --nx-bg-deep: #f6f4fd;
   --nx-bg-surface: #ffffff;
-  --nx-bg-elevated: #eef1f8;
-  --nx-border-subtle: rgba(15, 23, 42, 0.08);
-  --nx-border-active: rgba(99, 102, 241, 0.45);
-  --nx-text-primary: #0f172a;
-  --nx-text-muted: #5a6478;
-  --nx-glow-accent: rgba(99, 102, 241, 0.12);
+  --nx-bg-elevated: #efecfa;
+  --nx-border-subtle: rgba(20, 16, 31, 0.08);
+  --nx-border-active: rgba(106, 72, 245, 0.45);
+  --nx-text-primary: #15102a;
+  --nx-text-muted: #5d5675;
+  --nx-glow-accent: rgba(124, 92, 255, 0.12);
+  --nx-glow-pink: rgba(255, 132, 193, 0.1);
+  --glass-bg: rgba(255, 255, 255, 0.62);
+  --glass-bg-strong: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(20, 16, 31, 0.1);
 
   /* semantic z-index scale */
   --z-canvas-hud: 20;
@@ -56,14 +87,18 @@
 }
 
 .dark {
-  --nx-bg-deep: #05070c;
-  --nx-bg-surface: #0a0e17;
-  --nx-bg-elevated: #0f1522;
-  --nx-border-subtle: rgba(255, 255, 255, 0.07);
-  --nx-border-active: rgba(129, 140, 248, 0.5);
-  --nx-text-primary: #e6eaf4;
-  --nx-text-muted: #8b93a7;
-  --nx-glow-accent: rgba(99, 102, 241, 0.22);
+  --nx-bg-deep: #080b16;
+  --nx-bg-surface: #0a0c14;
+  --nx-bg-elevated: #0d1020;
+  --nx-border-subtle: rgba(255, 255, 255, 0.08);
+  --nx-border-active: rgba(124, 92, 255, 0.55);
+  --nx-text-primary: #ffffff;
+  --nx-text-muted: rgba(255, 255, 255, 0.55);
+  --nx-glow-accent: rgba(124, 92, 255, 0.22);
+  --nx-glow-pink: rgba(255, 132, 193, 0.14);
+  --glass-bg: rgba(255, 255, 255, 0.05);
+  --glass-bg-strong: rgba(255, 255, 255, 0.08);
+  --glass-border: rgba(255, 255, 255, 0.1);
 }
 
 @layer base {
@@ -78,15 +113,14 @@
     color: var(--nx-text-primary);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    font-feature-settings: "cv11", "ss01";
   }
   h1, h2, h3, h4 {
     font-family: var(--font-display);
-    letter-spacing: -0.02em;
+    letter-spacing: -0.025em;
     text-wrap: balance;
   }
   ::selection {
-    background: rgba(99, 102, 241, 0.35);
+    background: rgba(124, 92, 255, 0.4);
   }
   button { cursor: pointer; }
   button:disabled { cursor: not-allowed; }
@@ -103,18 +137,53 @@
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: rgba(139, 147, 167, 0.22);
+  background: rgba(149, 142, 178, 0.25);
   border-radius: 99px;
 }
-::-webkit-scrollbar-thumb:hover { background: rgba(139, 147, 167, 0.42); }
+::-webkit-scrollbar-thumb:hover { background: rgba(149, 142, 178, 0.45); }
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(139, 147, 167, 0.22) transparent;
+  scrollbar-color: rgba(149, 142, 178, 0.25) transparent;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
-   MATERIALS — noise, glass, glow
+   MATERIALS — glass, gradients, noise
    ═══════════════════════════════════════════════════════════════════════ */
+
+/* LUNA glass morphism: translucent white film + 20px blur. Border color
+   stays in markup so each surface can tune it. */
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px) saturate(1.35);
+  -webkit-backdrop-filter: blur(20px) saturate(1.35);
+}
+.glass-strong {
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(24px) saturate(1.45);
+  -webkit-backdrop-filter: blur(24px) saturate(1.45);
+}
+
+/* Brand gradient — logo marks, primary CTAs, decorative lines */
+.bg-luna-gradient {
+  background-image: linear-gradient(to top right, #7c5cff, #ff84c1);
+}
+
+/* Hero highlight words (LUNA spec) — display sizes only */
+.text-gradient {
+  background: linear-gradient(to right, #7c5cff 0%, #bfa6ff 50%, #ff84c1 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: #9d85ff; /* fallback when clip unsupported */
+}
+:root:not(.dark) .text-gradient {
+  background-image: linear-gradient(to right, #6a48f5 0%, #8d6fff 50%, #ee3d95 100%);
+}
+
+/* Gradient hairline separators */
+.hairline-gradient {
+  background: linear-gradient(90deg, transparent, var(--glass-border), transparent);
+}
 
 /* Fine tactile noise overlay: breaks up flat vector surfaces. Apply to a
    positioned container; the grain sits above background, below content. */
@@ -129,23 +198,11 @@
 }
 .dark .noise::before { opacity: 0.035; }
 
-/* Micro-glassmorphism: reserved for chrome (header, HUDs, modals). */
-.glass {
-  background: color-mix(in srgb, var(--nx-bg-surface) 78%, transparent);
-  backdrop-filter: blur(18px) saturate(1.4);
-  -webkit-backdrop-filter: blur(18px) saturate(1.4);
-}
-.glass-strong {
-  background: color-mix(in srgb, var(--nx-bg-surface) 90%, transparent);
-  backdrop-filter: blur(24px) saturate(1.5);
-  -webkit-backdrop-filter: blur(24px) saturate(1.5);
-}
-
 /* Soft glowing gradient backdrop for hero / stage areas */
 .stage-glow {
   background:
     radial-gradient(1100px 520px at 18% -12%, var(--nx-glow-accent), transparent 60%),
-    radial-gradient(900px 460px at 92% 0%, rgba(34, 211, 238, 0.07), transparent 55%),
+    radial-gradient(900px 460px at 92% 0%, var(--nx-glow-pink), transparent 55%),
     var(--nx-bg-deep);
 }
 
@@ -153,7 +210,7 @@
 .canvas-stage {
   background-image:
     radial-gradient(ellipse 70% 55% at 50% 42%, var(--nx-glow-accent), transparent 70%),
-    radial-gradient(rgba(139, 147, 167, 0.16) 1px, transparent 1px);
+    radial-gradient(rgba(149, 142, 178, 0.16) 1px, transparent 1px);
   background-size: 100% 100%, 24px 24px;
 }
 
@@ -167,7 +224,7 @@
   inset: -3px;
   border-radius: inherit;
   padding: 1.5px;
-  background: conic-gradient(from 180deg, #6366f1, #22d3ee, #a78bfa, #6366f1);
+  background: conic-gradient(from 180deg, #7c5cff, #bfa6ff, #ff84c1, #7c5cff);
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
@@ -175,6 +232,80 @@
   animation: holo-spin 6s linear infinite;
 }
 @keyframes holo-spin { to { transform: rotate(360deg); } }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   NIGHT SKY — starfield, moon, shooting stars (beyond the LUNA spec)
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* Layered repeating radial-gradient stars; prime-ish tile sizes hide the
+   repeat. Hidden in light mode (daylit sky instead). */
+.starfield {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(1px 1px at 12% 22%, rgba(255, 255, 255, 0.9), transparent 55%),
+    radial-gradient(1px 1px at 68% 11%, rgba(255, 255, 255, 0.7), transparent 55%),
+    radial-gradient(1.5px 1.5px at 42% 64%, rgba(191, 166, 255, 0.85), transparent 55%),
+    radial-gradient(1px 1px at 86% 47%, rgba(255, 255, 255, 0.6), transparent 55%),
+    radial-gradient(1.5px 1.5px at 24% 84%, rgba(255, 132, 193, 0.5), transparent 55%),
+    radial-gradient(1px 1px at 55% 33%, rgba(255, 255, 255, 0.55), transparent 55%),
+    radial-gradient(2px 2px at 78% 76%, rgba(191, 166, 255, 0.6), transparent 55%);
+  background-size: 460px 460px, 390px 390px, 540px 540px, 420px 420px, 610px 610px, 340px 340px, 700px 700px;
+}
+.starfield-twinkle { animation: twinkle 5.5s ease-in-out infinite alternate; }
+@keyframes twinkle { from { opacity: 0.45; } to { opacity: 1; } }
+:root:not(.dark) .starfield { opacity: 0; }
+
+/* The moon itself: lit sphere + lavender halo; faint by daylight. */
+.moon {
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 31% 28%, #fffdf9 0%, #f0eafd 36%, #cfc2f1 60%, #9b89d6 84%, #6f5cb8 100%);
+  box-shadow:
+    inset -18px -14px 44px rgba(67, 50, 140, 0.45),
+    0 0 60px 12px rgba(191, 166, 255, 0.35),
+    0 0 140px 44px rgba(124, 92, 255, 0.2);
+  position: relative;
+}
+.moon::after {
+  /* craters */
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background:
+    radial-gradient(9% 9% at 64% 38%, rgba(111, 92, 184, 0.5), transparent 70%),
+    radial-gradient(6% 6% at 38% 62%, rgba(111, 92, 184, 0.45), transparent 70%),
+    radial-gradient(12% 12% at 52% 76%, rgba(111, 92, 184, 0.35), transparent 70%),
+    radial-gradient(5% 5% at 26% 36%, rgba(111, 92, 184, 0.4), transparent 70%);
+}
+:root:not(.dark) .moon {
+  opacity: 0.85;
+  box-shadow:
+    inset -18px -14px 44px rgba(67, 50, 140, 0.25),
+    0 0 60px 12px rgba(124, 92, 255, 0.18);
+}
+
+/* Occasional meteor streak across the hero */
+.shooting-star {
+  position: absolute;
+  width: 130px;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.95), rgba(191, 166, 255, 0.4) 55%, transparent);
+  filter: drop-shadow(0 0 6px rgba(191, 166, 255, 0.8));
+  opacity: 0;
+  rotate: 205deg;
+  animation: shoot 9s ease-in infinite;
+}
+@keyframes shoot {
+  0% { opacity: 0; translate: 0 0; }
+  2% { opacity: 1; }
+  9% { opacity: 0; translate: -330px 160px; }
+  100% { opacity: 0; translate: -330px 160px; }
+}
+:root:not(.dark) .shooting-star { display: none; }
 
 /* ═══════════════════════════════════════════════════════════════════════
    CORE ANIMATIONS
@@ -212,6 +343,13 @@
 }
 .float-y { animation: float-y 5s ease-in-out infinite; }
 
+/* LUNA hero float: slower, deeper */
+@keyframes float-deep {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-20px); }
+}
+.float-deep { animation: float-deep 7s ease-in-out infinite; }
+
 /* Entrances */
 @keyframes fadeInUp {
   0% { opacity: 0; transform: translateY(12px) scale(0.97); }
@@ -239,7 +377,7 @@
 /* Shimmer for skeleton loading */
 @keyframes shimmer { to { background-position-x: -200%; } }
 .skeleton {
-  background: linear-gradient(110deg, transparent 40%, rgba(139,147,167,0.14) 50%, transparent 60%) 200% 0 / 200% 100%, var(--nx-bg-elevated);
+  background: linear-gradient(110deg, transparent 40%, rgba(149,142,178,0.14) 50%, transparent 60%) 200% 0 / 200% 100%, var(--nx-bg-elevated);
   animation: shimmer 1.6s linear infinite;
   border-radius: 6px;
 }
@@ -250,6 +388,34 @@
   100% { opacity: 1; transform: translateY(0); }
 }
 .ticker-in { animation: ticker-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+/* Capability marquee (home): duplicated track scrolls half its width */
+.marquee {
+  overflow: hidden;
+  mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent);
+}
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee 36s linear infinite;
+}
+.marquee:hover .marquee-track { animation-play-state: paused; }
+@keyframes marquee { to { transform: translateX(-50%); } }
+
+/* Scroll-driven reveal — progressive enhancement, content visible by
+   default everywhere (and in non-supporting browsers / headless renders). */
+@supports (animation-timeline: view()) {
+  .scroll-reveal {
+    animation: reveal-rise both cubic-bezier(0.16, 1, 0.3, 1);
+    animation-timeline: view();
+    animation-range: entry 0% entry 42%;
+  }
+  @keyframes reveal-rise {
+    from { opacity: 0.001; transform: translateY(28px); }
+    to { opacity: 1; transform: none; }
+  }
+}
 
 /* Voice waveform bars */
 @keyframes wave {
@@ -266,26 +432,41 @@
    ═══════════════════════════════════════════════════════════════════════ */
 
 .card-hover {
-  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
-              box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1),
-              border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .card-hover:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 32px rgba(2, 4, 10, 0.35), 0 0 0 1px var(--nx-border-active);
+  transform: translateY(-3px);
+  box-shadow: 0 14px 40px rgba(4, 4, 14, 0.4), 0 0 0 1px var(--nx-border-active);
+}
+:root:not(.dark) .card-hover:hover {
+  box-shadow: 0 14px 40px rgba(64, 48, 140, 0.14), 0 0 0 1px var(--nx-border-active);
 }
 
 /* Tactile press for primary buttons */
 .press { transition: transform 0.12s cubic-bezier(0.16, 1, 0.3, 1); }
 .press:active { transform: scale(0.97); }
 
+/* LUNA primary CTA glow */
+.cta-luna {
+  box-shadow: 0 8px 30px rgba(124, 92, 255, 0.3);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.cta-luna:hover {
+  transform: scale(1.05);
+  box-shadow: 0 12px 42px rgba(124, 92, 255, 0.42);
+}
+.cta-luna:active { transform: scale(0.96); }
+
 /* ═══════════════════════════════════════════════════════════════════════
    AGENT SYSTEM — status indicators
    ═══════════════════════════════════════════════════════════════════════ */
 
 @keyframes agent-halo {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(99,102,241,0.0); }
-  50% { box-shadow: 0 0 18px 2px rgba(99,102,241,0.5); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(124,92,255,0.0); }
+  50% { box-shadow: 0 0 18px 2px rgba(124,92,255,0.5); }
 }
 .agent-working { animation: agent-halo 1.6s infinite ease-in-out; }
 
@@ -308,7 +489,7 @@
 .spin-ring { animation: spin-ring 1.1s linear infinite; }
 
 /* ═══════════════════════════════════════════════════════════════════════
-   TEMPORAL VISTA + RADAR
+   TEMPORAL VISTA + SIGNALS
    ═══════════════════════════════════════════════════════════════════════ */
 
 @keyframes vista-bloom {
@@ -322,9 +503,9 @@
 .thread-flow { stroke-dasharray: 4 5; animation: thread-flow 0.9s linear infinite; }
 
 @keyframes radarPulse {
-  0% { box-shadow: 0 0 0 0 rgba(99,102,241,0.6); }
-  70% { box-shadow: 0 0 0 8px rgba(99,102,241,0); }
-  100% { box-shadow: 0 0 0 0 rgba(99,102,241,0); }
+  0% { box-shadow: 0 0 0 0 rgba(124,92,255,0.6); }
+  70% { box-shadow: 0 0 0 8px rgba(124,92,255,0); }
+  100% { box-shadow: 0 0 0 0 rgba(124,92,255,0); }
 }
 .radar-pulse { animation: radarPulse 1.5s ease-out; }
 
@@ -348,7 +529,7 @@
   border-radius: 10px;
   overflow: hidden;
   border: 1px solid var(--nx-border-subtle);
-  box-shadow: 0 8px 24px rgba(2, 4, 10, 0.4);
+  box-shadow: 0 8px 24px rgba(4, 4, 14, 0.4);
 }
 /* Fade nodes in WITHOUT animating transform — ReactFlow owns each node's
    `transform: translate(x,y)`, and a transform keyframe (even via fill-mode)
@@ -387,6 +568,9 @@
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
-  .aurora, .float-y, .glow-bg, .holo-ring::after, .wave-bar,
-  .animate-scanner, .agent-working, .spin-ring { animation: none !important; }
+  .aurora, .float-y, .float-deep, .glow-bg, .holo-ring::after, .wave-bar,
+  .animate-scanner, .agent-working, .spin-ring, .starfield-twinkle,
+  .shooting-star, .marquee-track { animation: none !important; }
+  .shooting-star { display: none; }
+  .scroll-reveal { animation: none !important; opacity: 1; transform: none; }
 }

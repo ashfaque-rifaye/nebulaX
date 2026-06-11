@@ -76,18 +76,14 @@ import { CommandConsole } from "./components/CommandConsole.tsx";
 import { FabricCanvas } from "./components/FabricCanvas.tsx";
 import { TriageBoard } from "./components/TriageBoard.tsx";
 import { MissionReplay } from "./components/MissionReplay.tsx";
-import { SignalRadar } from "./components/SignalRadar.tsx";
 import { MissionPlanner } from "./components/MissionPlanner.tsx";
 import { SettingsModal } from "./components/SettingsModal.tsx";
 import { OnboardingTour, TourStep } from "./components/OnboardingTour.tsx";
-import { Fabric3D } from "./components/Fabric3D.tsx";
 
-// Workspace lens definitions: one fabric, seven complementary views.
+// Workspace lens definitions: one fabric, five complementary views.
 const WORKSPACE_VIEWS = [
-  { key: "canvas", label: "Board", desc: "Evidence Board — drag, connect & correct findings", Icon: Network },
-  { key: "fabric2d", label: "Flow", desc: "Flow Map — auto-laid intelligence pipeline", Icon: GitBranch },
-  { key: "radar", label: "Radar", desc: "Signal Radar — closer to center = higher confidence", Icon: Radar },
-  { key: "fabric3d", label: "Orbit", desc: "Orbit — immersive 3D constellation of the fabric", Icon: Boxes },
+  { key: "canvas", label: "Board", desc: "Evidence Board — cluster & inspect findings in 2D or 3D", Icon: Network },
+  { key: "fabric2d", label: "Flow", desc: "Flow Map — auto-laid sensing → synthesis pipeline", Icon: GitBranch },
   { key: "vista", label: "Futures", desc: "Temporal Vista — forecast branching scenarios", Icon: Clock },
   { key: "triage", label: "Triage", desc: "Triage lanes — verified / drift / corrected", Icon: Columns3 },
   { key: "replay", label: "Replay", desc: "Replay — watch the fabric weave itself, run by run", Icon: History },
@@ -2427,27 +2423,6 @@ export default function App() {
               />
             )}
 
-            {/* --- SIGNAL RADAR VIEWPORT --- */}
-            {workspaceMode === "radar" && (
-              <SignalRadar
-                nodes={nodes}
-                isDark={isDark}
-                selectedNodeId={selectedNodeId}
-                onSelect={(id) => { setSelectedNodeId(id); const n = nodes.find(x => x.id === id); if (n && (n.type === "web-signal" || n.type === "synthesis")) setCorrectionContent(n.content); }}
-              />
-            )}
-
-            {/* --- ORBIT: immersive 3D constellation of the fabric --- */}
-            {workspaceMode === "fabric3d" && (
-              <Fabric3D
-                nodes={nodes}
-                edges={edges}
-                isDark={isDark}
-                selectedNodeId={selectedNodeId}
-                onSelect={(id) => { setSelectedNodeId(id); const n = nodes.find(x => x.id === id); if (n && (n.type === "web-signal" || n.type === "synthesis")) setCorrectionContent(n.content); }}
-              />
-            )}
-
             {/* --- TEMPORAL VISTA (EchoForge: past → present → futures) --- */}
             {workspaceMode === "vista" && (
               <TemporalVista
@@ -3015,62 +2990,6 @@ export default function App() {
                         </div>
                       )}
                     </div>
-
-                    {/* INTERACTIVE MEMORY CORRECTOR VETO FORM */}
-                    {(selectedNode.type === "web-signal" || selectedNode.type === "synthesis") && (
-                      <div className={`flex flex-col gap-3 p-4 rounded-xl no-pan border ${
-                        isDark ? "bg-[#090c12]/90 border-white/5" : "bg-slate-50 border-slate-200"
-                      }`}>
-                        <span className={`text-[10px] font-mono tracking-wider uppercase font-bold flex items-center gap-1.5 select-none leading-none ${
-                          isDark ? "text-teal-400" : "text-teal-700"
-                        }`}>
-                          <Undo className="w-3.5 h-3.5" />
-                          VERIFY COGNITIVE SWARM CLAIM
-                        </span>
-                        
-                        <p className={`text-[10px] leading-relaxed font-sans select-none ${isDark ? "text-gray-400" : "text-slate-500"}`}>
-                          Submit an authoritative human verification veto claim. This injects a high credibility Correction node (100% CF) to bypass drift anomalies in the swarm.
-                        </p>
-
-                        <div className="flex flex-col gap-1">
-                          <label className={`text-[9.5px] font-mono select-none ${isDark ? "text-gray-500" : "text-slate-400"}`}>Corrected claim statement:</label>
-                          <textarea
-                            placeholder="Provide correct verified data values..."
-                            value={correctionContent}
-                            onChange={e => setCorrectionContent(e.target.value)}
-                            className={`w-full h-20 border p-2 rounded text-xs placeholder-slate-400 focus:outline-none focus:border-blue-500 font-sans ${
-                              isDark ? "bg-black/40 border-white/5 text-white" : "bg-white border-slate-200 text-slate-800"
-                            }`}
-                          />
-                        </div>
-
-                        <div className="flex flex-col gap-1">
-                          <label className={`text-[9.5px] font-mono select-none ${isDark ? "text-gray-500" : "text-slate-400"}`}>Operator veto reason:</label>
-                          <input
-                            type="text"
-                            placeholder="e.g., Confirmed waiver applies June 2026"
-                            value={correctionReason}
-                            onChange={e => setCorrectionReason(e.target.value)}
-                            className={`w-full border p-2 rounded text-xs placeholder-slate-400 focus:outline-none focus:border-blue-500 font-sans ${
-                              isDark ? "bg-black/40 border-white/5 text-white" : "bg-white border-slate-200 text-slate-800"
-                            }`}
-                          />
-                        </div>
-
-                        <button
-                          onClick={() => handleSubmitCorrection(selectedNode.id)}
-                          disabled={isCorrecting || !correctionContent.trim()}
-                          className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold py-2 px-3 rounded-lg transition-all flex items-center justify-center gap-1.5 shadow-md disabled:opacity-50 select-none cursor-pointer"
-                        >
-                          {isCorrecting ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          ) : (
-                            <ShieldCheck className="w-3.5 h-3.5 animate-pulse" />
-                          )}
-                          Submit Memory Correction Veto
-                        </button>
-                      </div>
-                    )}
 
                     {/* CITATION AND PROVENANCE LISTS */}
                     {selectedNode.provenance && selectedNode.provenance.length > 0 && (

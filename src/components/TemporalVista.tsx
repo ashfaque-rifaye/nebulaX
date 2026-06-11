@@ -145,7 +145,7 @@ export const TemporalVista: React.FC<TemporalVistaProps> = ({ nodes, isDark, sel
                 onMouseEnter={() => setHoverPresent(n.id)}
                 onMouseLeave={() => setHoverPresent(null)}
                 onClick={() => onSelect(n.id)}
-                className={`text-left rounded-lg border p-2.5 transition-all ${selectedNodeId === n.id ? "ring-1 ring-blue-500" : ""} ${lit ? "ring-1 ring-emerald-500 scale-[1.01]" : ""} ${active && !lit && hoverPresent !== n.id ? "opacity-50" : "opacity-100"} ${isDark ? "bg-[#0b0e14]/60 border-white/5 hover:border-white/15" : "bg-white border-slate-200 hover:border-slate-300 shadow-sm"}`}
+                className={`text-left rounded-lg border p-2.5 transition-all ${selectedNodeId === n.id ? "ring-1 ring-violet-500" : ""} ${lit ? "ring-1 ring-emerald-500 scale-[1.01]" : ""} ${active && !lit && hoverPresent !== n.id ? "opacity-50" : "opacity-100"} ${isDark ? "bg-[#0b0e1c]/60 border-white/5 hover:border-white/15" : "bg-white border-slate-200 hover:border-slate-300 shadow-sm"}`}
               >
                 <div className="flex items-center gap-1.5 mb-0.5">
                   <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: conf(n.confidence) }} />
@@ -160,9 +160,9 @@ export const TemporalVista: React.FC<TemporalVistaProps> = ({ nodes, isDark, sel
 
         {/* NOW divider */}
         <div className="hidden lg:flex flex-col items-center justify-center relative">
-          <div className={`absolute inset-y-4 w-px ${isDark ? "bg-gradient-to-b from-emerald-500/0 via-blue-500/40 to-fuchsia-500/0" : "bg-gradient-to-b from-emerald-400/0 via-blue-400/50 to-fuchsia-400/0"}`} />
-          <div className="rotate-90 flex items-center gap-1 text-[9px] font-mono uppercase tracking-widest text-blue-500 whitespace-nowrap">now <ArrowRight className="w-3 h-3" /></div>
-          <Zap className="absolute top-6 w-3 h-3 text-blue-400 animate-pulse" />
+          <div className={`absolute inset-y-4 w-px ${isDark ? "bg-gradient-to-b from-emerald-500/0 via-violet-500/40 to-fuchsia-500/0" : "bg-gradient-to-b from-emerald-400/0 via-violet-400/50 to-fuchsia-400/0"}`} />
+          <div className="rotate-90 flex items-center gap-1 text-[9px] font-mono uppercase tracking-widest text-violet-500 whitespace-nowrap">now <ArrowRight className="w-3 h-3" /></div>
+          <Zap className="absolute top-6 w-3 h-3 text-violet-400 animate-pulse" />
         </div>
 
         {/* FUTURES */}
@@ -192,7 +192,7 @@ export const TemporalVista: React.FC<TemporalVistaProps> = ({ nodes, isDark, sel
                 onMouseLeave={() => setHoverFuture(null)}
                 onClick={() => onSelect(f.id)}
                 style={{ borderColor: `${rs.c}4d`, animationDelay: `${i * 0.08}s` }}
-                className={`text-left rounded-xl border p-3.5 transition-all hover:-translate-y-0.5 ${bloom ? "vista-bloom" : ""} ${selectedNodeId === f.id ? "ring-1 ring-fuchsia-500" : ""} ${lit ? "ring-1 ring-fuchsia-500 scale-[1.01]" : ""} ${active && !lit && hoverFuture !== f.id ? "opacity-50" : "opacity-100"} ${isDark ? "bg-[#0c111c]" : "bg-white shadow-sm"}`}
+                className={`text-left rounded-xl border p-3.5 transition-all hover:-translate-y-0.5 ${bloom ? "vista-bloom" : ""} ${selectedNodeId === f.id ? "ring-1 ring-fuchsia-500" : ""} ${lit ? "ring-1 ring-fuchsia-500 scale-[1.01]" : ""} ${active && !lit && hoverFuture !== f.id ? "opacity-50" : "opacity-100"} ${isDark ? "bg-[#0d1122]" : "bg-white shadow-sm"}`}
               >
                 <div className="flex items-center justify-between gap-2 mb-1">
                   <span className="flex items-center gap-1 text-[9px] font-mono font-bold uppercase" style={{ color: rs.c }}><rs.Icon className="w-3 h-3" /> {rs.label}</span>
@@ -200,7 +200,7 @@ export const TemporalVista: React.FC<TemporalVistaProps> = ({ nodes, isDark, sel
                 </div>
                 <h4 className={`text-[12.5px] font-extrabold leading-tight ${title}`}>{f.title.replace(/^Future:\s*/, "")}</h4>
                 <p className={`text-[10.5px] leading-snug mt-1 line-clamp-3 ${muted}`}>{f.content}</p>
-                <div className="mt-2 h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: isDark ? "rgba(255,255,255,0.08)" : "#e2e8f0" }}>
+                <div className="mt-2 h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: isDark ? "rgba(255,255,255,0.08)" : "#e6e2f2" }}>
                   <div className="h-full rounded-full transition-all" style={{ width: `${prob}%`, backgroundColor: rs.c }} />
                 </div>
                 {/* influence count */}

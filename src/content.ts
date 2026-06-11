@@ -17,7 +17,7 @@ export const AGENTS: AgentInfo[] = [
     id: "conductor", codename: "Conductor", role: "Mission Planner",
     blurb: "Breaks your goal into a research plan.",
     detail: "Reads your plain-language mission and decides what to look for, in what order, and which specialists to dispatch.",
-    icon: "Compass", color: "text-blue-500",
+    icon: "Compass", color: "text-violet-500",
   },
   {
     id: "pathfinder", codename: "Pathfinder", role: "Web Scout",
@@ -41,7 +41,7 @@ export const AGENTS: AgentInfo[] = [
     id: "cartographer", codename: "Cartographer", role: "Memory Weaver",
     blurb: "Connects findings into one living map.",
     detail: "Links related findings together so you see the whole picture, not scattered snippets — and keeps the map as your memory over time.",
-    icon: "Network", color: "text-blue-400",
+    icon: "Network", color: "text-violet-400",
   },
   {
     id: "sentinel", codename: "Sentinel", role: "Watchdog",
@@ -130,7 +130,7 @@ export const PIPELINE_STEPS = [
     text: "You state a goal in plain language. The Web Scout searches and reads real pages across the open web." },
   { n: 2, title: "Verify", icon: "ShieldCheck", color: "text-emerald-500",
     text: "The Fact-Checker cross-references each finding across sources and scores how much to trust it." },
-  { n: 3, title: "Weave", icon: "Network", color: "text-blue-500",
+  { n: 3, title: "Weave", icon: "Network", color: "text-violet-500",
     text: "The Memory Weaver connects findings into one living map; the Watchdog flags any contradictions." },
   { n: 4, title: "Recommend", icon: "Sparkles", color: "text-amber-500",
     text: "The Strategist explains what it means and what's next; the Reporter writes a fully-cited brief." },

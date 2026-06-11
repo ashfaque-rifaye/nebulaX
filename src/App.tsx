@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, FormEvent } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence, useReducedMotion } from "motion/react";
 import {
   Bot,
   Loader2,
@@ -94,7 +94,7 @@ type WorkspaceMode = typeof WORKSPACE_VIEWS[number]["key"];
 
 const TOUR_STEPS: TourStep[] = [
   { target: '[data-tour="rail"]', title: "Watch the swarm work", body: "Eight specialist agents sense, verify, weave and act. Each tile is live: a pulsing ring means that agent is working right now. Click one to open its console." },
-  { target: '[data-tour="views"]', title: "Seven lenses, one fabric", body: "Board for evidence, Radar for confidence at a glance, Orbit for the 3D constellation, Futures for forecasts, Triage for verification, Replay for history. Hover any icon to see what it does." },
+  { target: '[data-tour="views"]', title: "Five lenses, one fabric", body: "Board for evidence (flip it to 3D right on the canvas), Flow for the sensing → synthesis pipeline, Futures for forecasts, Triage for verification, Replay for history. Hover any icon to see what it does." },
   { target: '[data-tour="stage"]', title: "Explore your intelligence fabric", body: "Every card is a finding with provenance. Drag to pan, scroll to zoom, click any node to inspect its sources and confidence breakdown." },
   { target: '[data-tour="inspector"]', title: "Inspect, then act", body: "The Inspector shows the selected node's provenance chain and confidence, and tracks overall mission health when nothing is selected." },
   { target: '[data-tour="feed"]', title: "Live agent feed", body: "The ticker streams what agents are doing in real time. Expand it for the full intelligence brief and one-click proposed actions." },
@@ -370,10 +370,10 @@ export default function App() {
     // Sync theme class to document element
     if (theme === "dark") {
       document.documentElement.classList.add("dark");
-      document.body.className = "bg-[#05070c] text-[#e6eaf4] antialiased";
+      document.body.className = "bg-[#080b16] text-[#f2f1f9] antialiased";
     } else {
       document.documentElement.classList.remove("dark");
-      document.body.className = "bg-[#f4f6fb] text-slate-800 antialiased";
+      document.body.className = "bg-[#f6f4fd] text-slate-800 antialiased";
     }
     
     try {
@@ -1066,26 +1066,28 @@ export default function App() {
     return "idle";
   };
 
-  // Color theme mapping matrix 
+  // Color theme mapping matrix
   const isDark = theme === "dark";
+  // Skip entrance offsets for users who prefer reduced motion.
+  const reduceMotion = useReducedMotion();
 
   const t = {
-    bgCanvas: isDark ? "bg-[#05070c]" : "bg-[#f4f6fb]",
-    bgContainer: isDark ? "bg-[#05070c] text-[#e6eaf4]" : "bg-[#f4f6fb] text-slate-800",
+    bgCanvas: isDark ? "bg-[#080b16]" : "bg-[#f6f4fd]",
+    bgContainer: isDark ? "bg-[#080b16] text-[#f2f1f9]" : "bg-[#f6f4fd] text-slate-800",
     bgHeader: isDark ? "border-white/[0.06]" : "border-slate-200/80 shadow-[0_1px_2px_rgba(0,0,0,0.03)]",
-    bgRail: isDark ? "bg-[#07090f]/90 border-white/[0.06]" : "bg-[#fbfcfe] border-slate-200/80",
-    bgPane: isDark ? "bg-[#0a0e17]/95 border-white/[0.06]" : "bg-white border-slate-200 shadow-[0_-4px_24px_rgba(15,23,42,0.05)]",
-    bgSubBar: isDark ? "bg-[#080b12]/85 border-white/[0.06]" : "bg-[#fbfcfe] border-slate-200/70",
-    bgCard: isDark ? "bg-[#0b101b]/90 border-white/[0.06] text-gray-200 shadow-xl shadow-black/20" : "bg-white border-slate-200/90 text-slate-800 shadow-[0_4px_12px_rgba(15,23,42,0.04)]",
+    bgRail: isDark ? "bg-[#070a13]/90 border-white/[0.06]" : "bg-[#fdfcff] border-slate-200/80",
+    bgPane: isDark ? "bg-[#0a0d1a]/95 border-white/[0.06]" : "bg-white border-slate-200 shadow-[0_-4px_24px_rgba(15,23,42,0.05)]",
+    bgSubBar: isDark ? "bg-[#080b16]/85 border-white/[0.06]" : "bg-[#fdfcff] border-slate-200/70",
+    bgCard: isDark ? "bg-[#0c101f]/90 border-white/[0.06] text-gray-200 shadow-xl shadow-black/20" : "bg-white border-slate-200/90 text-slate-800 shadow-[0_4px_12px_rgba(15,23,42,0.04)]",
     textTitle: isDark ? "text-white" : "text-slate-900 font-semibold",
-    textDesc: isDark ? "text-[#aeb6c8]" : "text-slate-600",
-    textMute: isDark ? "text-[#8b93a7]" : "text-slate-500",
-    bgInner: isDark ? "bg-[#10162a]" : "bg-slate-50/90",
+    textDesc: isDark ? "text-[#b9bdd4]" : "text-slate-600",
+    textMute: isDark ? "text-[#9298b4]" : "text-slate-500",
+    bgInner: isDark ? "bg-[#12172e]" : "bg-slate-50/90",
     borderTheme: isDark ? "border-white/[0.06]" : "border-slate-100",
-    textOption: isDark ? "bg-[#10162a] text-[#e6eaf4]" : "bg-white text-slate-800",
+    textOption: isDark ? "bg-[#12172e] text-[#f2f1f9]" : "bg-white text-slate-800",
     shadow: isDark ? "shadow-2xl shadow-indigo-500/5" : "shadow-md shadow-slate-200",
     glow: isDark ? "glow-bg" : "hidden",
-    svgLines: isDark ? "#23304d" : "#cbd5e1",
+    svgLines: isDark ? "#2b3357" : "#cfc9e4",
     gridOpacity: isDark ? "opacity-25" : "opacity-[0.05]"
   };
 
@@ -1100,14 +1102,14 @@ export default function App() {
         {/* LOGO TITLE SECTION */}
         <div className="flex items-center gap-3">
           <div className="relative">
-            <div className="w-9 h-9 rounded-xl holo-ring bg-gradient-to-br from-indigo-600 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/25">
+            <div className="w-9 h-9 rounded-full holo-ring bg-luna-gradient flex items-center justify-center shadow-lg shadow-violet-500/30">
               <Network className="w-5 h-5 text-white" />
             </div>
           </div>
           <div>
             <h1 className={`text-lg font-bold tracking-tight flex items-center gap-2 font-display ${t.textTitle}`}>
-              NEBULA<span className="text-indigo-400">X</span>
-              <span className="text-[9px] font-mono tracking-widest text-indigo-500 bg-indigo-100 dark:text-indigo-300 dark:bg-indigo-500/15 px-1.5 py-0.5 rounded uppercase font-medium">
+              NEBULA<span className="text-gradient font-extrabold">X</span>
+              <span className="text-[9px] font-mono tracking-widest text-violet-600 bg-violet-500/10 dark:text-luna-lavender dark:bg-white/[0.06] px-2 py-0.5 rounded-full uppercase font-medium border border-violet-500/20 dark:border-white/10">
                 Team Fabric
               </span>
             </h1>
@@ -1115,28 +1117,28 @@ export default function App() {
           </div>
         </div>
 
-        {/* INTER-VIEW CONTROLS TAB SWITCHER */}
-        <div className={`flex items-center gap-1.5 p-1 rounded-lg border pr-2.5 ${
-          isDark ? "bg-[#090c12]/80 border-white/5" : "bg-slate-100 border-slate-200/50"
+        {/* INTER-VIEW CONTROLS TAB SWITCHER — LUNA floating pill */}
+        <div className={`flex items-center gap-1 p-1 rounded-full border glass ${
+          isDark ? "border-white/10" : "border-violet-500/10 shadow-sm"
         }`}>
           <button
             onClick={() => setCurrentView("home")}
-            className={`text-xs px-3.5 py-1.5 rounded-md font-medium transition-all flex items-center gap-1.5 ${
+            className={`text-xs px-3.5 py-1.5 rounded-full font-semibold transition-all duration-300 flex items-center gap-1.5 ${
               currentView === "home"
-                ? (isDark ? "bg-[#1a2333] text-white shadow-sm" : "bg-white text-slate-900 shadow-sm")
-                : (isDark ? "text-gray-400 hover:text-white" : "text-slate-500 hover:text-slate-900")
+                ? (isDark ? "bg-white/10 text-white shadow-sm" : "bg-white text-slate-900 shadow-sm")
+                : (isDark ? "text-white/50 hover:text-white" : "text-slate-500 hover:text-slate-900")
             }`}
           >
             <Compass className="w-3.5 h-3.5" />
             Overview Dashboard
           </button>
-          
+
           <button
             onClick={() => setCurrentView("workspace")}
-            className={`text-xs px-3.5 py-1.5 rounded-md font-medium transition-all flex items-center gap-1.5 ${
+            className={`text-xs px-3.5 py-1.5 rounded-full font-semibold transition-all duration-300 flex items-center gap-1.5 ${
               currentView === "workspace"
-                ? (isDark ? "bg-[#1a2333] text-white shadow-sm" : "bg-white text-slate-900 shadow-sm")
-                : (isDark ? "text-gray-400 hover:text-white" : "text-slate-500 hover:text-slate-900")
+                ? (isDark ? "bg-white/10 text-white shadow-sm" : "bg-white text-slate-900 shadow-sm")
+                : (isDark ? "text-white/50 hover:text-white" : "text-slate-500 hover:text-slate-900")
             }`}
           >
             <LayoutGrid className="w-3.5 h-3.5" />
@@ -1152,10 +1154,10 @@ export default function App() {
             <button
               key={key}
               onClick={() => setCurrentView(key)}
-              className={`hidden lg:flex text-xs px-3.5 py-1.5 rounded-md font-medium transition-all items-center gap-1.5 ${
+              className={`hidden lg:flex text-xs px-3.5 py-1.5 rounded-full font-semibold transition-all duration-300 items-center gap-1.5 ${
                 currentView === key
-                  ? (isDark ? "bg-[#1a2333] text-white shadow-sm" : "bg-white text-slate-900 shadow-sm")
-                  : (isDark ? "text-gray-400 hover:text-white" : "text-slate-500 hover:text-slate-900")
+                  ? (isDark ? "bg-white/10 text-white shadow-sm" : "bg-white text-slate-900 shadow-sm")
+                  : (isDark ? "text-white/50 hover:text-white" : "text-slate-500 hover:text-slate-900")
               }`}
             >
               <Icon className="w-3.5 h-3.5" />
@@ -1166,14 +1168,14 @@ export default function App() {
 
         {/* MISSION SELECTOR GATING CONTROL */}
         {currentView === "workspace" && launched && (
-          <div className={`flex items-center gap-2 rounded-lg border py-1.5 pl-3 pr-2 select-none ${
-            isDark ? "bg-[#111622] border-white/5" : "bg-slate-100 border-slate-200/60"
+          <div className={`flex items-center gap-2 rounded-full border py-1.5 pl-3 pr-2 select-none glass ${
+            isDark ? "border-white/10" : "border-violet-500/10"
           }`}>
             <button
               onClick={() => { setLaunched(false); setSelectedNodeId(null); setFocusedAgent(null); }}
               title="Back to Command Center"
               className={`flex items-center gap-1 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded transition-colors ${
-                isDark ? "text-blue-300 hover:bg-white/10" : "text-blue-600 hover:bg-blue-50"
+                isDark ? "text-violet-300 hover:bg-white/10" : "text-violet-600 hover:bg-violet-50"
               }`}
             >
               <Plus className="w-3 h-3" /> New
@@ -1191,7 +1193,7 @@ export default function App() {
               }`}
             >
               {missions.map(m => (
-                <option key={m.id} value={m.id} className={isDark ? "bg-[#111622] text-[#e6edf3]" : "bg-white text-slate-800"}>
+                <option key={m.id} value={m.id} className={isDark ? "bg-[#12152a] text-[#f2f1f9]" : "bg-white text-slate-800"}>
                   {(m.parent_id ? "↳ " : "")}{m.prompt.substring(0, 34).replace(/"/g, '')}...
                 </option>
               ))}
@@ -1209,8 +1211,8 @@ export default function App() {
                 placeholder="Launch search mission..."
                 value={newPrompt}
                 onChange={e => setNewPrompt(e.target.value)}
-                className={`w-full border rounded-lg py-1.5 pl-8 pr-8 text-xs focus:outline-none focus:border-blue-500 transition-all font-sans ${
-                  isDark ? "bg-[#111622] border-white/5 text-white placeholder-gray-500" : "bg-slate-100 border-slate-200/60 text-slate-800 placeholder-slate-400"
+                className={`w-full border rounded-full py-1.5 pl-8 pr-8 text-xs focus:outline-none focus:border-violet-500 transition-colors font-sans glass ${
+                  isDark ? "border-white/10 text-white placeholder-white/35" : "border-violet-500/10 text-slate-800 placeholder-slate-400"
                 }`}
               />
               <button
@@ -1229,7 +1231,7 @@ export default function App() {
             <button
               type="submit"
               disabled={isSubmitting || !newPrompt.trim()}
-              className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-all flex items-center gap-1 cursor-pointer"
+              className="bg-luna-gradient cta-luna text-white text-xs font-bold px-4 py-1.5 rounded-full flex items-center gap-1 cursor-pointer disabled:opacity-50"
             >
               {isSubmitting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
               Deploy
@@ -1242,7 +1244,7 @@ export default function App() {
           <button
             onClick={() => setCurrentView("home")}
             title={`${profile?.credits ?? 0} Green Credits · ${((profile?.totalCo2Saved_g ?? 0) / 1000).toFixed(2)} kg CO₂ saved — click to earn more`}
-            className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 transition-all cursor-pointer ${
+            className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 transition-all cursor-pointer ${
               isDark ? "border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20" : "border-emerald-500/30 bg-emerald-50 hover:bg-emerald-100"
             }`}
           >
@@ -1256,8 +1258,8 @@ export default function App() {
         <button
           onClick={() => setSettingsOpen(true)}
           title={activeEngine ? `Engine: ${activeEngine.provider} · ${activeEngine.model} — click to switch models or add API keys` : "Configure an AI model & API keys"}
-          className={`flex items-center gap-2 rounded-lg border px-2.5 py-1.5 transition-all press ${
-            isDark ? "border-white/[0.08] bg-white/[0.03] hover:border-indigo-500/40 hover:bg-indigo-500/10" : "border-slate-200 bg-white hover:border-indigo-400 hover:bg-indigo-50"
+          className={`flex items-center gap-2 rounded-full border px-3 py-1.5 transition-all press glass ${
+            isDark ? "border-white/10 hover:border-violet-500/50" : "border-violet-500/10 hover:border-violet-400"
           }`}
         >
           <CpuChip className={`w-3.5 h-3.5 ${activeEngine ? "text-indigo-400" : "text-amber-500"}`} />
@@ -1271,8 +1273,8 @@ export default function App() {
         {/* LIGHT/DARK MODE TOGGLE BUTTON */}
         <button
           onClick={() => setTheme(prev => prev === "dark" ? "light" : "dark")}
-          className={`p-2 rounded-lg border transition-all outline-none cursor-pointer press ${
-            isDark ? "border-white/[0.08] hover:bg-white/5" : "border-slate-200 hover:bg-slate-100"
+          className={`p-2 rounded-full border transition-all outline-none cursor-pointer press glass ${
+            isDark ? "border-white/10 hover:border-white/25" : "border-violet-500/10 hover:border-violet-300"
           }`}
           title={`Switch to ${theme === "dark" ? "Light" : "Dark"} Mode`}
         >
@@ -1287,210 +1289,351 @@ export default function App() {
 
       {/* --- VIEW 1: HOME PORTAL / EXPLAINER COCKPIT --- */}
       {currentView === "home" && (
-        <main className="flex-1 overflow-y-auto stage-glow">
-        <div className="max-w-7xl mx-auto w-full p-4 md:p-8 flex flex-col gap-8">
+        <main className="flex-1 overflow-y-auto relative">
 
-          {/* HERO INTRODUCTION PLATFORM */}
-          <section className={`noise relative overflow-hidden grid grid-cols-1 lg:grid-cols-12 gap-8 items-center p-6 md:p-10 rounded-3xl border ${t.bgCard}`}>
-            {/* aurora backdrop */}
-            <div className="absolute inset-0 overflow-hidden pointer-events-none -z-0">
-              <div className="aurora absolute -top-1/3 -left-10 w-[520px] h-[520px] rounded-full bg-blue-600/20 blur-3xl" />
-              <div className="aurora absolute -bottom-1/3 right-0 w-[460px] h-[460px] rounded-full bg-cyan-500/15 blur-3xl" style={{ animationDelay: "-11s" }} />
-              <div className="aurora absolute top-1/2 left-1/2 w-[360px] h-[360px] rounded-full bg-fuchsia-500/10 blur-3xl" style={{ animationDelay: "-5s" }} />
+          {/* ════ HERO — the night sky ════ */}
+          <section className={`noise relative overflow-hidden ${isDark ? "" : "stage-glow"}`}>
+            {/* sky layers */}
+            <div className="absolute inset-0 pointer-events-none overflow-hidden">
+              {isDark && (
+                <>
+                  <div className="starfield" />
+                  <div
+                    className="starfield starfield-twinkle"
+                    style={{ backgroundPosition: "140px 90px, 60px 160px, 200px 40px, 90px 220px, 30px 70px, 170px 130px, 240px 200px" }}
+                  />
+                </>
+              )}
+              {/* LUNA ambient glow blobs */}
+              <div className="absolute top-[14%] left-[4%] w-[420px] h-[420px] bg-violet-500/[0.08] rounded-full blur-[150px]" />
+              <div className="absolute top-[40%] right-[6%] w-[320px] h-[320px] bg-fuchsia-400/[0.06] rounded-full blur-[120px]" />
+              {/* the moon herself */}
+              <div className="moon float-deep absolute -top-8 right-[6%] w-32 h-32 md:w-44 md:h-44 hide-mobile" />
+              {isDark && (
+                <>
+                  <span className="shooting-star top-[16%] right-[26%]" />
+                  <span className="shooting-star top-[46%] right-[4%]" style={{ animationDelay: "4.6s", animationDuration: "11s" }} />
+                </>
+              )}
             </div>
 
-            <div className="relative z-10 lg:col-span-7 flex flex-col gap-5">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="inline-flex items-center gap-1.5 text-[10px] font-mono tracking-widest text-blue-500 uppercase font-semibold bg-blue-500/10 px-2.5 py-1 rounded-full w-fit">
-                  <Sparkles className="w-3.5 h-3.5" />
-                  Agentic Web · Microsoft Build AI
-                </span>
-                <span className="inline-flex items-center gap-1.5 text-[10px] font-mono tracking-wider text-emerald-500 uppercase font-semibold bg-emerald-500/10 px-2.5 py-1 rounded-full w-fit">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  {llmProviders.length > 0 ? `${primaryProvider} swarm live` : "swarm online"}
-                </span>
+            <div className="relative z-10 max-w-7xl mx-auto px-6 pt-14 md:pt-20 pb-14 grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
+              <div className="lg:col-span-7 flex flex-col gap-6">
+                {/* status pills */}
+                <motion.div
+                  initial={reduceMotion ? false : { opacity: 0, y: 14 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+                  className="flex items-center gap-2 flex-wrap"
+                >
+                  <span className={`inline-flex items-center gap-1.5 text-[10px] font-mono tracking-widest uppercase font-semibold glass border rounded-full px-3.5 py-1.5 w-fit ${
+                    isDark ? "text-luna-lavender border-white/10" : "text-violet-700 border-violet-500/15"
+                  }`}>
+                    <Sparkles className="w-3.5 h-3.5" />
+                    Agentic Web · Microsoft Build AI
+                  </span>
+                  <span className={`inline-flex items-center gap-1.5 text-[10px] font-mono tracking-wider uppercase font-semibold glass border rounded-full px-3.5 py-1.5 w-fit ${
+                    isDark ? "text-emerald-300 border-emerald-400/20" : "text-emerald-700 border-emerald-500/25"
+                  }`}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    {llmProviders.length > 0 ? `${primaryProvider} swarm live` : "swarm online"}
+                  </span>
+                </motion.div>
+
+                {/* headline — line-mask reveal */}
+                <h2 className="text-4xl md:text-6xl font-extrabold tracking-tight leading-[1.05] font-display">
+                  <span className="block overflow-hidden">
+                    <motion.span
+                      className={`block ${t.textTitle}`}
+                      initial={reduceMotion ? false : { y: "112%" }}
+                      animate={{ y: 0 }}
+                      transition={{ duration: 0.8, delay: 0.05, ease: [0.16, 1, 0.3, 1] }}
+                    >
+                      The self-correcting
+                    </motion.span>
+                  </span>
+                  <span className="block overflow-hidden">
+                    <motion.span
+                      className="block text-gradient pb-2"
+                      initial={reduceMotion ? false : { y: "112%" }}
+                      animate={{ y: 0 }}
+                      transition={{ duration: 0.8, delay: 0.16, ease: [0.16, 1, 0.3, 1] }}
+                    >
+                      team-intelligence fabric
+                    </motion.span>
+                  </span>
+                </h2>
+
+                <motion.p
+                  initial={reduceMotion ? false : { opacity: 0, y: 14 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.7, delay: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                  className={`text-sm md:text-base leading-relaxed max-w-xl ${isDark ? "text-white/70" : "text-slate-600"}`}
+                >
+                  State a goal in plain language. An autonomous agent swarm senses the open web, weaves every
+                  finding into a verified memory graph, flags contradictions, and proposes your next move —
+                  with <span className={`font-semibold ${isDark ? "text-luna-lavender" : "text-violet-700"}`}>every claim traceable to its source.</span>
+                </motion.p>
+
+                {/* CTAs */}
+                <motion.div
+                  initial={reduceMotion ? false : { opacity: 0, y: 14 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.7, delay: 0.42, ease: [0.16, 1, 0.3, 1] }}
+                  className="flex flex-wrap items-center gap-3"
+                >
+                  <button
+                    type="button"
+                    onClick={() => { setLaunched(false); setCurrentView("workspace"); }}
+                    className="bg-luna-gradient cta-luna font-bold text-white text-sm px-7 py-3.5 rounded-full flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Rocket className="w-4 h-4" />
+                    Launch a Mission
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                  {missions[0] && (
+                    <button
+                      type="button"
+                      onClick={() => launchMission(missions[0].id, "canvas")}
+                      className={`text-sm font-semibold px-6 py-3.5 rounded-full border transition-all duration-300 flex items-center gap-2 ${
+                        isDark ? "border-white/20 text-white hover:bg-white/10 hover:border-white/30" : "border-violet-500/25 text-slate-700 hover:bg-violet-500/5 hover:border-violet-500/40"
+                      }`}
+                    >
+                      <Network className="w-4 h-4 text-violet-500" />
+                      See a live example
+                    </button>
+                  )}
+                </motion.div>
+
+                {/* trust badges */}
+                <motion.div
+                  initial={reduceMotion ? false : { opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.7, delay: 0.52, ease: [0.16, 1, 0.3, 1] }}
+                  className="flex flex-wrap gap-2.5"
+                >
+                  {[
+                    { Icon: ShieldCheck, label: "Every claim sourced" },
+                    { Icon: RefreshCw, label: "Self-healing memory" },
+                    { Icon: Sparkles, label: "Zero-setup demo" },
+                  ].map((b) => (
+                    <span
+                      key={b.label}
+                      className={`glass border rounded-full px-4 py-2 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 ${
+                        isDark ? "text-white/45 border-white/10" : "text-slate-500 border-violet-500/10"
+                      }`}
+                    >
+                      <b.Icon className="w-3 h-3" />
+                      {b.label}
+                    </span>
+                  ))}
+                </motion.div>
+
+                {/* LIVE METRICS STRIP */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {[
+                    { label: "Active Missions", value: String(missions.length), icon: Compass, color: isDark ? "text-violet-400" : "text-violet-600" },
+                    { label: "Specialist Agents", value: String(agents.length || 8), icon: Bot, color: isDark ? "text-cyan-400" : "text-cyan-600" },
+                    { label: "AI Providers", value: String(llmProviders.length || 3), icon: Layers, color: isDark ? "text-fuchsia-400" : "text-fuchsia-600" },
+                    { label: "Avg Confidence", value: "92%", icon: Gauge, color: isDark ? "text-emerald-400" : "text-emerald-600" },
+                  ].map((m, i) => (
+                    <motion.div
+                      key={m.label}
+                      initial={reduceMotion ? false : { opacity: 0, y: 16 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.6, delay: 0.6 + i * 0.08, ease: [0.16, 1, 0.3, 1] }}
+                      className={`rounded-2xl border p-4 ${isDark ? "bg-white/[0.03] border-white/10" : "bg-white/80 border-violet-500/10"}`}
+                    >
+                      <m.icon className={`w-4 h-4 mb-1.5 ${m.color}`} />
+                      <div className={`text-2xl font-extrabold tracking-tight font-display tabular ${t.textTitle}`}>{m.value}</div>
+                      <div className={`text-[9px] font-mono uppercase tracking-wider ${isDark ? "text-white/35" : "text-slate-400"}`}>{m.label}</div>
+                    </motion.div>
+                  ))}
+                </div>
               </div>
 
-              <h2 className="text-3xl md:text-5xl font-bold tracking-tight leading-[1.05] font-display">
-                <span className={t.textTitle}>The self-correcting</span>
-                <br />
-                <span className="text-indigo-400">team-intelligence fabric</span>
-              </h2>
+              {/* RIGHT SIDE: GREEN CREDITS — earn compute by cutting real emissions */}
+              <motion.div
+                initial={reduceMotion ? false : { opacity: 0, x: 28 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.85, delay: 0.35, ease: [0.16, 1, 0.3, 1] }}
+                className="relative z-10 lg:col-span-5"
+              >
+                <div className="absolute -inset-3 bg-luna-gradient opacity-[0.18] blur-2xl rounded-[2.5rem] pointer-events-none" />
+                <div className={`relative h-[380px] rounded-[2rem] overflow-hidden border flex flex-col glass shadow-2xl ${
+                  isDark ? "border-white/10" : "border-violet-500/15"
+                }`}>
+                  <GreenCredits
+                    isDark={isDark}
+                    handle={handle}
+                    profile={profile}
+                    pledges={pledges}
+                    deployCost={deployCost}
+                    loading={profileLoading}
+                    claimingId={claimingPledgeId}
+                    onSetHandle={persistHandle}
+                    onClaim={claimPledge}
+                  />
+                </div>
+              </motion.div>
+            </div>
 
-              <p className={`text-sm md:text-[15px] leading-relaxed max-w-xl ${t.textDesc}`}>
-                State a goal in plain language. An autonomous agent swarm senses the open web, weaves every
-                finding into a verified memory graph, flags contradictions, and proposes your next move —
-                with <span className="font-semibold text-blue-500">every claim traceable to its source.</span>
-              </p>
-
-              {/* LIVE METRICS STRIP */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {[
-                  { label: "Active Missions", value: String(missions.length), icon: Compass, color: "text-blue-500" },
-                  { label: "Specialist Agents", value: String(agents.length || 8), icon: Bot, color: "text-cyan-500" },
-                  { label: "AI Providers", value: String(llmProviders.length || 3), icon: Layers, color: "text-fuchsia-500" },
-                  { label: "Avg Confidence", value: "92%", icon: Gauge, color: "text-emerald-500" },
-                ].map((m) => (
-                  <div
-                    key={m.label}
-                    className={`rounded-xl border p-3 backdrop-blur ${isDark ? "bg-white/[0.03] border-white/10" : "bg-white/70 border-slate-200"}`}
-                  >
-                    <m.icon className={`w-4 h-4 mb-1.5 ${m.color}`} />
-                    <div className={`text-xl font-extrabold tracking-tight ${t.textTitle}`}>{m.value}</div>
-                    <div className="text-[9px] font-mono uppercase tracking-wider text-slate-400">{m.label}</div>
+            {/* hairline + capability marquee */}
+            <div className="relative z-10 max-w-7xl mx-auto px-6">
+              <div className="h-px hairline-gradient" />
+            </div>
+            <div className="relative z-10 marquee py-5">
+              <div className="marquee-track items-center">
+                {[0, 1].map((dup) => (
+                  <div key={dup} className="flex items-center gap-3 pr-3" aria-hidden={dup === 1}>
+                    {[
+                      "Provenance-linked claims",
+                      "Drift Sentinel watchdog",
+                      "Confidence propagation",
+                      "8 specialist agents",
+                      "Re-weave healing",
+                      "3D constellation view",
+                      "Grounded fabric chat",
+                      "Temporal forecasts",
+                      "Green compute credits",
+                    ].map((cap) => (
+                      <span
+                        key={cap}
+                        className={`flex items-center gap-2 whitespace-nowrap glass border rounded-full px-4 py-1.5 text-[11px] font-mono ${
+                          isDark ? "text-white/50 border-white/[0.07]" : "text-slate-500 border-violet-500/10"
+                        }`}
+                      >
+                        <span className="w-1 h-1 rounded-full bg-luna-gradient" />
+                        {cap}
+                      </span>
+                    ))}
                   </div>
                 ))}
               </div>
-
-              <div className="flex flex-wrap items-center gap-3 mt-1">
-                <button
-                  type="button"
-                  onClick={() => { setLaunched(false); setCurrentView("workspace"); }}
-                  className="bg-blue-600 hover:bg-blue-500 font-bold text-white text-sm px-6 py-3 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-blue-600/25 active:scale-[0.98]"
-                >
-                  <Rocket className="w-4 h-4" />
-                  Launch a Mission
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-                {missions[0] && (
-                  <button
-                    type="button"
-                    onClick={() => launchMission(missions[0].id, "canvas")}
-                    className={`text-sm font-semibold px-5 py-3 rounded-xl border transition-all flex items-center gap-2 ${
-                      isDark ? "border-white/10 text-gray-200 hover:bg-white/5" : "border-slate-200 text-slate-700 hover:bg-slate-100"
-                    }`}
-                  >
-                    <Network className="w-4 h-4 text-blue-500" />
-                    See a live example
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* RIGHT SIDE: GREEN CREDITS — earn compute by cutting real emissions */}
-            <div className={`relative z-10 lg:col-span-5 h-[360px] rounded-2xl overflow-hidden border flex flex-col shadow-2xl ${
-              isDark ? "bg-black/30 border-white/10" : "bg-white border-slate-200/60"
-            }`}>
-              <GreenCredits
-                isDark={isDark}
-                handle={handle}
-                profile={profile}
-                pledges={pledges}
-                deployCost={deployCost}
-                loading={profileLoading}
-                claimingId={claimingPledgeId}
-                onSetHandle={persistHandle}
-                onClaim={claimPledge}
-              />
             </div>
           </section>
 
-          {/* SECTION: EXACTLY HOW DOES IT WORK & WHAT DO THEY DO & HOW TO MEASURE */}
-          <section className="flex flex-col gap-5">
-            <div className="text-center md:text-left">
-              <h3 className={`text-xl font-bold tracking-tight ${t.textTitle}`}>
-                Operation Protocol & Agent Directory
+          {/* ════ SECTION: OPERATION PROTOCOL ════ */}
+          <section className="relative max-w-7xl mx-auto px-6 py-16 md:py-24 flex flex-col gap-10">
+            <div className="scroll-reveal max-w-2xl">
+              <div className={`text-[11px] font-bold tracking-[0.2em] uppercase mb-3 ${isDark ? "text-luna-lavender" : "text-violet-700"}`}>
+                Operation Protocol
+              </div>
+              <h3 className={`text-3xl md:text-5xl font-bold tracking-tight ${t.textTitle}`}>
+                How the swarm <span className="text-gradient">earns your trust</span>
               </h3>
-              <p className={`text-xs ${t.textMute}`}>
-                Understand what each specialize agent does and the exact metrics to measure if they are working.
+              <p className={`text-sm mt-3 max-w-xl leading-relaxed ${isDark ? "text-white/60" : "text-slate-600"}`}>
+                Each specialist owns one analytical job, and every output carries the receipts to prove it worked.
               </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              
+
               {/* CARD 1: WHAT THEY DO - AGENT ROLES */}
-              <div className={`p-5 rounded-xl border flex flex-col gap-3.5 ${t.bgCard}`}>
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-500/15 flex items-center justify-center text-blue-600 dark:text-blue-400">
-                    <Cpu className="w-4 h-4" />
-                  </div>
-                  <h4 className="text-sm font-bold text-slate-950 dark:text-white">What do they do?</h4>
+              <div className={`group scroll-reveal p-8 rounded-[2.5rem] border transition-all duration-500 flex flex-col gap-4 bg-gradient-to-br ${
+                isDark
+                  ? "from-violet-500/10 to-transparent bg-white/[0.03] border-white/5 hover:border-white/15"
+                  : "from-violet-500/[0.06] to-transparent bg-white border-violet-500/10 shadow-lg shadow-violet-500/5 hover:shadow-xl"
+              }`}>
+                <div className={`w-14 h-14 rounded-2xl glass border flex items-center justify-center group-hover:scale-110 transition-transform duration-500 ${
+                  isDark ? "border-white/10" : "border-violet-500/15"
+                }`}>
+                  <Cpu className={`w-6 h-6 ${isDark ? "text-violet-400" : "text-violet-600"}`} />
                 </div>
-                
-                <p className={`text-xs leading-relaxed ${t.textDesc}`}>
+                <h4 className={`text-lg font-bold font-display ${t.textTitle}`}>What do they do?</h4>
+
+                <p className={`text-xs leading-relaxed ${isDark ? "text-white/60" : "text-slate-600"}`}>
                   Nebula deploys specialized cognitive virtual agents in parallel pipelines to handle distinct analytical milestones:
                 </p>
 
                 <ul className="text-xs flex flex-col gap-2.5 list-none font-sans mt-1">
                   <li className="flex gap-2.5 items-start">
-                    <span className="text-blue-500 font-bold font-mono">1.</span>
+                    <span className={`font-bold font-mono ${isDark ? "text-violet-400" : "text-violet-600"}`}>1.</span>
                     <div>
-                      <span className="font-semibold block text-slate-900 dark:text-gray-100">[Pathfinder] Scanning</span>
-                      <span className="text-[11px] text-slate-500 dark:text-gray-400">Scrapes search indices, crawling target domains to fetch web signals.</span>
+                      <span className={`font-semibold block ${t.textTitle}`}>[Pathfinder] Scanning</span>
+                      <span className={`text-[11px] ${isDark ? "text-white/50" : "text-slate-500"}`}>Scrapes search indices, crawling target domains to fetch web signals.</span>
                     </div>
                   </li>
                   <li className="flex gap-2.5 items-start">
-                    <span className="text-blue-500 font-bold font-mono">2.</span>
+                    <span className={`font-bold font-mono ${isDark ? "text-violet-400" : "text-violet-600"}`}>2.</span>
                     <div>
-                      <span className="font-semibold block text-slate-900 dark:text-gray-100">[Veritas] Verifying</span>
-                      <span className="text-[11px] text-slate-500 dark:text-gray-400">Assembles confidence indices and evaluates source reliability.</span>
+                      <span className={`font-semibold block ${t.textTitle}`}>[Veritas] Verifying</span>
+                      <span className={`text-[11px] ${isDark ? "text-white/50" : "text-slate-500"}`}>Assembles confidence indices and evaluates source reliability.</span>
                     </div>
                   </li>
                   <li className="flex gap-2.5 items-start">
-                    <span className="text-blue-500 font-bold font-mono">3.</span>
+                    <span className={`font-bold font-mono ${isDark ? "text-violet-400" : "text-violet-600"}`}>3.</span>
                     <div>
-                      <span className="font-semibold block text-slate-900 dark:text-gray-100">[Scribe & Oracle] Synthesizing</span>
-                      <span className="text-[11px] text-slate-500 dark:text-gray-400">Generates executive brief reports and draft proposed actions.</span>
+                      <span className={`font-semibold block ${t.textTitle}`}>[Scribe & Oracle] Synthesizing</span>
+                      <span className={`text-[11px] ${isDark ? "text-white/50" : "text-slate-500"}`}>Generates executive brief reports and draft proposed actions.</span>
                     </div>
                   </li>
                 </ul>
               </div>
 
               {/* CARD 2: Drift detection Sentinel */}
-              <div className={`p-5 rounded-xl border flex flex-col gap-3.5 ${t.bgCard}`}>
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-red-100 dark:bg-red-500/15 flex items-center justify-center text-red-600 dark:text-red-400">
-                    <ShieldAlert className="w-4 h-4" />
-                  </div>
-                  <h4 className="text-sm font-bold text-slate-950 dark:text-white">Contradiction Sentinel Shield</h4>
+              <div className={`group scroll-reveal p-8 rounded-[2.5rem] border transition-all duration-500 flex flex-col gap-4 bg-gradient-to-br ${
+                isDark
+                  ? "from-fuchsia-400/10 to-transparent bg-white/[0.03] border-white/5 hover:border-white/15"
+                  : "from-fuchsia-400/[0.07] to-transparent bg-white border-violet-500/10 shadow-lg shadow-violet-500/5 hover:shadow-xl"
+              }`}>
+                <div className={`w-14 h-14 rounded-2xl glass border flex items-center justify-center group-hover:scale-110 transition-transform duration-500 ${
+                  isDark ? "border-white/10" : "border-violet-500/15"
+                }`}>
+                  <ShieldAlert className={`w-6 h-6 ${isDark ? "text-fuchsia-400" : "text-fuchsia-600"}`} />
                 </div>
-                
-                <p className={`text-xs leading-relaxed ${t.textDesc}`}>
+                <h4 className={`text-lg font-bold font-display ${t.textTitle}`}>Contradiction Sentinel Shield</h4>
+
+                <p className={`text-xs leading-relaxed ${isDark ? "text-white/60" : "text-slate-600"}`}>
                   How does the system ensure sanity and credibility under conflicting web reports?
                 </p>
 
                 <div className="text-xs flex flex-col gap-3">
-                  <div className="bg-amber-500/5 border border-amber-500/20 rounded p-2.5 text-[11px]">
+                  <div className={`rounded-2xl p-3 text-[11px] border ${isDark ? "bg-amber-500/5 border-amber-500/15" : "bg-amber-500/5 border-amber-500/20"}`}>
                     <span className="font-semibold text-amber-600 dark:text-amber-400 block mb-1">🎯 Automated Verification Flags</span>
-                    The <span className="font-bold">Sentinel Agent</span> executes deep semantic contradictions checks between web nodes. If two sources assert contrasting claims, the system triggers a <span className="text-red-400 font-bold">Drift Exception Alert</span> and suppresses confidence values automatically!
+                    The <span className="font-bold">Sentinel Agent</span> executes deep semantic contradictions checks between web nodes. If two sources assert contrasting claims, the system triggers a <span className="text-rose-400 font-bold">Drift Exception Alert</span> and suppresses confidence values automatically!
                   </div>
-                  
-                  <div className="bg-emerald-500/5 border border-emerald-500/20 rounded p-2.5 text-[11px]">
+
+                  <div className={`rounded-2xl p-3 text-[11px] border ${isDark ? "bg-emerald-500/5 border-emerald-500/15" : "bg-emerald-500/5 border-emerald-500/20"}`}>
                     <span className="font-semibold text-emerald-600 dark:text-emerald-400 block mb-1">🛠 Recalculation Mathematics</span>
-                    Once a human operator posts a corrigendum memory veto, Nebula's re-weaving algorithm propagates confidence values network-wide, immediately rectifying the system summary.
+                    When the Watchdog reconciles a contradiction on re-weave, Nebula's algorithm propagates confidence values network-wide, immediately rectifying the system summary.
                   </div>
                 </div>
               </div>
 
               {/* CARD 3: MEASURING METHOD / HOW TO CONFIRM */}
-              <div className={`p-5 rounded-xl border flex flex-col gap-3.5 ${t.bgCard}`}>
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-500/15 flex items-center justify-center text-emerald-600 dark:text-emerald-500">
-                    <ShieldCheck className="w-4 h-4" />
-                  </div>
-                  <h4 className="text-sm font-bold text-slate-950 dark:text-white">How to measure if they are working?</h4>
+              <div className={`group scroll-reveal p-8 rounded-[2.5rem] border transition-all duration-500 flex flex-col gap-4 bg-gradient-to-br ${
+                isDark
+                  ? "from-cyan-400/10 to-transparent bg-white/[0.03] border-white/5 hover:border-white/15"
+                  : "from-cyan-400/[0.08] to-transparent bg-white border-violet-500/10 shadow-lg shadow-violet-500/5 hover:shadow-xl"
+              }`}>
+                <div className={`w-14 h-14 rounded-2xl glass border flex items-center justify-center group-hover:scale-110 transition-transform duration-500 ${
+                  isDark ? "border-white/10" : "border-violet-500/15"
+                }`}>
+                  <ShieldCheck className={`w-6 h-6 ${isDark ? "text-cyan-400" : "text-cyan-600"}`} />
                 </div>
-                
-                <p className={`text-xs leading-relaxed ${t.textDesc}`}>
+                <h4 className={`text-lg font-bold font-display ${t.textTitle}`}>How to measure if they are working?</h4>
+
+                <p className={`text-xs leading-relaxed ${isDark ? "text-white/60" : "text-slate-600"}`}>
                   You can inspect and confirm agent performance dynamically inside the workspaces:
                 </p>
 
                 <ul className="text-xs flex flex-col gap-2 list-none font-sans mt-1">
                   <li className="flex gap-2 items-start">
-                    <span className="text-emerald-500 text-[10px] bg-emerald-500/10 px-1 py-0.5 rounded font-mono font-bold uppercase flex-shrink-0">1. Rails</span>
-                    <span className="text-[11px] text-slate-500 dark:text-gray-400">Review the left <span className="font-semibold">Swarm Active Monitor Rails</span> to verify which agent is actively chewing tasks.</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold uppercase flex-shrink-0 ${isDark ? "text-cyan-300 bg-cyan-400/10" : "text-cyan-700 bg-cyan-500/10"}`}>1. Rails</span>
+                    <span className={`text-[11px] ${isDark ? "text-white/50" : "text-slate-500"}`}>Review the left <span className="font-semibold">Swarm Active Monitor Rails</span> to verify which agent is actively chewing tasks.</span>
                   </li>
                   <li className="flex gap-2 items-start">
-                    <span className="text-emerald-500 text-[10px] bg-emerald-500/10 px-1 py-0.5 rounded font-mono font-bold uppercase flex-shrink-0">2. Thread</span>
-                    <span className="text-[11px] text-slate-500 dark:text-gray-400">Hover summary sentences to track citations. If nodes glow, you have active trace pathways connected.</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold uppercase flex-shrink-0 ${isDark ? "text-cyan-300 bg-cyan-400/10" : "text-cyan-700 bg-cyan-500/10"}`}>2. Thread</span>
+                    <span className={`text-[11px] ${isDark ? "text-white/50" : "text-slate-500"}`}>Hover summary sentences to track citations. If nodes glow, you have active trace pathways connected.</span>
                   </li>
                   <li className="flex gap-2 items-start">
-                    <span className="text-emerald-500 text-[10px] bg-emerald-500/10 px-1 py-0.5 rounded font-mono font-bold uppercase flex-shrink-0">3. Streams</span>
-                    <span className="text-[11px] text-slate-500 dark:text-gray-400">Examine the <span className="font-semibold">Chronological Operations Log Stream</span> at the bottom to see live event payloads and timestamps.</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold uppercase flex-shrink-0 ${isDark ? "text-cyan-300 bg-cyan-400/10" : "text-cyan-700 bg-cyan-500/10"}`}>3. Streams</span>
+                    <span className={`text-[11px] ${isDark ? "text-white/50" : "text-slate-500"}`}>Examine the <span className="font-semibold">Chronological Operations Log Stream</span> at the bottom to see live event payloads and timestamps.</span>
                   </li>
                   <li className="flex gap-2 items-start">
-                    <span className="text-emerald-500 text-[10px] bg-emerald-500/10 px-1 py-0.5 rounded font-mono font-bold uppercase flex-shrink-0">4. Re-weave</span>
-                    <span className="text-[11px] text-slate-500 dark:text-gray-400">Hit <span className="font-semibold">Re-Weave</span> and watch confidence ripple across the fabric as the Watchdog reconciles contradictions. If the nodes re-score, the pipeline is alive!</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold uppercase flex-shrink-0 ${isDark ? "text-cyan-300 bg-cyan-400/10" : "text-cyan-700 bg-cyan-500/10"}`}>4. Re-weave</span>
+                    <span className={`text-[11px] ${isDark ? "text-white/50" : "text-slate-500"}`}>Hit <span className="font-semibold">Re-Weave</span> and watch confidence ripple across the fabric as the Watchdog reconciles contradictions. If the nodes re-score, the pipeline is alive!</span>
                   </li>
                 </ul>
               </div>
@@ -1498,14 +1641,19 @@ export default function App() {
             </div>
           </section>
 
-          {/* DYNAMIC SWARM GALLERY AND STARTERS */}
-          <section className="flex flex-col gap-4">
-            <h3 className={`text-lg font-bold tracking-tight ${t.textTitle}`}>
-              Currently Deployed Swarm Missions
-            </h3>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              
+          {/* ════ SECTION: LIVE MISSIONS GALLERY ════ */}
+          <section className="relative max-w-7xl mx-auto px-6 pb-16 md:pb-24 flex flex-col gap-8">
+            <div className="scroll-reveal">
+              <div className={`text-[11px] font-bold tracking-[0.2em] uppercase mb-3 ${isDark ? "text-luna-lavender" : "text-violet-700"}`}>
+                Live Operations
+              </div>
+              <h3 className={`text-3xl md:text-4xl font-bold tracking-tight ${t.textTitle}`}>
+                Currently deployed <span className="text-gradient">swarm missions</span>
+              </h3>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+
               {/* Render dynamic missions from database state */}
               {missions.map(mission => {
                 const lastRun = mission.runs?.[mission.runs.length - 1];
@@ -1513,43 +1661,43 @@ export default function App() {
                 return (
                   <div
                     key={mission.id}
-                    className={`p-5 rounded-xl border flex flex-col justify-between gap-4 select-none card-hover cursor-pointer noise relative overflow-hidden ${
-                      selectedMissionId === mission.id ? "ring-2 ring-indigo-500 " + t.bgCard : t.bgCard
-                    }`}
+                    className={`scroll-reveal p-6 rounded-[2rem] border flex flex-col justify-between gap-4 select-none card-hover cursor-pointer noise relative overflow-hidden ${
+                      isDark ? "bg-white/[0.03] border-white/[0.07]" : "bg-white border-violet-500/10 shadow-lg shadow-violet-500/5"
+                    } ${selectedMissionId === mission.id ? "ring-2 ring-violet-500" : ""}`}
                     onClick={() => launchMission(mission.id, "canvas")}
                   >
                     <div className="relative z-10 flex flex-col gap-1.5">
                       <div className="flex justify-between items-center text-[10px] font-mono leading-none">
-                        <span className="text-indigo-400 font-bold uppercase">Mission ID: {mission.id.split("-").pop()}</span>
+                        <span className={`font-bold uppercase ${isDark ? "text-luna-lavender" : "text-violet-600"}`}>Mission ID: {mission.id.split("-").pop()}</span>
                         <span className="flex items-center gap-1.5">
                           {freshSignals > 0 && (
                             <span className="px-1.5 py-0.5 rounded-full font-bold bg-emerald-500 text-white animate-pulse" title={`${freshSignals} new signal(s) since the previous run`}>
                               +{freshSignals} new
                             </span>
                           )}
-                          <span className={`px-2 py-0.5 rounded font-bold uppercase ${
+                          <span className={`px-2 py-0.5 rounded-full font-bold uppercase ${
                             mission.status === "ready" ? "bg-emerald-500/10 text-emerald-500" : "bg-amber-500/10 text-amber-500"
                           }`}>
                             {mission.status}
                           </span>
                         </span>
                       </div>
-                      
-                      <h4 className="text-sm font-bold text-slate-900 dark:text-white tracking-tight line-clamp-2">
+
+                      <h4 className={`text-sm font-bold tracking-tight line-clamp-2 ${t.textTitle}`}>
                         "{mission.prompt}"
                       </h4>
-                      <p className={`text-[11px] line-clamp-2 leading-relaxed ${t.textMute}`}>
+                      <p className={`text-[11px] line-clamp-2 leading-relaxed ${isDark ? "text-white/45" : "text-slate-500"}`}>
                         Target Watchlist Entities: {mission.targets.join(", ")}
                       </p>
                     </div>
 
-                    <div className="flex items-center justify-between text-[11px] font-mono border-t border-slate-200/50 dark:border-white/5 pt-3">
-                      <div className="flex items-center gap-1 text-slate-400">
-                        <Clock className="w-3 h-3 text-slate-400" />
+                    <div className={`flex items-center justify-between text-[11px] font-mono border-t pt-3 ${isDark ? "border-white/[0.06]" : "border-violet-500/10"}`}>
+                      <div className={`flex items-center gap-1 ${isDark ? "text-white/35" : "text-slate-400"}`}>
+                        <Clock className="w-3 h-3" />
                         <span>{new Date(mission.created_at).toLocaleDateString()}</span>
                       </div>
-                      
-                      <span className="text-blue-600 dark:text-blue-400 font-bold flex items-center gap-1 hover:underline">
+
+                      <span className={`font-bold flex items-center gap-1 hover:underline ${isDark ? "text-violet-400" : "text-violet-600"}`}>
                         Launch Workspace
                         <ArrowRight className="w-3 h-3" />
                       </span>
@@ -1559,26 +1707,28 @@ export default function App() {
               })}
 
               {/* STATS SUMMARY BOX FOR FAST VERIFICATION */}
-              <div className={`p-5 rounded-xl border flex flex-col justify-between bg-gradient-to-br from-blue-900/10 to-teal-900/10 dark:from-blue-900/20 dark:to-teal-900/20 border-blue-500/15 ${t.shadow}`}>
+              <div className={`scroll-reveal p-6 rounded-[2rem] border flex flex-col justify-between bg-gradient-to-br ${
+                isDark ? "from-violet-500/15 via-transparent to-fuchsia-400/10 border-violet-500/20" : "from-violet-500/[0.07] via-transparent to-fuchsia-400/[0.06] border-violet-500/15 shadow-lg shadow-violet-500/5"
+              }`}>
                 <div className="flex flex-col gap-1">
-                  <span className="text-[10px] font-mono text-blue-500 font-bold uppercase tracking-widest block">System Diagnostics</span>
-                  <h4 className="text-sm font-bold text-slate-950 dark:text-white flex items-center gap-1.5">
+                  <span className={`text-[10px] font-mono font-bold uppercase tracking-widest block ${isDark ? "text-luna-lavender" : "text-violet-600"}`}>System Diagnostics</span>
+                  <h4 className={`text-sm font-bold flex items-center gap-1.5 ${t.textTitle}`}>
                     <PulseIcon className="w-4 h-4 text-emerald-500 animate-pulse" />
                     Telemetric Indexing Matrix
                   </h4>
-                  <p className="text-[11px] text-slate-500 dark:text-gray-400 leading-snug">
+                  <p className={`text-[11px] leading-snug ${isDark ? "text-white/50" : "text-slate-500"}`}>
                     Veritas credibility calculations, Pathfinder crawling buffers, and Sentinel contradiction exceptions are fully synchronized.
                   </p>
                 </div>
-                
-                <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-slate-200/40 dark:border-white/5 font-mono text-xs">
+
+                <div className={`grid grid-cols-2 gap-2 mt-2 pt-2 border-t font-mono text-xs ${isDark ? "border-white/[0.06]" : "border-violet-500/10"}`}>
                   <div>
-                    <span className="text-[10px] text-slate-400 block pb-0.5">Average Confidence:</span>
+                    <span className={`text-[10px] block pb-0.5 ${isDark ? "text-white/35" : "text-slate-400"}`}>Average Confidence:</span>
                     <span className="font-bold text-emerald-500">92.4% Verified</span>
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-400 block pb-0.5">Veto Corrections:</span>
-                    <span className="font-bold text-blue-500">Activated (100% CF)</span>
+                    <span className={`text-[10px] block pb-0.5 ${isDark ? "text-white/35" : "text-slate-400"}`}>Watchdog Healing:</span>
+                    <span className={`font-bold ${isDark ? "text-violet-400" : "text-violet-600"}`}>Active (100% CF)</span>
                   </div>
                 </div>
               </div>
@@ -1586,7 +1736,29 @@ export default function App() {
             </div>
           </section>
 
-        </div>
+          {/* ════ CLOSING CTA ════ */}
+          <section className="relative overflow-hidden">
+            {isDark && <div className="starfield opacity-60" />}
+            <div className="relative z-10 max-w-3xl mx-auto px-6 pb-20 md:pb-28 pt-2 text-center flex flex-col items-center gap-6 scroll-reveal">
+              <div className="w-12 h-1 rounded-full bg-luna-gradient" />
+              <h3 className={`text-3xl md:text-5xl font-bold tracking-tight ${t.textTitle}`}>
+                Give your team a <span className="text-gradient">second brain</span>
+              </h3>
+              <p className={`text-sm md:text-base max-w-md leading-relaxed ${isDark ? "text-white/60" : "text-slate-600"}`}>
+                One sentence in. A verified, source-linked intelligence fabric out — watching the web while you work.
+              </p>
+              <button
+                type="button"
+                onClick={() => { setLaunched(false); setCurrentView("workspace"); }}
+                className="bg-luna-gradient cta-luna font-bold text-white text-sm px-8 py-4 rounded-full flex items-center gap-2 cursor-pointer"
+              >
+                <Rocket className="w-4 h-4" />
+                Deploy your first swarm
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          </section>
+
         </main>
       )}
 
@@ -1599,11 +1771,13 @@ export default function App() {
       {/* --- VIEW 2A: WORKSPACE COMMAND CENTER (shown until a mission is opened) --- */}
       {currentView === "workspace" && !launched && (
         <main className="flex-1 relative overflow-y-auto flex flex-col items-center justify-center px-4 py-10">
-          {/* aurora backdrop */}
+          {/* night-sky backdrop */}
           {isDark && (
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
-              <div className="aurora absolute top-1/4 left-1/3 w-[480px] h-[480px] rounded-full bg-blue-600/15 blur-3xl" />
-              <div className="aurora absolute bottom-1/4 right-1/3 w-[420px] h-[420px] rounded-full bg-cyan-500/10 blur-3xl" style={{ animationDelay: "-8s" }} />
+              <div className="starfield" />
+              <div className="aurora absolute top-1/4 left-1/3 w-[480px] h-[480px] rounded-full bg-violet-600/15 blur-3xl" />
+              <div className="aurora absolute bottom-1/4 right-1/3 w-[420px] h-[420px] rounded-full bg-fuchsia-400/10 blur-3xl" style={{ animationDelay: "-8s" }} />
+              <span className="shooting-star top-[18%] right-[20%]" style={{ animationDelay: "2.2s" }} />
             </div>
           )}
 
@@ -1640,12 +1814,12 @@ export default function App() {
                     <button
                       key={m.id}
                       onClick={() => launchMission(m.id, "canvas")}
-                      className={`text-left p-3.5 rounded-xl border transition-all group hover:-translate-y-0.5 ${
-                        isDark ? "bg-[#0b0f19]/80 border-white/5 hover:border-blue-500/40" : "bg-white border-slate-200 hover:border-blue-400 shadow-sm"
+                      className={`text-left p-4 rounded-2xl border transition-all duration-300 group hover:-translate-y-0.5 glass ${
+                        isDark ? "border-white/[0.07] hover:border-violet-500/40" : "border-violet-500/10 hover:border-violet-400 shadow-sm"
                       }`}
                     >
                       <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-[9px] font-mono font-bold text-blue-500 uppercase">{m.id.split("-").pop()}</span>
+                        <span className="text-[9px] font-mono font-bold text-violet-500 uppercase">{m.id.split("-").pop()}</span>
                         <span className={`text-[8px] font-mono px-1.5 py-0.5 rounded uppercase font-bold ${
                           m.status === "ready" ? "bg-emerald-500/10 text-emerald-500" : "bg-amber-500/10 text-amber-500"
                         }`}>{m.status}</span>
@@ -1653,7 +1827,7 @@ export default function App() {
                       <p className={`text-[11.5px] font-semibold leading-snug line-clamp-2 ${isDark ? "text-gray-200" : "text-slate-800"}`}>
                         {m.prompt}
                       </p>
-                      <span className="text-[10px] font-mono text-blue-500 flex items-center gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <span className="text-[10px] font-mono text-violet-500 flex items-center gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         Open workspace <ArrowRight className="w-3 h-3" />
                       </span>
                     </button>
@@ -1779,7 +1953,7 @@ export default function App() {
           )}
 
           {/* --- MAIN CENTER: VIEWPORT, CANVAS AND GRAPH PANEL --- */}
-          <main className={`flex-1 flex flex-col min-w-0 ${t.bgCanvas} overflow-hidden relative ${isMaximized ? 'bg-[#05070c] dark:bg-[#05070c] z-[100]' : ''}`} ref={workspaceContainerRef}>
+          <main className={`flex-1 flex flex-col min-w-0 ${t.bgCanvas} overflow-hidden relative ${isMaximized ? 'bg-[#080b16] dark:bg-[#080b16] z-[100]' : ''}`} ref={workspaceContainerRef}>
 
             {/* STATIC SUBBAR STATUS NOTIFIER */}
             {!isMaximized && (
@@ -2084,16 +2258,16 @@ export default function App() {
               
               {/* CANVAS MANUAL HUD */}
               <div className={`group absolute top-4 left-4 z-30 flex flex-col rounded-xl border backdrop-blur font-mono text-[9.5px] shadow-xl w-10 h-10 hover:w-[320px] hover:h-auto overflow-hidden transition-all duration-300 no-pan ${
-                isDark ? "bg-[#0b0e14]/90 border-white/5 text-gray-400 hover:bg-[#0b0e14]" : "bg-white/95 border-slate-200 text-slate-500 hover:bg-white"
+                isDark ? "bg-[#0b0e1c]/90 border-white/5 text-gray-400 hover:bg-[#0b0e1c]" : "bg-white/95 border-slate-200 text-slate-500 hover:bg-white"
               }`}>
                 <div className="absolute inset-0 flex items-center justify-center cursor-help group-hover:opacity-0 transition-opacity duration-300 pointer-events-none">
-                  <Info className="w-5 h-5 text-blue-500" />
+                  <Info className="w-5 h-5 text-violet-500" />
                 </div>
                 <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col gap-1.5 p-3.5 w-full">
                   <span className={`font-extrabold mb-1.5 border-b pb-1 flex items-center gap-1.5 select-none text-[10px] ${
                     isDark ? "text-gray-200 border-white/5" : "text-slate-800 border-slate-200/80"
                   }`}>
-                    <Info className="w-3.5 h-3.5 text-blue-500" />
+                    <Info className="w-3.5 h-3.5 text-violet-500" />
                     CANVAS INTERACTION PROTOCOL
                   </span>
                   <div className="flex items-center gap-1.5 bg-emerald-500/5 px-2 py-0.5 rounded text-emerald-600 dark:text-emerald-400">
@@ -2108,7 +2282,7 @@ export default function App() {
                     <div className="w-1.5 h-1.5 bg-red-500 rounded-full"></div>
                     <span>Low Credibility / Drift Exception (≤ 49%)</span>
                   </div>
-                  <div className="mt-1.5 border-t border-slate-200 dark:border-white/5 pt-1.5 text-blue-600 dark:text-blue-300 font-semibold leading-normal">
+                  <div className="mt-1.5 border-t border-slate-200 dark:border-white/5 pt-1.5 text-violet-600 dark:text-violet-300 font-semibold leading-normal">
                     💡 Drag backgrounds to Pan. Click to select. Drag individual node cards to organize! Use scroll/HUD to Zoom!
                   </div>
                 </div>
@@ -2208,7 +2382,7 @@ export default function App() {
                           ? "stroke-red-500"
                           : isConCorrect
                           ? "stroke-emerald-500"
-                          : "stroke-blue-500";
+                          : "stroke-violet-500";
 
                         return (
                           <g key={edge.id} className="transition-all duration-300">
@@ -2225,7 +2399,7 @@ export default function App() {
                               <text
                                 x={midX}
                                 y={midY - 4}
-                                fill={isConContradict ? "#ef4444" : isConCorrect ? "#10b981" : "#3b82f6"}
+                                fill={isConContradict ? "#ef4444" : isConCorrect ? "#10b981" : "#7c5cff"}
                                 className="text-[8px] font-mono uppercase font-bold text-anchor-middle select-none text-center bg-white dark:bg-black p-0.5"
                                 textAnchor="middle"
                               >
@@ -2275,12 +2449,12 @@ export default function App() {
                             newestRunId && node.run_id === newestRunId ? "new-signal" : ""
                           } ${
                             isHighlighted
-                              ? "ring-2 ring-indigo-500 ring-offset-2 scale-[1.03] dark:ring-offset-[#05070c] shadow-xl"
+                              ? "ring-2 ring-indigo-500 ring-offset-2 scale-[1.03] dark:ring-offset-[#080b16] shadow-xl"
                               : isSelected
                               ? "ring-1 ring-indigo-500 scale-[1.02] shadow-xl"
                               : "shadow-md hover:shadow-lg hover:-translate-y-0.5"
                           } ${isFocused ? "opacity-100 filter-none" : "opacity-30 scale-[0.96] blur-[0.5px]"} ${
-                            isDark ? "bg-[#0b101b]/95 border-white/10 text-slate-200 hover:border-indigo-400/50" : "bg-white border-slate-200 text-slate-800 hover:border-indigo-400/60"
+                            isDark ? "bg-[#0c101f]/95 border-white/10 text-slate-200 hover:border-indigo-400/50" : "bg-white border-slate-200 text-slate-800 hover:border-indigo-400/60"
                           }`}
                         >
                           {/* CARD HEADER */}
@@ -2347,7 +2521,7 @@ export default function App() {
 
               {/* FLOATING ZOOM & HUD NAVIGATION AREA (BOTTOM RIGHT) */}
               <div className={`absolute bottom-4 right-4 z-20 flex items-center gap-1.5 p-2 rounded-xl border shadow-2xl select-none no-pan ${
-                isDark ? "bg-[#0b0e14]/95 border-white/5" : "bg-white/95 border-slate-200"
+                isDark ? "bg-[#0b0e1c]/95 border-white/5" : "bg-white/95 border-slate-200"
               }`}>
                 <button
                   type="button"
@@ -2380,7 +2554,7 @@ export default function App() {
                     setCanvasZoom(1.0);
                     setNodeOffsets({});
                   }}
-                  className="p-1.5 px-3 text-[9.5px] font-mono text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/10 rounded-md transition-all font-bold border border-blue-500/20 cursor-pointer"
+                  className="p-1.5 px-3 text-[9.5px] font-mono text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/10 rounded-md transition-all font-bold border border-violet-500/20 cursor-pointer"
                   title="Recenter Board Coordinates"
                 >
                   Reset Layout
@@ -2589,11 +2763,11 @@ export default function App() {
                             onMouseLeave={() => setHoveredSentenceId(null)}
                             className={`text-xs p-2 rounded-lg transition-all pl-6 leading-relaxed relative border ${
                               hoveredSentenceId === s.id
-                                ? "bg-blue-500/5 border-blue-500/40 text-slate-900 dark:text-white shadow-xs"
+                                ? "bg-violet-500/5 border-violet-500/40 text-slate-900 dark:text-white shadow-xs"
                                 : "text-slate-600 dark:text-gray-300 border-transparent hover:bg-slate-50 dark:hover:bg-white/[0.01]"
                             }`}
                           >
-                            <div className="absolute left-2.5 top-3 w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+                            <div className="absolute left-2.5 top-3 w-1.5 h-1.5 rounded-full bg-violet-500"></div>
                             {s.text}
                             
                             {/* Trace links */}
@@ -2622,15 +2796,15 @@ export default function App() {
                       </div>
 
                       {/* SWARM DIRECTIVES DEPLOYED */}
-                      <div className="flex flex-col gap-2 mt-4 bg-blue-500/5 border border-blue-500/15 p-4 rounded-xl">
-                        <span className="text-[10.5px] font-mono tracking-wider text-blue-600 dark:text-blue-400 uppercase font-bold flex items-center gap-1.5">
+                      <div className="flex flex-col gap-2 mt-4 bg-violet-500/5 border border-violet-500/15 p-4 rounded-xl">
+                        <span className="text-[10.5px] font-mono tracking-wider text-violet-600 dark:text-violet-400 uppercase font-bold flex items-center gap-1.5">
                           <TrendingUp className="w-4 h-4" />
                           RECOMMENDED NEXT STEPS
                         </span>
                         <ul className="list-none flex flex-col gap-1.5 font-sans">
                           {brief.recommendations.map((rec, i) => (
                             <li key={i} className="text-xs text-slate-700 dark:text-gray-300 flex items-start gap-2 pl-1 leading-relaxed">
-                              <span className="text-blue-500 select-none font-bold">↳</span>
+                              <span className="text-violet-500 select-none font-bold">↳</span>
                               {rec}
                             </li>
                           ))}
@@ -2679,7 +2853,7 @@ export default function App() {
                         >
                           <div className="flex justify-between items-start select-none">
                             <span className={`text-[8.5px] font-mono px-1.5 py-0.5 border rounded uppercase ${
-                              act.kind === "draft-email" ? "text-purple-600 border-purple-500/20 bg-purple-500/5" : "text-blue-600 border-blue-500/20 bg-blue-500/5"
+                              act.kind === "draft-email" ? "text-purple-600 border-purple-500/20 bg-purple-500/5" : "text-violet-600 border-violet-500/20 bg-violet-500/5"
                             }`}>
                               {act.kind}
                             </span>
@@ -2762,7 +2936,7 @@ export default function App() {
                               {act.payload.to && (
                                 <a
                                   href={`mailto:${act.payload.to}?subject=${encodeURIComponent(act.payload.subject || act.title)}&body=${encodeURIComponent(act.payload.body || "")}`}
-                                  className="flex-1 bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold py-1 px-2 rounded-md transition-all flex items-center justify-center gap-1 shadow-sm"
+                                  className="flex-1 bg-violet-600 hover:bg-violet-500 text-white text-[10px] font-bold py-1 px-2 rounded-md transition-all flex items-center justify-center gap-1 shadow-sm"
                                 >
                                   <Mail className="w-3.5 h-3.5" /> Open in Mail
                                 </a>
@@ -2793,7 +2967,7 @@ export default function App() {
                 {/* TIMELINE ACTIVITIES OPERATIONS PANEL AREA (span 4) */}
                 <div className="col-span-4 overflow-y-auto p-4 flex flex-col gap-3 font-mono border-l border-slate-200/50 dark:border-white/5">
                   <div className="flex items-center gap-1.5 pb-2 border-b border-slate-200/50 dark:border-white/5">
-                    <Activity className="w-3.5 h-3.5 text-blue-500" />
+                    <Activity className="w-3.5 h-3.5 text-violet-500" />
                     <span className="text-[10px] tracking-wider text-slate-500 dark:text-gray-400 uppercase font-bold">
                       Agent Activity
                     </span>
@@ -2807,7 +2981,7 @@ export default function App() {
                     ) : (
                       events.map(ev => {
                         const levelColors = {
-                          info: "text-blue-600 bg-blue-500/5 border-blue-500/10 dark:text-blue-400 dark:bg-blue-950/20 dark:border-blue-900/20",
+                          info: "text-violet-600 bg-violet-500/5 border-violet-500/10 dark:text-violet-400 dark:bg-violet-950/20 dark:border-violet-900/20",
                           success: "text-emerald-600 bg-emerald-500/5 border-emerald-500/10 dark:text-emerald-400 dark:bg-emerald-950/20 dark:border-emerald-900/20",
                           warn: "text-amber-600 bg-amber-500/5 border-amber-500/10 dark:text-amber-400 dark:bg-amber-950/20 dark:border-amber-900/20",
                           error: "text-red-600 bg-red-500/5 border-red-500/10 dark:text-red-400 dark:bg-red-950/20 dark:border-red-900/20"
@@ -2858,7 +3032,7 @@ export default function App() {
                 isDark ? "bg-black/25 border-white/[0.06]" : "bg-slate-50 border-slate-200"
               }`}>
                 <h3 className="text-sm font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-2 font-display">
-                  <Bot className="w-4 h-4 text-blue-500" />
+                  <Bot className="w-4 h-4 text-violet-500" />
                   Cognitive Fabric Inspector
                 </h3>
                 <div className="flex items-center gap-1">
@@ -2870,7 +3044,7 @@ export default function App() {
                         <button
                           onClick={() => patchNode(sn.id, { pinned: !sn.pinned })}
                           title={sn.pinned ? "Unpin node" : "Pin node"}
-                          className={`p-1.5 rounded-lg transition-colors ${sn.pinned ? "text-blue-500 bg-blue-500/10" : "text-slate-400 hover:text-blue-500 hover:bg-blue-500/10"}`}
+                          className={`p-1.5 rounded-lg transition-colors ${sn.pinned ? "text-violet-500 bg-violet-500/10" : "text-slate-400 hover:text-violet-500 hover:bg-violet-500/10"}`}
                         >
                           <Pin className={`w-3.5 h-3.5 ${sn.pinned ? "fill-current" : ""}`} />
                         </button>
@@ -2905,7 +3079,7 @@ export default function App() {
                     
                     {/* ENHANCED PROVENANCE DETAIL CARD */}
                     <div className={`p-4 rounded-xl border flex flex-col gap-3 ${getConfColor(confRating, true)} ${
-                      isDark ? "bg-[#07090e] shadow-lg" : "bg-[#f8fafc]/50 shadow-sm"
+                      isDark ? "bg-[#070a13] shadow-lg" : "bg-[#faf9fe]/50 shadow-sm"
                     }`}>
                       
                       <div className="flex justify-between items-center leading-none select-none text-[8px] font-mono">
@@ -2984,7 +3158,7 @@ export default function App() {
                             referrerPolicy="no-referrer"
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 font-bold"
+                            className="text-violet-600 dark:text-violet-400 hover:underline flex items-center gap-1 font-bold"
                           >
                             OPEN CITED SIGNAL
                             <ExternalLink className="w-3 h-3" />
@@ -3056,9 +3230,9 @@ export default function App() {
                 <div className="flex items-center gap-2">
                   <div className={`w-2 h-2 rounded-full ${
                     runningAgentId === focusedAgent.id 
-                      ? "bg-blue-400 animate-ping" 
+                      ? "bg-violet-400 animate-ping" 
                       : getAgentWorkingLabel(focusedAgent.id) === "working"
-                      ? "bg-blue-400 animate-ping"
+                      ? "bg-violet-400 animate-ping"
                       : "bg-emerald-500 animate-pulse"
                   }`} />
                   <h3 className="text-sm font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-1.5 font-display">
@@ -3078,7 +3252,7 @@ export default function App() {
               <div className="p-4 flex flex-col gap-4 flex-1">
                 {/* Agent Health & Metrics */}
                 <div className={`p-4 rounded-xl border flex flex-col gap-3 ${
-                  isDark ? "bg-[#07090e] border-white/5 shadow-lg" : "bg-[#f8fafc]/50 border-slate-200 shadow-sm"
+                  isDark ? "bg-[#070a13] border-white/5 shadow-lg" : "bg-[#faf9fe]/50 border-slate-200 shadow-sm"
                 }`}>
                   <span className="text-[9px] font-mono tracking-widest text-slate-400 uppercase font-bold">
                     NEURAL ENGINE STATUS
@@ -3166,8 +3340,8 @@ export default function App() {
                       selectedMission?.status !== "ready"
                         ? "bg-slate-300 dark:bg-white/5 text-slate-400 dark:text-slate-600 cursor-not-allowed border-none"
                         : runningAgentId === focusedAgent.id
-                        ? "bg-blue-600/20 border border-blue-500 text-blue-400 shadow-md animate-pulse cursor-wait"
-                        : "bg-blue-600 hover:bg-blue-500 text-white shadow-lg cursor-pointer hover:shadow-blue-600/10 active:scale-[0.98]"
+                        ? "bg-violet-600/20 border border-violet-500 text-violet-400 shadow-md animate-pulse cursor-wait"
+                        : "bg-violet-600 hover:bg-violet-500 text-white shadow-lg cursor-pointer hover:shadow-violet-600/10 active:scale-[0.98]"
                     }`}
                   >
                     {runningAgentId === focusedAgent.id 
@@ -3185,7 +3359,7 @@ export default function App() {
                   </span>
                   
                   <div className={`flex-1 overflow-y-auto p-3 rounded-lg border font-mono text-[9.5px]/relaxed flex flex-col gap-2 ${
-                    isDark ? "bg-[#05070a] border-white/5 text-blue-400" : "bg-slate-900 border-slate-900 text-blue-400"
+                    isDark ? "bg-[#05070a] border-white/5 text-violet-400" : "bg-slate-900 border-slate-900 text-violet-400"
                   }`}>
                     {events.filter(e => 
                       e.sender.toLowerCase() === focusedAgent.id.toLowerCase() || 
@@ -3201,13 +3375,13 @@ export default function App() {
                           <div className="flex justify-between items-center text-[7.5px] text-slate-500 select-none">
                             <span className="font-bold flex items-center gap-1 uppercase">
                               <span className={`w-1 h-1 rounded-full ${
-                                e.level === "success" ? "bg-emerald-500" : e.level === "warn" ? "bg-amber-400" : e.level === "error" ? "bg-red-500" : "bg-blue-400"
+                                e.level === "success" ? "bg-emerald-500" : e.level === "warn" ? "bg-amber-400" : e.level === "error" ? "bg-red-500" : "bg-violet-400"
                               }`} />
                               {e.sender}
                             </span>
                             <span>{new Date(e.timestamp).toLocaleTimeString()}</span>
                           </div>
-                          <p className="text-white dark:text-blue-300 font-sans text-xs mt-0.5">
+                          <p className="text-white dark:text-violet-300 font-sans text-xs mt-0.5">
                             {e.message}
                           </p>
                         </div>
@@ -3293,7 +3467,7 @@ export default function App() {
                   </div>
 
                   {/* fabric trust gauge */}
-                  <div className={`rounded-xl border p-4 flex flex-col gap-2 noise relative overflow-hidden ${isDark ? "bg-[#0b101b] border-white/[0.06]" : "bg-slate-50 border-slate-200"}`}>
+                  <div className={`rounded-xl border p-4 flex flex-col gap-2 noise relative overflow-hidden ${isDark ? "bg-[#0c101f] border-white/[0.06]" : "bg-slate-50 border-slate-200"}`}>
                     <span className={`relative z-10 text-[9px] font-mono uppercase tracking-widest font-bold ${t.textMute}`}>Fabric trust</span>
                     <div className="relative z-10 flex items-end gap-2">
                       <span className={`text-3xl font-bold font-display tabular leading-none ${avg >= 80 ? "text-emerald-400" : avg >= 50 ? "text-amber-400" : "text-rose-400"}`}>{avg}%</span>
@@ -3341,7 +3515,7 @@ export default function App() {
                         <button
                           key={act.id}
                           onClick={() => { setFooterOpen(true); setActiveTab("actions"); }}
-                          className={`text-left rounded-lg border p-2.5 transition-all card-hover ${isDark ? "bg-[#0b101b] border-white/[0.06]" : "bg-white border-slate-200"}`}
+                          className={`text-left rounded-lg border p-2.5 transition-all card-hover ${isDark ? "bg-[#0c101f] border-white/[0.06]" : "bg-white border-slate-200"}`}
                         >
                           <span className="text-[8.5px] font-mono uppercase text-indigo-400">{act.kind}</span>
                           <p className={`text-[11px] font-bold leading-snug line-clamp-2 ${t.textTitle}`}>{act.title}</p>

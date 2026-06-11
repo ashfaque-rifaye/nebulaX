@@ -5,7 +5,7 @@ NebulaX is a living team-intelligence fabric. You define an **Intelligence Missi
 ## Architecture
 
 - **Frontend** — Vite + React 19 + TypeScript + Tailwind v4 + Motion (`src/App.tsx`, `src/components/`). A unified Swarm Workspace: five lenses over one fabric (Evidence Board with a 2D/3D constellation toggle, Flow Map, Temporal Vista, Triage, Replay), a docked Inspector panel (node detail / agent console / grounded chat / custom agents / mission pulse), a live agent-activity ticker with an expandable Brief & Actions pane, and a first-run spotlight tour.
-- **Design system** — `src/index.css`: semantic dark/light tokens (deep-charcoal Dark Mode 2.0 + cool light theme), Space Grotesk + Inter + JetBrains Mono variable fonts, noise/glass materials, reduced-motion fallbacks.
+- **Design system** — `src/index.css`: the LUNA theme — a deep-navy night sky (`#080b16`) with a luna-purple → luna-pink brand gradient and lavender accents, plus a daylit light-mode counterpart on the same semantic tokens. Bricolage Grotesque + Figtree + Spline Sans Mono variable fonts, glass morphism, starfield/moon/shooting-star ambience, gradient hero text, capability marquee, scroll-driven reveals, noise materials, and reduced-motion fallbacks throughout.
 - **Backend** — Express, served alongside Vite from a single process (`server.ts`). REST API for missions, fabric, events, brief, actions, corrections, re-weave, and runtime LLM configuration.
 - **Store** — in-memory DB persisted to `nebula-data.json` (`src/db.ts`), implementing the core IP: confidence propagation across a provenance graph, healed by the Watchdog on re-weave.
 - **AI swarm** — `src/agents.ts` orchestrates the sensing → reasoning → synthesis → action pipeline.

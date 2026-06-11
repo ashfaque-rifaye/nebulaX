@@ -16,7 +16,7 @@ interface MissionPlannerProps {
 }
 
 const ACCENTS = [
-  { ring: "hover:border-blue-500/60", chip: "bg-blue-500/10 text-blue-500", glow: "from-blue-500/15", num: "text-blue-500" },
+  { ring: "hover:border-violet-500/60", chip: "bg-violet-500/10 text-violet-500", glow: "from-violet-500/15", num: "text-violet-500" },
   { ring: "hover:border-fuchsia-500/60", chip: "bg-fuchsia-500/10 text-fuchsia-500", glow: "from-fuchsia-500/15", num: "text-fuchsia-500" },
   { ring: "hover:border-cyan-500/60", chip: "bg-cyan-500/10 text-cyan-500", glow: "from-cyan-500/15", num: "text-cyan-500" },
 ];
@@ -42,11 +42,11 @@ export const MissionPlanner: React.FC<MissionPlannerProps> = ({
 
       <div
         className={`relative w-full max-w-5xl max-h-[90vh] overflow-y-auto rounded-2xl border shadow-2xl ${
-          isDark ? "bg-[#0a0d14] border-white/10" : "bg-white border-slate-200"
+          isDark ? "bg-[#0a0c14] border-white/10" : "bg-white border-slate-200"
         }`}
       >
         {/* header */}
-        <div className={`sticky top-0 z-10 flex items-start justify-between gap-4 px-6 py-4 border-b backdrop-blur ${isDark ? "bg-[#0a0d14]/90 border-white/10" : "bg-white/90 border-slate-200"}`}>
+        <div className={`sticky top-0 z-10 flex items-start justify-between gap-4 px-6 py-4 border-b backdrop-blur ${isDark ? "bg-[#0a0c14]/90 border-white/10" : "bg-white/90 border-slate-200"}`}>
           <div className="flex flex-col gap-1">
             <span className="inline-flex items-center gap-1.5 text-[10px] font-mono tracking-widest text-indigo-400 uppercase font-semibold">
               <Wand2 className="w-3.5 h-3.5" />
@@ -93,7 +93,7 @@ export const MissionPlanner: React.FC<MissionPlannerProps> = ({
               {[0, 1, 2].map((i) => (
                 <div
                   key={i}
-                  className={`rounded-xl border p-5 flex flex-col gap-3 animate-pulse ${isDark ? "bg-[#0c111c] border-white/5" : "bg-slate-50 border-slate-200"}`}
+                  className={`rounded-xl border p-5 flex flex-col gap-3 animate-pulse ${isDark ? "bg-[#0d1122] border-white/5" : "bg-slate-50 border-slate-200"}`}
                 >
                   <div className={`h-3 w-1/3 rounded ${isDark ? "bg-white/10" : "bg-slate-200"}`} />
                   <div className={`h-5 w-2/3 rounded ${isDark ? "bg-white/10" : "bg-slate-200"}`} />
@@ -105,7 +105,7 @@ export const MissionPlanner: React.FC<MissionPlannerProps> = ({
                   </div>
                 </div>
               ))}
-              <div className="md:col-span-3 flex items-center justify-center gap-2 text-xs font-mono text-blue-500 pt-2">
+              <div className="md:col-span-3 flex items-center justify-center gap-2 text-xs font-mono text-violet-500 pt-2">
                 <Loader2 className="w-4 h-4 animate-spin" />
                 Conductor is decomposing your goal into strategic angles…
               </div>
@@ -122,7 +122,7 @@ export const MissionPlanner: React.FC<MissionPlannerProps> = ({
                       onClick={() => onSelect(v)}
                       disabled={busy}
                       className={`group relative text-left rounded-xl border p-5 flex flex-col gap-3 transition-all overflow-hidden disabled:cursor-not-allowed ${
-                        isDark ? "bg-[#0c111c] border-white/10" : "bg-white border-slate-200 shadow-sm"
+                        isDark ? "bg-[#0d1122] border-white/10" : "bg-white border-slate-200 shadow-sm"
                       } ${!busy ? ac.ring + " hover:-translate-y-1 hover:shadow-xl" : "opacity-60"}`}
                     >
                       <div className={`absolute inset-x-0 -top-10 h-24 bg-gradient-to-b ${ac.glow} to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none`} />
@@ -149,8 +149,8 @@ export const MissionPlanner: React.FC<MissionPlannerProps> = ({
                       <div
                         className={`mt-1 flex items-center justify-center gap-1.5 text-xs font-bold py-2 rounded-lg transition-all ${
                           isThisDeploying
-                            ? "bg-blue-600/20 text-blue-400"
-                            : "bg-blue-600 text-white group-hover:bg-blue-500"
+                            ? "bg-violet-600/20 text-violet-400"
+                            : "bg-violet-600 text-white group-hover:bg-violet-500"
                         }`}
                       >
                         {isThisDeploying ? (

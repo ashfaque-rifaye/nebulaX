@@ -33,7 +33,7 @@ interface FabricCanvasProps {
 // ----------------------
 
 const getNodeBorder = (node: WeaveNode, isSelected: boolean, isDark: boolean) => {
-  if (isSelected) return 'ring-2 ring-blue-500 shadow-blue-500/50 shadow-lg scale-[1.02]';
+  if (isSelected) return 'ring-2 ring-violet-500 shadow-violet-500/50 shadow-lg scale-[1.02]';
   if (node.flagged_by === 'sentinel') return 'ring-2 ring-red-500 animate-pulse shadow-red-500/30 shadow-md';
   return isDark ? 'border border-white/10 shadow-sm' : 'border border-slate-200 shadow-sm';
 };
@@ -47,15 +47,15 @@ const getConfidenceColor = (conf: number) => {
 const BaseNode = ({ data, selected, typeLabel, icon: Icon }: any) => {
   const node = data.node as WeaveNode;
   const isDark = data.isDark;
-  const themeBg = isDark ? 'bg-[#0b0e14]/95 text-gray-200 backdrop-blur-md' : 'bg-white/95 text-slate-800 backdrop-blur-md';
+  const themeBg = isDark ? 'bg-[#0b0e1c]/95 text-gray-200 backdrop-blur-md' : 'bg-white/95 text-slate-800 backdrop-blur-md';
   
   return (
     <div className={`p-3.5 rounded-xl w-72 ${themeBg} ${getNodeBorder(node, selected, isDark)} transition-all duration-300 cursor-pointer`}>
-      <Handle type="target" position={Position.Left} className="w-2.5 h-2.5 !bg-blue-500 border-2 !border-[#0b0e14]" />
+      <Handle type="target" position={Position.Left} className="w-2.5 h-2.5 !bg-violet-500 border-2 !border-[#0b0e1c]" />
       
       <div className="flex justify-between items-center mb-2.5 border-b border-slate-500/20 pb-1.5">
         <span className="text-[10px] font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 opacity-80">
-          <Icon className="w-3.5 h-3.5 text-blue-500" />
+          <Icon className="w-3.5 h-3.5 text-violet-500" />
           {typeLabel}
         </span>
         <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border ${getConfidenceColor(node.confidence)}`}>
@@ -75,7 +75,7 @@ const BaseNode = ({ data, selected, typeLabel, icon: Icon }: any) => {
         )}
       </div>
 
-      <Handle type="source" position={Position.Right} className="w-2.5 h-2.5 !bg-blue-500 border-2 !border-[#0b0e14]" />
+      <Handle type="source" position={Position.Right} className="w-2.5 h-2.5 !bg-violet-500 border-2 !border-[#0b0e1c]" />
     </div>
   );
 };
@@ -159,13 +159,13 @@ const FabricFlow = ({ nodes: rawNodes, edges: rawEdges, isDark, selectedNodeId, 
       target: e.target,
       label: e.label,
       animated: e.relation !== 'contradicts',
-      style: { stroke: e.relation === 'contradicts' ? '#ef4444' : (isDark ? '#38bdf8' : '#3b82f6'), strokeWidth: 2 },
+      style: { stroke: e.relation === 'contradicts' ? '#ef4444' : (isDark ? '#bfa6ff' : '#7c5cff'), strokeWidth: 2 },
       markerEnd: {
         type: MarkerType.ArrowClosed,
-        color: e.relation === 'contradicts' ? '#ef4444' : (isDark ? '#38bdf8' : '#3b82f6'),
+        color: e.relation === 'contradicts' ? '#ef4444' : (isDark ? '#bfa6ff' : '#7c5cff'),
       },
       labelStyle: { fill: isDark ? '#9ca3af' : '#475569', fontSize: 10, fontFamily: 'monospace', fontWeight: 'bold' },
-      labelBgStyle: { fill: isDark ? '#0b0e14' : '#ffffff', fillOpacity: 0.85 },
+      labelBgStyle: { fill: isDark ? '#0b0e1c' : '#ffffff', fillOpacity: 0.85 },
       labelBgPadding: [6, 3],
       labelBgBorderRadius: 4,
     }));
@@ -223,15 +223,15 @@ const FabricFlow = ({ nodes: rawNodes, edges: rawEdges, isDark, selectedNodeId, 
       proOptions={{ hideAttribution: true }}
       className={isDark ? '!bg-transparent' : '!bg-transparent'}
     >
-      <Background color={isDark ? '#2a3550' : '#cbd5e1'} gap={26} size={1.4} />
-      <Controls className={isDark ? '!bg-[#0a0e17]/90 !border-white/10 !fill-white [&>button]:!border-white/10 [&>button]:!bg-transparent [&>button:hover]:!bg-white/10' : ''} />
+      <Background color={isDark ? '#2a3550' : '#cfc9e4'} gap={26} size={1.4} />
+      <Controls className={isDark ? '!bg-[#0a0d1a]/90 !border-white/10 !fill-white [&>button]:!border-white/10 [&>button]:!bg-transparent [&>button:hover]:!bg-white/10' : ''} />
       <MiniMap
         pannable
         zoomable
         nodeColor={confColor}
         nodeStrokeWidth={3}
-        maskColor={isDark ? 'rgba(5,7,12,0.78)' : 'rgba(244,246,251,0.78)'}
-        className={isDark ? '!bg-[#0a0e17]' : '!bg-white'}
+        maskColor={isDark ? 'rgba(8,11,22,0.78)' : 'rgba(246,244,253,0.78)'}
+        className={isDark ? '!bg-[#0a0d1a]' : '!bg-white'}
       />
 
       <Panel position="top-left" className={`p-3.5 glass border rounded-xl m-4 font-mono text-[10px] pointer-events-none shadow-xl ${isDark ? 'border-white/10 text-gray-300' : 'border-slate-200 text-slate-700'}`}>
@@ -259,7 +259,7 @@ export const FabricCanvas: React.FC<FabricCanvasProps> = (props) => {
           <Cpu className="w-7 h-7 text-indigo-400" />
         </div>
         <h3 className={`text-base font-bold font-display ${props.isDark ? "text-white" : "text-slate-900"}`}>The flow map weaves itself</h3>
-        <p className={`text-xs max-w-sm leading-relaxed ${props.isDark ? "text-[#8b93a7]" : "text-slate-500"}`}>
+        <p className={`text-xs max-w-sm leading-relaxed ${props.isDark ? "text-[#9298b4]" : "text-slate-500"}`}>
           As soon as the swarm senses signals, this view auto-lays the pipeline: raw signals flow into syntheses, corrections and actions, left to right.
         </p>
       </div>
@@ -271,7 +271,7 @@ export const FabricCanvas: React.FC<FabricCanvasProps> = (props) => {
       {props.onToggleMaximize && (
         <button
           onClick={props.onToggleMaximize}
-          className="absolute top-4 right-4 p-2 rounded-lg border bg-white/80 dark:bg-[#0b0e14]/80 border-slate-200 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors z-[60] text-slate-700 dark:text-gray-300 shadow-md backdrop-blur-sm"
+          className="absolute top-4 right-4 p-2 rounded-lg border bg-white/80 dark:bg-[#0b0e1c]/80 border-slate-200 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors z-[60] text-slate-700 dark:text-gray-300 shadow-md backdrop-blur-sm"
           title={props.isMaximized ? "Restore view" : "Maximize canvas"}
         >
           {props.isMaximized ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}

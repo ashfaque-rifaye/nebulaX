@@ -86,7 +86,7 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({ isDark, steps, o
           exit={{ opacity: 0, y: -6, scale: 0.98 }}
           transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
           className={`absolute w-[320px] rounded-2xl border shadow-2xl p-4 flex flex-col gap-2.5 noise ${
-            isDark ? "bg-[#0f1522] border-white/10" : "bg-white border-slate-200"
+            isDark ? "bg-[#101427] border-white/10" : "bg-white border-slate-200"
           }`}
           style={tipStyle}
         >
@@ -100,7 +100,7 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({ isDark, steps, o
             </button>
           </div>
           <h3 className={`relative z-10 text-sm font-bold tracking-tight ${isDark ? "text-white" : "text-slate-900"}`}>{step.title}</h3>
-          <p className={`relative z-10 text-xs leading-relaxed ${isDark ? "text-[#aeb6c8]" : "text-slate-600"}`}>{step.body}</p>
+          <p className={`relative z-10 text-xs leading-relaxed ${isDark ? "text-[#b9bdd4]" : "text-slate-600"}`}>{step.body}</p>
 
           <div className="relative z-10 flex items-center justify-between pt-1">
             {/* progress dots */}

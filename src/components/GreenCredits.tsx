@@ -54,7 +54,7 @@ export const GreenCredits: React.FC<GreenCreditsProps> = ({
           </p>
         </div>
         <div className="w-full max-w-[260px] flex flex-col gap-2">
-          <div className={`flex items-center gap-2 rounded-lg border px-3 py-2 ${isDark ? "bg-[#0b0f19] border-white/10" : "bg-white border-slate-200"}`}>
+          <div className={`flex items-center gap-2 rounded-lg border px-3 py-2 ${isDark ? "bg-[#0b0e1c] border-white/10" : "bg-white border-slate-200"}`}>
             <User className="w-3.5 h-3.5 text-slate-400" />
             <input
               value={draft}
@@ -84,7 +84,7 @@ export const GreenCredits: React.FC<GreenCreditsProps> = ({
   return (
     <div className="w-full h-full flex flex-col">
       {/* header: balance + impact */}
-      <div className={`px-3.5 py-3 border-b ${isDark ? "border-white/5 bg-[#0b0f19]/60" : "border-slate-200 bg-white/70"}`}>
+      <div className={`px-3.5 py-3 border-b ${isDark ? "border-white/5 bg-[#0b0e1c]/60" : "border-slate-200 bg-white/70"}`}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
             <Leaf className="w-4 h-4 text-emerald-500" />
@@ -106,8 +106,8 @@ export const GreenCredits: React.FC<GreenCreditsProps> = ({
             <div className="flex items-center gap-1 text-[8px] font-mono uppercase tracking-wider text-emerald-500"><Leaf className="w-2.5 h-2.5" />CO₂ saved</div>
             <div className={`text-sm font-extrabold ${isDark ? "text-white" : "text-slate-900"}`}>{co2kg.toFixed(2)} kg</div>
           </div>
-          <div className={`rounded-lg border px-2 py-1.5 ${isDark ? "bg-white/[0.03] border-white/10" : "bg-blue-50/60 border-blue-200/60"}`}>
-            <div className="flex items-center gap-1 text-[8px] font-mono uppercase tracking-wider text-blue-500"><TrendingUp className="w-2.5 h-2.5" />$ saved</div>
+          <div className={`rounded-lg border px-2 py-1.5 ${isDark ? "bg-white/[0.03] border-white/10" : "bg-violet-50/60 border-violet-200/60"}`}>
+            <div className="flex items-center gap-1 text-[8px] font-mono uppercase tracking-wider text-violet-500"><TrendingUp className="w-2.5 h-2.5" />$ saved</div>
             <div className={`text-sm font-extrabold ${isDark ? "text-white" : "text-slate-900"}`}>${saved.toFixed(3)}</div>
           </div>
         </div>
@@ -132,7 +132,7 @@ export const GreenCredits: React.FC<GreenCreditsProps> = ({
                 className={`group flex items-center gap-2.5 rounded-lg border px-2.5 py-2 text-left transition-all ${
                   done
                     ? isDark ? "bg-emerald-950/20 border-emerald-900/30 opacity-70" : "bg-emerald-50 border-emerald-200 opacity-80"
-                    : isDark ? "bg-[#0c111c] border-white/5 hover:border-emerald-500/40" : "bg-white border-slate-200 hover:border-emerald-400 shadow-sm"
+                    : isDark ? "bg-[#0d1122] border-white/5 hover:border-emerald-500/40" : "bg-white border-slate-200 hover:border-emerald-400 shadow-sm"
                 }`}
               >
                 <span className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${done ? "bg-emerald-500 text-white" : "bg-emerald-500/15 text-emerald-500"}`}>

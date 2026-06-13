@@ -5,10 +5,13 @@ NebulaX is a living team-intelligence fabric. You define an **Intelligence Missi
 ## Architecture
 
 - **Frontend** — Vite + React 19 + TypeScript + Tailwind v4 + Motion (`src/App.tsx`, `src/components/`). A unified Swarm Workspace: five lenses over one fabric (Evidence Board with a 2D/3D constellation toggle, Flow Map, Temporal Vista, Triage, Replay), a docked Inspector panel (node detail / agent console / grounded chat / custom agents / mission pulse), a live agent-activity ticker with an expandable Brief & Actions pane, and a first-run spotlight tour.
+- **Edit Swarm** — `src/components/MissionSettings.tsx`: reshape a live mission — goal, persona, watchlist targets, the active specialist roster (the sense→verify→weave spine stays core; Sentinel/Oracle/Scribe/Actor/Visualizer/Cinematographer toggle), and the live-monitor cadence — then Save or Save & Re-sense.
+- **Accounts & wallet** — `src/auth.ts` (scrypt-hashed passphrases, httpOnly session cookies, login rate-limiting, CSRF origin checks) + `AuthModal`/`Wallet`. Green Credits are a real wallet: every model run is **metered by actual token consumption** (`footprint.creditsForTokens`, per-provider rates) and recorded as an earn/spend **ledger** entry; earn back via daily eco-pledges.
+- **Media Studio** — `src/media.ts` + `src/components/MediaStudio.tsx`: Visualizer (image) and Cinematographer (video) agents over a 19-engine BYO-key roster (FLUX, SDXL/SD3.5, GPT-Image; Higgsfield, Kling, Runway, Luma, Hunyuan, LTX, Wan, SVD, Pika), metered per image / per second, with a keyless on-brand simulation fallback.
 - **Design system** — `src/index.css`: the LUNA theme — a deep-navy night sky (`#080b16`) with a luna-purple → luna-pink brand gradient and lavender accents, plus a daylit light-mode counterpart on the same semantic tokens. Bricolage Grotesque + Figtree + Spline Sans Mono variable fonts, glass morphism, starfield/moon/shooting-star ambience, gradient hero text, capability marquee, scroll-driven reveals, noise materials, and reduced-motion fallbacks throughout.
-- **Backend** — Express, served alongside Vite from a single process (`server.ts`). REST API for missions, fabric, events, brief, actions, corrections, re-weave, and runtime LLM configuration.
-- **Store** — in-memory DB persisted to `nebula-data.json` (`src/db.ts`), implementing the core IP: confidence propagation across a provenance graph, healed by the Watchdog on re-weave.
-- **AI swarm** — `src/agents.ts` orchestrates the sensing → reasoning → synthesis → action pipeline.
+- **Backend** — Express, served alongside Vite from a single process (`server.ts`). REST API for auth/sessions, the credit wallet & ledger, missions, fabric, events, brief, actions, corrections, re-weave, media generation, and runtime LLM/media configuration.
+- **Store** — in-memory DB persisted to `nebula-data.json` (`src/db.ts`), implementing the core IP: confidence propagation across a provenance graph, healed by the Watchdog on re-weave; also profiles/credentials, sessions, the credit ledger, and media assets.
+- **AI swarm** — `src/agents.ts` orchestrates the sensing → reasoning → synthesis → action pipeline (respecting each mission's agent roster).
 
 ## AI providers — Model Control Center
 

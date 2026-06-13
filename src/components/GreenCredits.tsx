@@ -1,8 +1,8 @@
-import React, { useState } from "react";
-import { Profile, MissionPlanVariant } from "../types.ts";
+import React from "react";
+import { Profile } from "../types.ts";
 import {
-  Leaf, Coins, Zap, TrendingUp, Loader2, Check, ArrowRight, User,
-  Bike, Salad, Thermometer, Lightbulb, Recycle, Sparkles
+  Leaf, Coins, Zap, TrendingUp, Loader2, Check, ArrowRight, User, Wallet as WalletIcon,
+  Bike, Salad, Thermometer, Lightbulb, Recycle, Sparkles, ShieldCheck
 } from "lucide-react";
 
 export interface PledgeDef {
@@ -27,7 +27,8 @@ interface GreenCreditsProps {
   deployCost: number;
   loading: boolean;
   claimingId: string | null;
-  onSetHandle: (h: string) => void;
+  onAuth: () => void;          // open the sign-in / create-account modal
+  onOpenWallet: () => void;    // open the full wallet (ledger + earn)
   onClaim: (pledgeId: string) => void;
 }
 
@@ -36,41 +37,38 @@ function todayUTC() {
 }
 
 export const GreenCredits: React.FC<GreenCreditsProps> = ({
-  isDark, handle, profile, pledges, deployCost, loading, claimingId, onSetHandle, onClaim,
+  isDark, handle, profile, pledges, deployCost, loading, claimingId, onAuth, onOpenWallet, onClaim,
 }) => {
-  const [draft, setDraft] = useState("");
-
-  // ── Handle setup gate ──
+  // ── Signed-out gate: a real account CTA (no more vague handle box) ──
   if (!handle) {
     return (
-      <div className="w-full h-full flex flex-col items-center justify-center gap-4 p-6 text-center">
-        <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 flex items-center justify-center float-y">
-          <Leaf className="w-6 h-6 text-emerald-500" />
+      <div className="relative w-full h-full flex flex-col items-center justify-center gap-4 p-6 text-center overflow-hidden">
+        <div className="absolute -top-16 -right-10 w-44 h-44 bg-luna-gradient opacity-20 blur-3xl pointer-events-none" />
+        <div className="relative w-14 h-14 rounded-2xl bg-luna-gradient flex items-center justify-center float-y shadow-lg shadow-violet-500/30">
+          <Leaf className="w-7 h-7 text-white" />
         </div>
-        <div>
-          <h3 className={`text-sm font-extrabold ${isDark ? "text-white" : "text-slate-900"}`}>Create your Green profile</h3>
-          <p className={`text-[11px] mt-1 max-w-[240px] ${isDark ? "text-gray-400" : "text-slate-500"}`}>
-            Earn <span className="text-emerald-500 font-semibold">Green Credits</span> by cutting real-world emissions, then spend them to deploy the agent swarm.
+        <div className="relative">
+          <h3 className={`text-base font-extrabold font-display ${isDark ? "text-white" : "text-slate-900"}`}>Your Green Wallet</h3>
+          <p className={`text-[11px] mt-1 max-w-[250px] ${isDark ? "text-white/55" : "text-slate-500"}`}>
+            Create an account to bank <span className="text-emerald-500 font-semibold">Green Credits</span> by cutting real emissions, then spend them as you run the swarm.
           </p>
         </div>
-        <div className="w-full max-w-[260px] flex flex-col gap-2">
-          <div className={`flex items-center gap-2 rounded-lg border px-3 py-2 ${isDark ? "bg-[#0b0e1c] border-white/10" : "bg-white border-slate-200"}`}>
-            <User className="w-3.5 h-3.5 text-slate-400" />
-            <input
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter" && draft.trim()) onSetHandle(draft.trim()); }}
-              placeholder="pick a handle (e.g. ashfaque)"
-              className={`flex-1 bg-transparent text-xs focus:outline-none ${isDark ? "text-white placeholder-gray-500" : "text-slate-800 placeholder-slate-400"}`}
-            />
-          </div>
+        <div className="relative w-full max-w-[260px] flex flex-col gap-2">
           <button
-            onClick={() => draft.trim() && onSetHandle(draft.trim())}
-            disabled={!draft.trim()}
-            className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-xs font-bold py-2 rounded-lg flex items-center justify-center gap-1.5"
+            onClick={onAuth}
+            className="bg-luna-gradient cta-luna text-white text-xs font-bold py-2.5 rounded-full flex items-center justify-center gap-1.5"
           >
-            Start earning <ArrowRight className="w-3.5 h-3.5" />
+            Create account · get 120 credits <ArrowRight className="w-3.5 h-3.5" />
           </button>
+          <button
+            onClick={onAuth}
+            className={`text-[11px] font-semibold py-1.5 transition-colors ${isDark ? "text-white/55 hover:text-white" : "text-slate-500 hover:text-slate-800"}`}
+          >
+            Already have one? <span className="text-violet-400">Sign in</span>
+          </button>
+          <p className={`text-[9px] flex items-center justify-center gap-1 mt-0.5 ${isDark ? "text-white/35" : "text-slate-400"}`}>
+            <ShieldCheck className="w-2.5 h-2.5 text-emerald-500" /> scrypt-hashed · httpOnly session
+          </p>
         </div>
       </div>
     );
@@ -90,16 +88,20 @@ export const GreenCredits: React.FC<GreenCreditsProps> = ({
             <Leaf className="w-4 h-4 text-emerald-500" />
             <span className={`text-[11px] font-bold font-mono tracking-wide ${isDark ? "text-gray-200" : "text-slate-800"}`}>GREEN CREDITS</span>
           </div>
-          <span className="flex items-center gap-1 text-[10px] font-mono text-slate-400">
-            <User className="w-3 h-3" />{handle}
-          </span>
+          <button
+            onClick={onOpenWallet}
+            title="Open your wallet — balance, ledger & earnings"
+            className={`flex items-center gap-1 text-[10px] font-mono px-2 py-1 rounded-full border transition-colors ${isDark ? "text-white/60 border-white/10 hover:bg-white/5" : "text-slate-500 border-violet-500/15 hover:bg-violet-500/5"}`}
+          >
+            <WalletIcon className="w-3 h-3" />{handle}
+          </button>
         </div>
         <div className="flex items-end gap-1.5 mt-1.5">
           <Coins className="w-5 h-5 text-emerald-500 mb-0.5" />
           <span className={`text-3xl font-extrabold tracking-tight ${isDark ? "text-white" : "text-slate-900"}`}>
             {loading && !profile ? "…" : credits}
           </span>
-          <span className="text-[10px] font-mono text-slate-400 mb-1.5">credits · {deployCost}/deploy</span>
+          <span className="text-[10px] font-mono text-slate-400 mb-1.5">credits · metered/run</span>
         </div>
         <div className="grid grid-cols-2 gap-2 mt-2">
           <div className={`rounded-lg border px-2 py-1.5 ${isDark ? "bg-white/[0.03] border-white/10" : "bg-emerald-50/60 border-emerald-200/60"}`}>

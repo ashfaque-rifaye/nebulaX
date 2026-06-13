@@ -76,11 +76,62 @@ function round(n: number, dp: number): number {
   return Math.round(n * f) / f;
 }
 
-// Cost (in Green Credits) to run swarm actions.
+// Cost (in Green Credits) to run swarm actions. These remain as *display*
+// reference / pre-flight estimates; the real charge is metered per token below.
 export const DEPLOY_COST = 25;       // deploy a full mission (also a re-sense)
 export const MANUAL_AGENT_COST = 6;  // run a single agent manually
 export const CHAT_COST = 3;          // ask the fabric assistant a question
 export const STARTER_CREDITS = 120;  // new profiles begin here so they can try it
+
+// Minimum wallet balance required to START any model run. The true cost is
+// charged after the run from actual token consumption.
+export const MIN_RUN_RESERVE = 4;
+
+// ── Token-metered credit pricing ────────────────────────────────────────────
+// Credits charged per 1K tokens, by provider. Greener / cheaper engines cost
+// fewer credits — so the wallet drains in proportion to the model you actually
+// used. Pricier frontier models cost more, exactly as billed.
+const CREDITS_PER_1K_DEFAULT = 4.0;
+const CREDITS_PER_1K_PROVIDER: Record<string, number> = {
+  Groq: 2.0,
+  Cerebras: 2.2,
+  HuggingFace: 2.6,
+  Together: 3.0,
+  OpenRouter: 3.5,
+  Mistral: 3.2,
+  OpenAI: 6.0,
+};
+
+/** Green-Credit cost for a metered LLM run. Always ≥ 1 credit for any real run. */
+export function creditsForTokens(tokens: number, provider: string): number {
+  if (!tokens || tokens <= 0) return 0;
+  const rate = CREDITS_PER_1K_PROVIDER[provider] ?? CREDITS_PER_1K_DEFAULT;
+  return Math.max(1, Math.round((tokens / 1000) * rate));
+}
+
+// ── Media generation pricing (Feature 3) ────────────────────────────────────
+// Stills are charged per image; clips per second of footage. Real cloud media
+// models are far pricier than text, so credits scale accordingly.
+const CREDITS_PER_IMAGE_DEFAULT = 12;
+const CREDITS_PER_IMAGE_PROVIDER: Record<string, number> = {
+  "fal-flux": 10, "replicate-flux": 12, "together-flux": 11, "bfl-flux": 14,
+  "stability-sdxl": 9, "replicate-sdxl": 8, "openai-image": 18, "hf-image": 6,
+};
+const CREDITS_PER_VIDEO_SEC_DEFAULT = 30;
+const CREDITS_PER_VIDEO_SEC_PROVIDER: Record<string, number> = {
+  "higgsfield": 40, "fal-kling": 34, "replicate-kling": 34, "fal-runway": 38,
+  "fal-luma": 32, "fal-hunyuan": 26, "replicate-hunyuan": 26, "replicate-ltx": 18,
+  "fal-wan": 24, "replicate-svd": 16, "fal-pika": 30,
+};
+
+export function creditsForImage(providerId: string, count = 1): number {
+  const rate = CREDITS_PER_IMAGE_PROVIDER[providerId] ?? CREDITS_PER_IMAGE_DEFAULT;
+  return Math.max(1, Math.round(rate * count));
+}
+export function creditsForVideo(providerId: string, seconds: number): number {
+  const rate = CREDITS_PER_VIDEO_SEC_PROVIDER[providerId] ?? CREDITS_PER_VIDEO_SEC_DEFAULT;
+  return Math.max(1, Math.round(rate * Math.max(1, seconds)));
+}
 
 // The eco-pledge catalogue. Each is a real-world action; credits + estimated
 // kg CO₂ saved are conservative. Claimable once per UTC day per pledge.

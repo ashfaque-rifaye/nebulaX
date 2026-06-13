@@ -6,11 +6,24 @@ import { db } from "./src/db.ts";
 import { runMissionSensing, executeSingleAgentCognition, planMissionVariants, answerFabricQuestion, runSelfCorrection, enrichMissionNodes, runCustomAgent, generateFutures } from "./src/agents.ts";
 import { WeaveNode } from "./src/types.ts";
 import { isLLMAvailable, getProviderNames, chat, getLLMConfigSummary, updateLLMConfig, testProvider } from "./src/llm.ts";
-import { PLEDGES, DEPLOY_COST, MANUAL_AGENT_COST, CHAT_COST } from "./src/footprint.ts";
+import { PLEDGES, DEPLOY_COST, MANUAL_AGENT_COST, MIN_RUN_RESERVE, creditsForTokens } from "./src/footprint.ts";
 import { ChatTurn } from "./src/types.ts";
+import {
+  hashPassphrase, verifyPassphrase, newSessionToken, validateHandle, validatePassphrase,
+  rateLimited, recordAttempt, clearAttempts, parseCookies, serializeSessionCookie, clearSessionCookie,
+  SESSION_COOKIE, SESSION_TTL_MS,
+} from "./src/auth.ts";
 
 // Load environment variables
 dotenv.config();
+
+// Augment Express's Request with the authenticated handle (set by session mw).
+declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
+  namespace Express {
+    interface Request { handle?: string | null; }
+  }
+}
 
 async function startServer() {
   const app = express();
@@ -20,7 +33,103 @@ async function startServer() {
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
 
+  // True when the request arrived over HTTPS (sets the Secure cookie flag).
+  const isSecure = (req: express.Request) =>
+    req.secure || req.headers["x-forwarded-proto"] === "https";
+
+  // ── Session middleware: resolve the session cookie → req.handle ──
+  app.use((req, _res, next) => {
+    const token = parseCookies(req.headers.cookie)[SESSION_COOKIE];
+    req.handle = db.getSessionHandle(token);
+    next();
+  });
+
+  // ── CSRF defense-in-depth: reject cross-origin state-changing API calls ──
+  // SameSite=Lax already blocks most; this checks Origin against Host for any
+  // mutating /api request that carries an Origin header.
+  app.use((req, res, next) => {
+    const mutating = ["POST", "PUT", "PATCH", "DELETE"].includes(req.method);
+    if (mutating && req.path.startsWith("/api/")) {
+      const origin = req.headers.origin;
+      if (origin) {
+        try {
+          if (new URL(origin).host !== req.headers.host) {
+            return res.status(403).json({ error: "Cross-origin request blocked." });
+          }
+        } catch { /* malformed Origin — fall through */ }
+      }
+    }
+    next();
+  });
+
+  // Require an authenticated session; 401 otherwise.
+  const requireAuth: express.RequestHandler = (req, res, next) => {
+    if (!req.handle) return res.status(401).json({ error: "Sign in to continue.", code: "UNAUTHENTICATED" });
+    next();
+  };
+
   // --- API ROUTES FIRST ---
+
+  // ─── AUTH ───────────────────────────────────────────────────────────────
+  // Create an account: handle + passphrase (scrypt-hashed) → session cookie.
+  app.post("/api/auth/signup", (req, res) => {
+    try {
+      const h = validateHandle(req.body?.handle);
+      if ("error" in h) return res.status(400).json({ error: h.error });
+      const pw = validatePassphrase(req.body?.passphrase);
+      if ("error" in pw) return res.status(400).json({ error: pw.error });
+      if (db.hasCredential(h.handle)) {
+        return res.status(409).json({ error: "That handle is taken. Try signing in instead.", code: "HANDLE_TAKEN" });
+      }
+      db.setCredential(h.handle, hashPassphrase(pw.pass));
+      const token = newSessionToken();
+      db.createSession(h.handle, token, SESSION_TTL_MS);
+      res.setHeader("Set-Cookie", serializeSessionCookie(token, isSecure(req)));
+      clearAttempts(h.handle.toLowerCase());
+      res.status(201).json(db.publicProfile(db.getOrCreateProfile(h.handle)));
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || "Signup failed" });
+    }
+  });
+
+  // Sign in: verify passphrase, rotate a fresh session, set cookie.
+  app.post("/api/auth/login", (req, res) => {
+    try {
+      const h = validateHandle(req.body?.handle);
+      if ("error" in h) return res.status(400).json({ error: h.error });
+      const rlKey = h.handle.toLowerCase();
+      if (rateLimited(rlKey)) {
+        return res.status(429).json({ error: "Too many attempts. Wait a few minutes and try again." });
+      }
+      const stored = db.getCredential(h.handle);
+      const pass = String(req.body?.passphrase ?? "");
+      if (!stored || !verifyPassphrase(pass, stored)) {
+        recordAttempt(rlKey);
+        return res.status(401).json({ error: "Incorrect handle or passphrase." });
+      }
+      clearAttempts(rlKey);
+      const token = newSessionToken();
+      db.createSession(h.handle, token, SESSION_TTL_MS);
+      res.setHeader("Set-Cookie", serializeSessionCookie(token, isSecure(req)));
+      res.json(db.publicProfile(db.getOrCreateProfile(h.handle)));
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || "Login failed" });
+    }
+  });
+
+  // Sign out: drop the session + clear the cookie.
+  app.post("/api/auth/logout", (req, res) => {
+    const token = parseCookies(req.headers.cookie)[SESSION_COOKIE];
+    db.deleteSession(token);
+    res.setHeader("Set-Cookie", clearSessionCookie(isSecure(req)));
+    res.json({ success: true });
+  });
+
+  // Who am I? (used to restore a session on page load)
+  app.get("/api/auth/me", (req, res) => {
+    if (!req.handle) return res.status(401).json({ error: "Not signed in." });
+    res.json(db.publicProfile(db.getOrCreateProfile(req.handle)));
+  });
 
   // Healthcheck & smoke test
   app.get("/api/health", (req, res) => {
@@ -79,25 +188,42 @@ async function startServer() {
 
   // The eco-pledge catalogue (static).
   app.get("/api/pledges", (req, res) => {
-    res.json({ pledges: PLEDGES, deployCost: DEPLOY_COST, manualAgentCost: MANUAL_AGENT_COST });
+    res.json({ pledges: PLEDGES, deployCost: DEPLOY_COST, manualAgentCost: MANUAL_AGENT_COST, minReserve: MIN_RUN_RESERVE, metered: true });
   });
 
-  // Get (or lazily create) a profile by handle.
+  // Get a profile by handle (public fields only; secrets never serialized).
   app.get("/api/profile/:handle", (req, res) => {
     try {
       const handle = String(req.params.handle).trim().slice(0, 40);
       if (!handle) return res.status(400).json({ error: "Handle is required." });
       const profile = db.getOrCreateProfile(handle);
-      res.json(profile);
+      res.json(db.publicProfile(profile));
     } catch (err: any) {
       res.status(500).json({ error: err.message || "Failed to load profile" });
     }
   });
 
-  // Claim an eco-pledge → award Green Credits + log real-world impact (once/day each).
-  app.post("/api/profile/:handle/pledge", (req, res) => {
+  // Wallet ledger (earn/spend history) — only the signed-in owner may read it.
+  app.get("/api/profile/:handle/ledger", requireAuth, (req, res) => {
     try {
       const handle = String(req.params.handle).trim().slice(0, 40);
+      if (handle.toLowerCase() !== String(req.handle).toLowerCase()) {
+        return res.status(403).json({ error: "You can only view your own wallet." });
+      }
+      const limit = Math.min(500, Math.max(1, parseInt(String(req.query.limit || "120"), 10) || 120));
+      res.json({ ledger: db.getLedger(handle, limit), profile: db.publicProfile(db.getOrCreateProfile(handle)) });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || "Failed to load ledger" });
+    }
+  });
+
+  // Claim an eco-pledge → award Green Credits + log real-world impact (once/day each).
+  app.post("/api/profile/:handle/pledge", requireAuth, (req, res) => {
+    try {
+      const handle = String(req.params.handle).trim().slice(0, 40);
+      if (handle.toLowerCase() !== String(req.handle).toLowerCase()) {
+        return res.status(403).json({ error: "You can only claim pledges on your own account." });
+      }
       const { pledgeId } = req.body;
       const def = PLEDGES.find(p => p.id === pledgeId);
       if (!handle || !def) return res.status(400).json({ error: "Valid handle and pledgeId required." });
@@ -106,7 +232,7 @@ async function startServer() {
       if (!profile) {
         return res.status(409).json({ error: "Pledge already claimed today.", code: "ALREADY_CLAIMED" });
       }
-      res.json({ profile, awarded: { credits: def.credits, co2_g: def.co2_g } });
+      res.json({ profile: db.publicProfile(profile), awarded: { credits: def.credits, co2_g: def.co2_g } });
     } catch (err: any) {
       res.status(500).json({ error: err.message || "Failed to claim pledge" });
     }
@@ -151,26 +277,24 @@ async function startServer() {
   });
 
   // Create new intelligence mission (Starts async autonomous agent sensing thread)
-  app.post("/api/missions", (req, res) => {
+  app.post("/api/missions", requireAuth, (req, res) => {
     try {
-      const { prompt, persona, handle, parent_id } = req.body;
+      const { prompt, persona, parent_id } = req.body;
       if (!prompt || typeof prompt !== "string") {
         return res.status(400).json({ error: "Mission prompt string is required." });
       }
 
-      // Green Credits gating: deploying the swarm costs credits.
-      const owner = handle ? String(handle).trim().slice(0, 40) : null;
-      if (owner) {
-        const profile = db.getOrCreateProfile(owner);
-        if (profile.credits < DEPLOY_COST) {
-          return res.status(402).json({
-            error: `Not enough Green Credits to deploy (need ${DEPLOY_COST}, have ${profile.credits}). Earn more via eco-pledges.`,
-            code: "INSUFFICIENT_CREDITS",
-            credits: profile.credits,
-            required: DEPLOY_COST
-          });
-        }
-        db.spendCredits(owner, DEPLOY_COST);
+      // Green Credits gating: must hold a minimum reserve to start. The actual
+      // charge is metered from token consumption when the run completes.
+      const owner = req.handle as string;
+      const profile = db.getOrCreateProfile(owner);
+      if (profile.credits < MIN_RUN_RESERVE) {
+        return res.status(402).json({
+          error: `Not enough Green Credits to deploy (need at least ${MIN_RUN_RESERVE}, have ${profile.credits}). Earn more via eco-pledges.`,
+          code: "INSUFFICIENT_CREDITS",
+          credits: profile.credits,
+          required: MIN_RUN_RESERVE
+        });
       }
 
       const missionId = `mission-${Math.random().toString(36).substr(2, 9)}`;
@@ -193,7 +317,7 @@ async function startServer() {
         console.error("Swarm background execution exception:", err);
       });
 
-      res.status(201).json({ ...newMission, spent: owner ? DEPLOY_COST : 0 });
+      res.status(201).json({ ...newMission, metered: true });
     } catch (err) {
       res.status(500).json({ error: "Failed to create intelligence mission" });
     }
@@ -328,20 +452,17 @@ async function startServer() {
   // ─── Living missions: re-sense, runs, chat, edit, lifecycle, curation ──────
 
   // Re-sense: re-run the swarm and APPEND a new run (time-series). Costs credits.
-  app.post("/api/missions/:id/resense", (req, res) => {
+  app.post("/api/missions/:id/resense", requireAuth, (req, res) => {
     try {
       const mId = req.params.id;
       const mission = db.getMission(mId);
       if (!mission) return res.status(404).json({ error: "Mission not found" });
 
       const trigger = req.body?.trigger === "monitor" ? "monitor" : "resense";
-      const owner = req.body?.handle ? String(req.body.handle).trim().slice(0, 40) : (mission.owner || null);
-      if (owner) {
-        const profile = db.getOrCreateProfile(owner);
-        if (profile.credits < DEPLOY_COST) {
-          return res.status(402).json({ error: `Not enough Green Credits to re-sense (need ${DEPLOY_COST}, have ${profile.credits}).`, code: "INSUFFICIENT_CREDITS", credits: profile.credits, required: DEPLOY_COST });
-        }
-        db.spendCredits(owner, DEPLOY_COST);
+      const owner = req.handle as string;
+      const profile = db.getOrCreateProfile(owner);
+      if (profile.credits < MIN_RUN_RESERVE) {
+        return res.status(402).json({ error: `Not enough Green Credits to re-sense (need at least ${MIN_RUN_RESERVE}, have ${profile.credits}).`, code: "INSUFFICIENT_CREDITS", credits: profile.credits, required: MIN_RUN_RESERVE });
       }
 
       db.addEvent({
@@ -356,7 +477,7 @@ async function startServer() {
       runMissionSensing(mId, mission.prompt, mission.persona, owner, trigger).catch(err => {
         console.error("Re-sense execution exception:", err);
       });
-      res.json({ success: true, spent: owner ? DEPLOY_COST : 0 });
+      res.json({ success: true, metered: true });
     } catch (err: any) {
       res.status(500).json({ error: err.message || "Failed to re-sense mission" });
     }
@@ -391,38 +512,42 @@ async function startServer() {
     res.json({ success: true });
   });
 
-  app.post("/api/custom-agents/:id/run", async (req, res) => {
+  app.post("/api/custom-agents/:id/run", requireAuth, async (req, res) => {
     try {
       const agent = db.getCustomAgent(req.params.id);
       if (!agent) return res.status(404).json({ error: "Custom agent not found" });
-      const handle = req.body?.handle ? String(req.body.handle).trim().slice(0, 40) : null;
-      if (handle) {
-        const profile = db.getOrCreateProfile(handle);
-        if (profile.credits < MANUAL_AGENT_COST) {
-          return res.status(402).json({ error: `Not enough Green Credits to run an agent (need ${MANUAL_AGENT_COST}, have ${profile.credits}).`, code: "INSUFFICIENT_CREDITS", credits: profile.credits, required: MANUAL_AGENT_COST });
-        }
-        db.spendCredits(handle, MANUAL_AGENT_COST);
+      const handle = req.handle as string;
+      const profile = db.getOrCreateProfile(handle);
+      if (profile.credits < MIN_RUN_RESERVE) {
+        return res.status(402).json({ error: `Not enough Green Credits to run an agent (need at least ${MIN_RUN_RESERVE}, have ${profile.credits}).`, code: "INSUFFICIENT_CREDITS", credits: profile.credits, required: MIN_RUN_RESERVE });
       }
       const result = await runCustomAgent(agent.mission_id, agent.id);
-      res.json({ ...result, spent: handle ? MANUAL_AGENT_COST : 0 });
+      const provider = getProviderNames()[0] || "Groq";
+      const spent = db.debit(handle, creditsForTokens(result.tokens || 900, provider), {
+        source: "custom-agent", note: `Ran custom agent “${agent.name}” (~${result.tokens} tokens)`,
+        tokens: result.tokens, provider, mission_id: agent.mission_id,
+      });
+      res.json({ ...result, spent });
     } catch (err: any) {
       res.status(500).json({ error: err.message || "Failed to run custom agent" });
     }
   });
 
   // Forecast branching futures (Temporal Vista / EchoForge).
-  app.post("/api/missions/:id/forecast", async (req, res) => {
+  app.post("/api/missions/:id/forecast", requireAuth, async (req, res) => {
     try {
-      const handle = req.body?.handle ? String(req.body.handle).trim().slice(0, 40) : null;
-      if (handle) {
-        const profile = db.getOrCreateProfile(handle);
-        if (profile.credits < MANUAL_AGENT_COST) {
-          return res.status(402).json({ error: `Not enough Green Credits to forecast (need ${MANUAL_AGENT_COST}, have ${profile.credits}).`, code: "INSUFFICIENT_CREDITS", credits: profile.credits, required: MANUAL_AGENT_COST });
-        }
-        db.spendCredits(handle, MANUAL_AGENT_COST);
+      const handle = req.handle as string;
+      const profile = db.getOrCreateProfile(handle);
+      if (profile.credits < MIN_RUN_RESERVE) {
+        return res.status(402).json({ error: `Not enough Green Credits to forecast (need at least ${MIN_RUN_RESERVE}, have ${profile.credits}).`, code: "INSUFFICIENT_CREDITS", credits: profile.credits, required: MIN_RUN_RESERVE });
       }
       const result = await generateFutures(req.params.id);
-      res.json({ ...result, spent: handle ? MANUAL_AGENT_COST : 0 });
+      const provider = getProviderNames()[0] || "Groq";
+      const spent = db.debit(handle, creditsForTokens(result.tokens || 1400, provider), {
+        source: "forecast", note: `Forecast branching futures (~${result.tokens} tokens)`,
+        tokens: result.tokens, provider, mission_id: req.params.id,
+      });
+      res.json({ ...result, spent });
     } catch (err: any) {
       res.status(500).json({ error: err.message || "Failed to forecast futures" });
     }
@@ -456,20 +581,17 @@ async function startServer() {
     }
   });
 
-  app.post("/api/missions/:id/chat", async (req, res) => {
+  app.post("/api/missions/:id/chat", requireAuth, async (req, res) => {
     try {
       const mId = req.params.id;
-      const { question, handle } = req.body;
+      const { question } = req.body;
       if (!question || typeof question !== "string") {
         return res.status(400).json({ error: "A question string is required." });
       }
-      const owner = handle ? String(handle).trim().slice(0, 40) : null;
-      if (owner) {
-        const profile = db.getOrCreateProfile(owner);
-        if (profile.credits < CHAT_COST) {
-          return res.status(402).json({ error: `Not enough Green Credits to ask (need ${CHAT_COST}, have ${profile.credits}).`, code: "INSUFFICIENT_CREDITS", credits: profile.credits, required: CHAT_COST });
-        }
-        db.spendCredits(owner, CHAT_COST);
+      const owner = req.handle as string;
+      const profile = db.getOrCreateProfile(owner);
+      if (profile.credits < MIN_RUN_RESERVE) {
+        return res.status(402).json({ error: `Not enough Green Credits to ask (need at least ${MIN_RUN_RESERVE}, have ${profile.credits}).`, code: "INSUFFICIENT_CREDITS", credits: profile.credits, required: MIN_RUN_RESERVE });
       }
 
       const userTurn: ChatTurn = {
@@ -481,7 +603,7 @@ async function startServer() {
       };
       db.addChat(userTurn);
 
-      const { answer, citations } = await answerFabricQuestion(mId, question);
+      const { answer, citations, tokens } = await answerFabricQuestion(mId, question);
       const assistantTurn: ChatTurn = {
         id: `chat-a-${Math.random().toString(36).substr(2, 9)}`,
         mission_id: mId,
@@ -492,26 +614,37 @@ async function startServer() {
       };
       db.addChat(assistantTurn);
 
-      res.json({ message: assistantTurn });
+      const provider = getProviderNames()[0] || "Groq";
+      const spent = db.debit(owner, creditsForTokens(tokens || 450, provider), {
+        source: "chat", note: `Asked the fabric a question (~${tokens} tokens)`,
+        tokens, provider, mission_id: mId,
+      });
+      res.json({ message: assistantTurn, spent });
     } catch (err: any) {
       res.status(500).json({ error: err.message || "Failed to answer question" });
     }
   });
 
-  // Edit mission spec (optionally trigger a scoped re-sense).
+  // Edit mission spec (optionally trigger a scoped re-sense — metered like a run).
   app.put("/api/missions/:id", (req, res) => {
     try {
       const mId = req.params.id;
-      const { prompt, persona, targets, agents, cadence, resense, handle } = req.body;
+      const { prompt, persona, targets, agents, cadence, resense } = req.body;
+
+      // A re-sense costs credits, so it requires a signed-in owner with reserve.
+      if (resense) {
+        if (!req.handle) return res.status(401).json({ error: "Sign in to re-sense.", code: "UNAUTHENTICATED" });
+        const profile = db.getOrCreateProfile(req.handle);
+        if (profile.credits < MIN_RUN_RESERVE) {
+          return res.status(402).json({ error: `Not enough Green Credits to re-sense (need at least ${MIN_RUN_RESERVE}, have ${profile.credits}).`, code: "INSUFFICIENT_CREDITS", credits: profile.credits, required: MIN_RUN_RESERVE });
+        }
+      }
+
       const updated = db.updateMissionSpec(mId, { prompt, persona, targets, agents, cadence });
       if (!updated) return res.status(404).json({ error: "Mission not found" });
 
       if (resense) {
-        const owner = handle ? String(handle).trim().slice(0, 40) : (updated.owner || null);
-        if (owner) {
-          const profile = db.getOrCreateProfile(owner);
-          if (profile.credits >= DEPLOY_COST) db.spendCredits(owner, DEPLOY_COST);
-        }
+        const owner = req.handle as string;
         runMissionSensing(mId, updated.prompt, updated.persona, owner, "edit").catch(err => console.error(err));
       }
       res.json(updated);
@@ -597,24 +730,26 @@ async function startServer() {
   });
 
   // Manually trigger dynamic agent execution
-  app.post("/api/missions/:id/agents/:agentId/execute", async (req, res) => {
+  app.post("/api/missions/:id/agents/:agentId/execute", requireAuth, async (req, res) => {
     try {
       const { id, agentId } = req.params;
-      const handle = req.body?.handle ? String(req.body.handle).trim().slice(0, 40) : null;
-      if (handle) {
-        const profile = db.getOrCreateProfile(handle);
-        if (profile.credits < MANUAL_AGENT_COST) {
-          return res.status(402).json({
-            error: `Not enough Green Credits to run an agent (need ${MANUAL_AGENT_COST}, have ${profile.credits}).`,
-            code: "INSUFFICIENT_CREDITS",
-            credits: profile.credits,
-            required: MANUAL_AGENT_COST
-          });
-        }
-        db.spendCredits(handle, MANUAL_AGENT_COST);
+      const handle = req.handle as string;
+      const profile = db.getOrCreateProfile(handle);
+      if (profile.credits < MIN_RUN_RESERVE) {
+        return res.status(402).json({
+          error: `Not enough Green Credits to run an agent (need at least ${MIN_RUN_RESERVE}, have ${profile.credits}).`,
+          code: "INSUFFICIENT_CREDITS",
+          credits: profile.credits,
+          required: MIN_RUN_RESERVE
+        });
       }
       const result = await executeSingleAgentCognition(id, agentId);
-      res.json({ ...result, spent: handle ? MANUAL_AGENT_COST : 0 });
+      const provider = getProviderNames()[0] || "Groq";
+      const spent = db.debit(handle, creditsForTokens(result.tokens || 700, provider), {
+        source: "agent", note: `Ran ${agentId} manually (~${result.tokens || 0} tokens)`,
+        tokens: result.tokens || 0, provider, mission_id: id,
+      });
+      res.json({ ...result, spent });
     } catch (err: any) {
       console.error("Agent execution failed:", err);
       res.status(500).json({ error: err.message || "Failed to execute agent" });

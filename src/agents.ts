@@ -390,6 +390,12 @@ export async function runMissionSensing(
   let totalTokens = 0;
   let runProvider = getProviderNames()[0] || "Groq";
 
+  // Respect the mission's active agent roster. The sense→verify→weave spine
+  // always runs; optional specialists (sentinel/oracle/scribe/actor) can be
+  // toggled off in Edit Swarm.
+  const roster = db.getMission(missionId)?.agents;
+  const agentOn = (id: string) => !roster || roster.length === 0 || roster.includes(id);
+
   // Open a sensing run for this pass so the mission becomes a time-series.
   const runStartMs = Date.now();
   const existingRuns = db.getRuns(missionId);
@@ -617,7 +623,7 @@ Return JSON:
           synthesisTitle = parsedReasoning.synthesis_title || synthesisTitle;
           synthesisContent = parsedReasoning.synthesis_content || synthesisContent;
 
-          if (parsedReasoning.has_contradiction && parsedReasoning.contradiction_title) {
+          if (agentOn("sentinel") && parsedReasoning.has_contradiction && parsedReasoning.contradiction_title) {
             logEvent("Sentinel", "Systemic conflict sensor sparked: Analyzing statement details...", "warn");
             conflictNode = {
               id: `node-contradict-${Math.random().toString(36).substr(2, 5)}`,
@@ -731,8 +737,8 @@ Return JSON:
     logEvent("Actor", "Actor assembling email correspondence drafts and calendar prompts...", "info");
     await sleep(1200);
 
-    // Add proposed actions via AI
-    if (llmReady() && discoveredNodes.length > 0) {
+    // Add proposed actions via AI (Actor specialist — skippable via Edit Swarm)
+    if (agentOn("actor") && llmReady() && discoveredNodes.length > 0) {
       try {
         logEvent("Actor", "Actor model creating executable workflows from synthesis.", "info");
         const { data: parsedActions, tokens: aTokens } = await chatJSON<{ actions: any[] }>(

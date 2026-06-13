@@ -755,12 +755,14 @@ class Database {
     if (m) { m.monitoring = monitoring; m.updated_at = new Date().toISOString(); this.save(); }
   }
 
-  public updateMissionSpec(id: string, patch: { prompt?: string; persona?: string | null; targets?: string[] }): Mission | undefined {
+  public updateMissionSpec(id: string, patch: { prompt?: string; persona?: string | null; targets?: string[]; agents?: string[]; cadence?: number }): Mission | undefined {
     const m = this.getMission(id);
     if (m) {
       if (patch.prompt !== undefined) m.prompt = patch.prompt;
       if (patch.persona !== undefined) m.persona = patch.persona;
       if (patch.targets !== undefined) m.targets = patch.targets;
+      if (patch.agents !== undefined) m.agents = patch.agents;
+      if (patch.cadence !== undefined) m.cadence = Math.max(10, Math.min(3600, patch.cadence));
       m.updated_at = new Date().toISOString();
       this.save();
     }

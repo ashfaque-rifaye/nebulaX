@@ -13,6 +13,8 @@ export interface Mission {
   // ── living-mission fields ──
   parent_id?: string;              // set if this is a deep-dive child of another mission
   monitoring?: boolean;            // live monitor toggle (client auto re-senses)
+  cadence?: number;                // monitor cadence in seconds (default 45)
+  agents?: string[];               // enabled specialist agent ids (undefined = all on)
   archived?: boolean;              // lifecycle: archived missions are hidden by default
   runs?: MissionRun[];             // history of sensing runs
   layout?: { [nodeId: string]: { x: number; y: number } }; // persisted canvas layout

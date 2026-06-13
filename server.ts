@@ -502,8 +502,8 @@ async function startServer() {
   app.put("/api/missions/:id", (req, res) => {
     try {
       const mId = req.params.id;
-      const { prompt, persona, targets, resense, handle } = req.body;
-      const updated = db.updateMissionSpec(mId, { prompt, persona, targets });
+      const { prompt, persona, targets, agents, cadence, resense, handle } = req.body;
+      const updated = db.updateMissionSpec(mId, { prompt, persona, targets, agents, cadence });
       if (!updated) return res.status(404).json({ error: "Mission not found" });
 
       if (resense) {

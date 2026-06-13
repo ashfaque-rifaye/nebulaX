@@ -62,7 +62,8 @@ import {
   ChevronUp,
   ChevronDown,
   GitBranch,
-  Crosshair
+  Crosshair,
+  SlidersHorizontal
 } from "lucide-react";
 import { Mission, WeaveNode, WeaveEdge, ProposedAction, ActivityFeedEvent, ResearchBrief, AgentStatus, MissionPlanVariant, Profile, ChatTurn, MissionRun, CustomAgent } from "./types.ts";
 import { GreenCredits, PledgeDef } from "./components/GreenCredits.tsx";
@@ -78,6 +79,7 @@ import { TriageBoard } from "./components/TriageBoard.tsx";
 import { MissionReplay } from "./components/MissionReplay.tsx";
 import { Constellation3D } from "./components/Constellation3D.tsx";
 import { MissionPlanner } from "./components/MissionPlanner.tsx";
+import { MissionSettings, MissionPatch } from "./components/MissionSettings.tsx";
 import { SettingsModal } from "./components/SettingsModal.tsx";
 import { OnboardingTour, TourStep } from "./components/OnboardingTour.tsx";
 
@@ -264,6 +266,10 @@ export default function App() {
   };
   const layoutSaveTimer = useRef<any>(null);
 
+  // Edit Swarm (modify the live mission: goal, persona, targets, roster, cadence)
+  const [editOpen, setEditOpen] = useState(false);
+  const [editSaving, setEditSaving] = useState(false);
+
   // Mission planner (pick a strategic angle before deploying the swarm)
   const [showPlanner, setShowPlanner] = useState(false);
   const [planLoading, setPlanLoading] = useState(false);
@@ -440,9 +446,10 @@ export default function App() {
   // Live monitor: auto re-sense on an interval while the workspace is open.
   useEffect(() => {
     if (!launched || !selectedMission?.monitoring || selectedMission?.status !== "ready") return;
-    const iv = setInterval(() => { handleResense("monitor"); }, 45000);
+    const everyMs = Math.max(10, selectedMission?.cadence || 45) * 1000;
+    const iv = setInterval(() => { handleResense("monitor"); }, everyMs);
     return () => clearInterval(iv);
-  }, [launched, selectedMission?.monitoring, selectedMission?.status, selectedMissionId]);
+  }, [launched, selectedMission?.monitoring, selectedMission?.status, selectedMission?.cadence, selectedMissionId]);
 
   // Load chat when the panel opens or the mission changes.
   useEffect(() => {
@@ -741,6 +748,33 @@ export default function App() {
       console.error("Re-sense failed:", err);
     } finally {
       if (trigger === "resense") setResensing(false);
+    }
+  };
+
+  // Save edits to the live mission spec (goal / persona / targets / roster / cadence).
+  const handleSaveMissionSpec = async (patch: MissionPatch, resense: boolean) => {
+    if (!selectedMissionId) return;
+    setEditSaving(true);
+    try {
+      const res = await fetch(`/api/missions/${selectedMissionId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ ...patch, resense, handle })
+      });
+      if (res.ok) {
+        await fetchMissions();
+        if (selectedMissionId) await fetchMissionData(selectedMissionId);
+        if (handle) fetchProfile(handle);
+        setEditOpen(false);
+      } else if (res.status === 402) {
+        const e = await res.json().catch(() => ({}));
+        alert(e.error || "Not enough Green Credits to re-sense. Earn more via eco-pledges.");
+      }
+    } catch (err) {
+      console.error("Failed to save mission spec:", err);
+    } finally {
+      setEditSaving(false);
     }
   };
 
@@ -1859,6 +1893,7 @@ export default function App() {
                 const isWorking = currentWork === "working" || runningAgentId === a.id;
                 const isFocused = focusedAgent?.id === a.id;
                 const AgentIcon = AGENT_ICONS[a.id] || Bot;
+                const rosterOff = !!(selectedMission?.agents && selectedMission.agents.length && !selectedMission.agents.includes(a.id));
 
                 // Live "what it's doing" — newest event emitted by this agent.
                 const liveEvent = [...events].reverse().find(
@@ -1889,10 +1924,10 @@ export default function App() {
                       setSelectedNodeId(null); setChatOpen(false); setCustomOpen(false);
                       setFocusedAgent(isFocused ? null : a);
                     }}
-                    title={`${a.name}: ${a.task} — click to open console`}
+                    title={rosterOff ? `${a.name} is OFF for this swarm — enable it in Edit Swarm` : `${a.name}: ${a.task} — click to open console`}
                     className={`flex flex-col gap-1 p-2 rounded-xl border text-left transition-all relative cursor-pointer select-none overflow-hidden min-w-[148px] md:min-w-0 press ${
                       isWorking ? "agent-working" : ""
-                    } ${
+                    } ${rosterOff ? "opacity-40 grayscale" : ""} ${
                       isFocused
                         ? "bg-indigo-600/10 border-indigo-500/70 ring-1 ring-indigo-500/35 shadow-lg shadow-indigo-500/10"
                         : isWorking
@@ -2021,6 +2056,19 @@ export default function App() {
                 </div>
 
                 <div className={`w-px h-5 ${isDark ? "bg-white/10" : "bg-slate-200"}`} />
+
+                {/* Edit Swarm */}
+                <button
+                  onClick={() => setEditOpen(true)}
+                  disabled={!selectedMission}
+                  title="Edit this swarm — goal, persona, watchlist, active agents, cadence"
+                  className={`text-[10px] font-semibold px-2.5 py-1.5 border rounded-lg transition-all flex items-center gap-1.5 disabled:opacity-50 select-none press ${
+                    isDark ? "text-violet-200 hover:text-white bg-violet-500/10 border-violet-500/25 hover:border-violet-500/50" : "text-violet-700 hover:text-violet-800 bg-violet-500/5 border-violet-500/20 hover:border-violet-500/40"
+                  }`}
+                >
+                  <SlidersHorizontal className="w-3 h-3" />
+                  <span className="hidden md:inline">Edit Swarm</span>
+                </button>
 
                 {/* Re-sense */}
                 <button
@@ -3568,6 +3616,19 @@ export default function App() {
           </main>
 
         </div>
+      )}
+
+      {/* --- EDIT SWARM: reshape the live mission --- */}
+      {editOpen && selectedMission && (
+        <MissionSettings
+          isDark={isDark}
+          mission={selectedMission}
+          personas={PERSONAS}
+          busy={editSaving}
+          resenseCost={deployCost}
+          onClose={() => setEditOpen(false)}
+          onSave={handleSaveMissionSpec}
+        />
       )}
 
       {/* --- MISSION PLANNER: choose a strategic angle before deploying --- */}

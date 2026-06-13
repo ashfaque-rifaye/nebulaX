@@ -1,5 +1,12 @@
 @import "tailwindcss";
 
+/* Theme is driven by a `.dark` class on <html> (toggled in App), NOT the OS
+   setting. Tailwind v4 defaults `dark:` to prefers-color-scheme, so without
+   this every `dark:` utility silently follows the OS and ignores the toggle —
+   which renders dark text on dark surfaces when the OS is in light mode. Bind
+   the variant to the class so the whole app honors the in-app theme. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* ═══════════════════════════════════════════════════════════════════════
    NEBULAX DESIGN SYSTEM — LUNA
    Deep-navy night sky (#080b16), luna-purple → luna-pink brand gradient,

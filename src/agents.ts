@@ -742,20 +742,26 @@ Return JSON:
       try {
         logEvent("Actor", "Actor model creating executable workflows from synthesis.", "info");
         const { data: parsedActions, tokens: aTokens } = await chatJSON<{ actions: any[] }>(
-          `Based on the synthesis: "${synthesisContent}", propose two executable next steps for a ${persona || "Analyst"}.
-One should be a "draft-email" (to a relevant real-seeming recipient) and one a "reminder" or "draft-brief".
-For draft-email, include a recipient and subject. For a reminder/deadline, include an ISO date if one is implied.
+          `Based on the synthesis: "${synthesisContent}", propose THREE distinct, executable next moves for a ${persona || "Analyst"}.
+Use DIFFERENT action kinds — do not make them all emails. Choose from:
+- "outreach": contact a specific person (include "to" + "subject")
+- "monitor": stand up a continuous watch on an entity/URL (include "target")
+- "deep-dive": spawn a focused follow-up mission (include "seed" = the new mission prompt)
+- "decision": a strategic move to lock in
+- "reminder": a deadline (include ISO "deadline")
 Return JSON:
 {
   "actions": [
     {
-       "kind": "draft-email" | "draft-brief" | "reminder",
-       "title": "Short title",
-       "rationale": "Why this matters",
-       "to": "recipient email if draft-email, else empty",
-       "subject": "email subject if draft-email, else empty",
-       "deadline": "ISO date (YYYY-MM-DD) if there is a deadline/reminder, else empty",
-       "payload_body": "The actual text body (email draft / brief / reminder details)"
+       "kind": "outreach" | "monitor" | "deep-dive" | "decision" | "reminder",
+       "title": "Short imperative title (verb first)",
+       "rationale": "Why this matters, grounded in the findings",
+       "to": "recipient email (outreach only)",
+       "subject": "email subject (outreach only)",
+       "target": "entity or URL to watch (monitor only)",
+       "seed": "the follow-up mission prompt (deep-dive only)",
+       "deadline": "YYYY-MM-DD (reminder only)",
+       "payload_body": "the action's body text"
     }
   ]
 }`
@@ -766,11 +772,13 @@ Return JSON:
             const payload: any = { body: act.payload_body || "" };
             if (act.to) payload.to = act.to;
             if (act.subject) payload.subject = act.subject;
+            if (act.target) payload.target = act.target;
+            if (act.seed) payload.seed = act.seed;
             if (act.deadline) payload.deadline = act.deadline;
             db.addProposedAction({
               id: `act-dyn-${i}-${Math.random().toString(36).substr(2, 5)}`,
               mission_id: missionId,
-              kind: act.kind || "draft-brief",
+              kind: act.kind || "decision",
               title: act.title || "Proposed Action",
               payload,
               rationale: act.rationale || "",
@@ -787,21 +795,35 @@ Return JSON:
       logEvent("Actor", "Simulating offline proposed executive summaries...", "info");
     }
 
-    // MOCK ACTION FALLBACK
+    // SIMULATED FALLBACK — a varied next-move set (not all emails) so the
+    // action plan reads like a real intelligence handoff even offline.
     if (db.getActions(missionId).length === 0) {
-      const act1: ProposedAction = {
-        id: `act-dyn-1-${Math.random().toString(36).substr(2, 5)}`,
-        mission_id: missionId,
-        kind: "draft-brief",
-        title: "Generate Strategic Market Opportunity Summary",
-        payload: {
-          body: `### Executive Strategy Summary: ${prompt}\nDerived on: ${new Date().toLocaleDateString()}\nAnalysis of researched endpoints represents a major vector. Recommended setup is to manually audit routing layers.`
+      const rid = () => Math.random().toString(36).substr(2, 5);
+      const firstTarget = (db.getMission(missionId)?.targets || [])[0] || prompt.split(" ")[0];
+      const fallbacks: ProposedAction[] = [
+        {
+          id: `act-dyn-dec-${rid()}`, mission_id: missionId, kind: "decision",
+          title: "Lock in the verified position before acting",
+          payload: { body: `Turn the highest-confidence finding from "${prompt}" into a committed decision. Cite the verified node so the call is defensible, and re-weave if any source drifts.` },
+          rationale: "The synthesis is verified across sources — converting it into a decision captures the intelligence before it goes stale.",
+          provenance: [synthesisNode.id], status: "proposed"
         },
-        rationale: "Oracle strategy: Leverages found terms to offset overhead risks.",
-        provenance: [synthesisNode.id],
-        status: "proposed"
-      };
-      db.addProposedAction(act1);
+        {
+          id: `act-dyn-mon-${rid()}`, mission_id: missionId, kind: "monitor",
+          title: `Put ${firstTarget} on a standing watch`,
+          payload: { target: String(firstTarget), body: `Stand up a continuous watch on ${firstTarget}. Re-sense on a cadence and alert when a new signal or contradiction appears.` },
+          rationale: "The fabric is a snapshot; a standing watch turns it into a live feed that self-corrects as the world changes.",
+          provenance: [synthesisNode.id], status: "proposed"
+        },
+        {
+          id: `act-dyn-dive-${rid()}`, mission_id: missionId, kind: "deep-dive",
+          title: "Deep-dive the strongest open thread",
+          payload: { seed: `Deep dive into the most consequential finding from: ${prompt}`, body: "Spawn a focused child mission to resolve the biggest remaining unknown surfaced by this swarm." },
+          rationale: "One finding is load-bearing but under-sourced; a scoped deep-dive raises its confidence.",
+          provenance: [synthesisNode.id], status: "proposed"
+        },
+      ];
+      fallbacks.forEach(a => db.addProposedAction(a));
     }
 
     // Watchdog: autonomous self-correction across the whole fabric (cross-run drift/contradictions).

@@ -6,7 +6,8 @@ import { db } from "./src/db.ts";
 import { runMissionSensing, executeSingleAgentCognition, planMissionVariants, answerFabricQuestion, runSelfCorrection, enrichMissionNodes, runCustomAgent, generateFutures } from "./src/agents.ts";
 import { WeaveNode } from "./src/types.ts";
 import { isLLMAvailable, getProviderNames, chat, getLLMConfigSummary, updateLLMConfig, testProvider } from "./src/llm.ts";
-import { PLEDGES, DEPLOY_COST, MANUAL_AGENT_COST, MIN_RUN_RESERVE, creditsForTokens } from "./src/footprint.ts";
+import { PLEDGES, DEPLOY_COST, MANUAL_AGENT_COST, MIN_RUN_RESERVE, creditsForTokens, creditsForImage, creditsForVideo } from "./src/footprint.ts";
+import { generateMedia, getMediaConfigSummary, updateMediaConfig } from "./src/media.ts";
 import { ChatTurn } from "./src/types.ts";
 import {
   hashPassphrase, verifyPassphrase, newSessionToken, validateHandle, validatePassphrase,
@@ -182,6 +183,19 @@ async function startServer() {
   app.post("/api/llm/test", async (req, res) => {
     const result = await testProvider(req.body?.providerId);
     res.status(result.ok ? 200 : 502).json(result);
+  });
+
+  // ─── Media engines (image/video) — BYO key, like the LLM control center ────
+  app.get("/api/media/providers", (req, res) => {
+    res.json(getMediaConfigSummary());
+  });
+  app.put("/api/media/config", (req, res) => {
+    try {
+      const { vendor, apiKey } = req.body || {};
+      res.json(updateMediaConfig({ vendor, apiKey }));
+    } catch (err: any) {
+      res.status(400).json({ error: err.message || "Invalid media configuration" });
+    }
   });
 
   // ─── Profiles & Green Credits ──────────────────────────────────────────────
@@ -625,6 +639,71 @@ async function startServer() {
     }
   });
 
+  // ─── Media generation (Visualizer / Cinematographer) ───────────────────────
+  // List a mission's generated media.
+  app.get("/api/missions/:id/media", (req, res) => {
+    res.json({ assets: db.getMediaAssets(req.params.id) });
+  });
+
+  // Generate an image/video for a mission. Metered per image / per second.
+  app.post("/api/missions/:id/media", requireAuth, async (req, res) => {
+    try {
+      const mId = req.params.id;
+      if (!db.getMission(mId)) return res.status(404).json({ error: "Mission not found" });
+      const handle = req.handle as string;
+      const kind: "image" | "video" = req.body?.kind === "video" ? "video" : "image";
+      const prompt = String(req.body?.prompt || "").trim().slice(0, 500);
+      if (!prompt) return res.status(400).json({ error: "A prompt is required." });
+      const providerId = String(req.body?.providerId || "");
+      const seconds = Math.max(2, Math.min(12, parseInt(String(req.body?.seconds || "5"), 10) || 5));
+      const sourceNodeId = req.body?.sourceNodeId ? String(req.body.sourceNodeId) : undefined;
+
+      // Pre-flight cost estimate + reserve check.
+      const estimate = kind === "video" ? creditsForVideo(providerId, seconds) : creditsForImage(providerId, 1);
+      const profile = db.getOrCreateProfile(handle);
+      if (profile.credits < Math.max(MIN_RUN_RESERVE, estimate)) {
+        return res.status(402).json({
+          error: `Not enough Green Credits to generate (need ~${estimate}, have ${profile.credits}).`,
+          code: "INSUFFICIENT_CREDITS", credits: profile.credits, required: estimate,
+        });
+      }
+
+      const result = await generateMedia(kind, prompt, providerId, req.body?.model, seconds);
+      const charged = db.debit(handle, estimate, {
+        source: kind === "video" ? "media-video" : "media-image",
+        note: `${kind === "video" ? "Rendered clip" : "Rendered image"} on ${result.provider}${result.simulated ? " (preview)" : ""}`,
+        provider: result.provider, mission_id: mId,
+      });
+
+      const asset = {
+        id: `media-${Math.random().toString(36).substr(2, 9)}`,
+        mission_id: mId, kind, prompt,
+        providerId: providerId || result.provider,
+        provider: result.provider, model: result.model,
+        url: result.url, poster: result.poster, seconds: result.seconds,
+        simulated: result.simulated, credits: charged, note: result.note,
+        source_node_id: sourceNodeId,
+        created_at: new Date().toISOString(),
+      };
+      db.addMediaAsset(asset);
+      db.addEvent({
+        id: `ev-media-${Math.random().toString(36).substr(2, 9)}`,
+        mission_id: mId, timestamp: new Date().toISOString(),
+        sender: kind === "video" ? "Cinematographer" : "Visualizer",
+        message: `${kind === "video" ? "Rendered a clip" : "Rendered an image"} — “${prompt.slice(0, 48)}” on ${result.provider}.`,
+        level: "success",
+      });
+      res.status(201).json({ asset, spent: charged });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || "Failed to generate media" });
+    }
+  });
+
+  app.delete("/api/media/:id", requireAuth, (req, res) => {
+    db.deleteMediaAsset(req.params.id);
+    res.json({ success: true });
+  });
+
   // Edit mission spec (optionally trigger a scoped re-sense — metered like a run).
   app.put("/api/missions/:id", (req, res) => {
     try {
@@ -767,7 +846,9 @@ async function startServer() {
         { id: "sentinel", name: "Sentinel", status: "idle", task: "Analyzing statement drift" },
         { id: "oracle", name: "Oracle", status: "idle", task: "Gating executable action triggers" },
         { id: "scribe", name: "Scribe", status: "idle", task: "Indexing provenance tracing briefs" },
-        { id: "actor", name: "Actor", status: "idle", task: "Formatting client correspondence loops" }
+        { id: "actor", name: "Actor", status: "idle", task: "Formatting client correspondence loops" },
+        { id: "visualizer", name: "Visualizer", status: "idle", task: "Rendering stills from findings on request" },
+        { id: "cinematographer", name: "Cinematographer", status: "idle", task: "Animating clips from findings on request" }
       ];
       res.json(activeAgents);
     } catch (err) {

@@ -117,11 +117,14 @@ const CREDITS_PER_IMAGE_PROVIDER: Record<string, number> = {
   "fal-flux": 10, "replicate-flux": 12, "together-flux": 11, "bfl-flux": 14,
   "stability-sdxl": 9, "replicate-sdxl": 8, "openai-image": 18, "hf-image": 6,
 };
-const CREDITS_PER_VIDEO_SEC_DEFAULT = 30;
+// Per-SECOND credit cost for video. Real cloud video is far pricier than text
+// or stills, so clips cost more — but kept affordable against the demo wallet
+// (a few seconds, not hundreds of credits). Frontier engines still cost more.
+const CREDITS_PER_VIDEO_SEC_DEFAULT = 7;
 const CREDITS_PER_VIDEO_SEC_PROVIDER: Record<string, number> = {
-  "higgsfield": 40, "fal-kling": 34, "replicate-kling": 34, "fal-runway": 38,
-  "fal-luma": 32, "fal-hunyuan": 26, "replicate-hunyuan": 26, "replicate-ltx": 18,
-  "fal-wan": 24, "replicate-svd": 16, "fal-pika": 30,
+  "higgsfield": 9, "fal-kling": 8, "replicate-kling": 8, "fal-runway": 9,
+  "fal-luma": 7, "fal-hunyuan": 6, "replicate-hunyuan": 6, "replicate-ltx": 3,
+  "fal-wan": 5, "replicate-svd": 3, "fal-pika": 7,
 };
 
 export function creditsForImage(providerId: string, count = 1): number {

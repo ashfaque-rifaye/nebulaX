@@ -64,7 +64,9 @@ import {
   GitBranch,
   Crosshair,
   SlidersHorizontal,
-  Wallet as WalletIcon
+  Wallet as WalletIcon,
+  Clapperboard,
+  Image as ImageIcon
 } from "lucide-react";
 import { Mission, WeaveNode, WeaveEdge, ProposedAction, ActivityFeedEvent, ResearchBrief, AgentStatus, MissionPlanVariant, Profile, ChatTurn, MissionRun, CustomAgent } from "./types.ts";
 import { GreenCredits, PledgeDef } from "./components/GreenCredits.tsx";
@@ -85,6 +87,7 @@ import { SettingsModal } from "./components/SettingsModal.tsx";
 import { OnboardingTour, TourStep } from "./components/OnboardingTour.tsx";
 import { AuthModal } from "./components/AuthModal.tsx";
 import { Wallet } from "./components/Wallet.tsx";
+import { MediaStudio } from "./components/MediaStudio.tsx";
 
 // Workspace lens definitions: one fabric, five complementary views.
 const WORKSPACE_VIEWS = [
@@ -115,6 +118,8 @@ const AGENT_ICONS: Record<string, React.ComponentType<{ className?: string }>> =
   oracle: Sparkles,
   scribe: BookOpen,
   actor: Mail,
+  visualizer: ImageIcon,
+  cinematographer: Clapperboard,
 };
 
 export default function App() {
@@ -280,6 +285,10 @@ export default function App() {
   // Edit Swarm (modify the live mission: goal, persona, targets, roster, cadence)
   const [editOpen, setEditOpen] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
+
+  // Media Studio (Visualizer / Cinematographer)
+  const [studioOpen, setStudioOpen] = useState(false);
+  const [studioSeed, setStudioSeed] = useState<string>("");
 
   // Mission planner (pick a strategic angle before deploying the swarm)
   const [showPlanner, setShowPlanner] = useState(false);
@@ -2205,6 +2214,19 @@ export default function App() {
                   <span className="hidden md:inline">My Agents</span>
                 </button>
 
+                {/* Media Studio */}
+                <button
+                  onClick={() => { setStudioSeed(""); setStudioOpen(true); }}
+                  disabled={!selectedMission}
+                  title="Media Studio — generate images & video from this mission"
+                  className={`text-[10px] font-semibold px-2.5 py-1.5 border rounded-lg transition-all flex items-center gap-1.5 select-none press disabled:opacity-50 ${
+                    isDark ? "text-violet-200 hover:text-white bg-violet-500/10 border-violet-500/25 hover:border-violet-500/50" : "text-violet-700 hover:text-violet-800 bg-violet-500/5 border-violet-500/20 hover:border-violet-500/40"
+                  }`}
+                >
+                  <Clapperboard className="w-3 h-3" />
+                  <span className="hidden md:inline">Studio</span>
+                </button>
+
                 <button
                   onClick={handleTriggerReweave}
                   disabled={reweaving || selectedMission?.status !== "ready"}
@@ -3441,6 +3463,10 @@ export default function App() {
                     disabled={runningAgentId !== null || !!isSubmitting || selectedMission?.status !== "ready"}
                     onClick={async () => {
                       if (!selectedMission) return;
+                      // Media agents open the Studio rather than the text executor.
+                      if (focusedAgent.id === "visualizer" || focusedAgent.id === "cinematographer") {
+                        setStudioSeed(""); setStudioOpen(true); return;
+                      }
                       if (!authed) { requireAuth("Sign in to run an agent — each run is metered in credits."); return; }
                       setRunningAgentId(focusedAgent.id);
                       try {
@@ -3476,10 +3502,12 @@ export default function App() {
                         : "bg-violet-600 hover:bg-violet-500 text-white shadow-lg cursor-pointer hover:shadow-violet-600/10 active:scale-[0.98]"
                     }`}
                   >
-                    {runningAgentId === focusedAgent.id 
-                      ? "⚡ NEURAL THREAD RUNNING..." 
+                    {runningAgentId === focusedAgent.id
+                      ? "⚡ NEURAL THREAD RUNNING..."
                       : selectedMission?.status !== "ready"
                       ? "Pipeline Inactive"
+                      : (focusedAgent.id === "visualizer" || focusedAgent.id === "cinematographer")
+                      ? `🎬 OPEN ${focusedAgent.name.toUpperCase()} STUDIO`
                       : `⚡ EXECUTE ${focusedAgent.name.toUpperCase()} COGNITION`}
                   </button>
                 </div>
@@ -3724,6 +3752,20 @@ export default function App() {
           onClaim={claimPledge}
           onClose={() => setWalletOpen(false)}
           onSignOut={signOut}
+        />
+      )}
+
+      {/* --- MEDIA STUDIO: Visualizer / Cinematographer --- */}
+      {studioOpen && selectedMission && (
+        <MediaStudio
+          isDark={isDark}
+          missionId={selectedMission.id}
+          authed={authed}
+          seedPrompt={studioSeed}
+          onRequireAuth={(reason) => requireAuth(reason)}
+          onOpenSettings={() => { setStudioOpen(false); setSettingsOpen(true); }}
+          onSpent={() => { if (handle) fetchProfile(handle); }}
+          onClose={() => setStudioOpen(false)}
         />
       )}
 

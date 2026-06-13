@@ -102,6 +102,27 @@ export interface LedgerEntry {
   mission_id?: string;
 }
 
+// A generated media artifact (image or video) for a mission, produced by the
+// Visualizer / Cinematographer agents. URL is a remote link (live) or an
+// on-brand SVG data-URI (simulated fallback).
+export interface MediaAsset {
+  id: string;
+  mission_id: string;
+  kind: "image" | "video";
+  prompt: string;
+  providerId: string;
+  provider: string;        // human-readable provider/model label
+  model: string;
+  url: string;
+  poster?: string;         // poster frame for video
+  seconds?: number;        // clip length for video
+  simulated: boolean;      // true = preview placeholder (no live key)
+  credits: number;         // credits charged for this generation
+  note?: string;
+  source_node_id?: string; // finding this visual was derived from, if any
+  created_at: string;
+}
+
 export type NodeType = "web-signal" | "human-note" | "synthesis" | "correction" | "output" | "memory" | "action";
 export type EdgeRel = "weaved" | "contradicts" | "correction-applied" | "prior-context" | "source-of" | "supports";
 

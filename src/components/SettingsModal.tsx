@@ -70,6 +70,85 @@ async function fetchJSON<T>(url: string, init?: RequestInit, timeoutMs = 9000): 
   }
 }
 
+// ─── Media engines (image/video) — BYO key, grouped by vendor ───────────────
+interface MediaProv { id: string; name: string; kind: "image" | "video"; vendor: string; configured: boolean; live: boolean; }
+const VENDOR_LABEL: Record<string, string> = {
+  fal: "fal.ai", replicate: "Replicate", openai: "OpenAI", together: "Together AI",
+  huggingface: "Hugging Face", stability: "Stability AI", bfl: "Black Forest Labs", higgsfield: "Higgsfield",
+};
+
+const MediaEngines: React.FC<{ isDark: boolean }> = ({ isDark }) => {
+  const [provs, setProvs] = useState<MediaProv[]>([]);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState<string | null>(null);
+  const muted = isDark ? "text-white/50" : "text-slate-500";
+  const title = isDark ? "text-white" : "text-slate-900";
+  const inner = isDark ? "bg-white/[0.03] border-white/10" : "bg-white border-violet-500/15";
+
+  const load = async () => {
+    try { const r = await fetch("/api/media/providers"); if (r.ok) { const d = await r.json(); setProvs(d.providers || []); } } catch { /* ignore */ }
+  };
+  useEffect(() => { load(); }, []);
+
+  const vendors: string[] = Array.from(new Set(provs.map(p => p.vendor)));
+  const save = async (vendor: string) => {
+    setSaving(vendor);
+    try {
+      await fetch("/api/media/config", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ vendor, apiKey: drafts[vendor] || "" }) });
+      setDrafts(d => { const n = { ...d }; delete n[vendor]; return n; });
+      await load();
+    } catch { /* ignore */ } finally { setSaving(null); }
+  };
+
+  return (
+    <div className="flex flex-col gap-2">
+      <span className={`text-[10px] font-mono uppercase tracking-widest font-bold ${muted}`}>Media engines · image &amp; video</span>
+      <p className={`text-[10.5px] -mt-1 ${muted}`}>Bring your own key to generate live media. Without a key the Studio still renders on-brand previews.</p>
+      {vendors.map(v => {
+        const group = provs.filter(p => p.vendor === v);
+        const configured = group.some(p => p.configured);
+        const kinds: string[] = Array.from(new Set(group.map(p => p.kind)));
+        const draft = drafts[v];
+        return (
+          <div key={v} className={`rounded-xl border p-3 ${inner}`}>
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className={`text-xs font-bold ${title}`}>{VENDOR_LABEL[v] || v}</span>
+                <span className={`text-[8px] font-mono uppercase tracking-wide px-1.5 py-0.5 rounded ${isDark ? "bg-white/5 text-white/45" : "bg-violet-500/5 text-violet-600"}`}>{kinds.join(" · ")}</span>
+              </div>
+              {configured
+                ? <span className="text-[9px] font-mono text-emerald-400 flex items-center gap-1"><Check className="w-3 h-3" /> key set</span>
+                : <span className={`text-[9px] font-mono ${muted}`}>no key</span>}
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="password"
+                value={draft ?? ""}
+                onChange={e => setDrafts(d => ({ ...d, [v]: e.target.value }))}
+                placeholder={configured ? "•••••••• (replace key)" : `paste ${VENDOR_LABEL[v] || v} API key`}
+                className={`flex-1 bg-transparent border rounded-lg px-2.5 py-1.5 text-[11px] font-mono focus:outline-none focus:border-violet-500 ${isDark ? "border-white/10 text-white placeholder-white/30" : "border-violet-500/15 text-slate-800 placeholder-slate-400"}`}
+              />
+              <button
+                onClick={() => save(v)}
+                disabled={saving === v || draft === undefined}
+                className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-luna-gradient text-white disabled:opacity-40 flex items-center gap-1"
+              >
+                {saving === v ? <Loader2 className="w-3 h-3 animate-spin" /> : null} Save
+              </button>
+              {configured && (
+                <button onClick={() => { setDrafts(d => ({ ...d, [v]: "" })); save(v); }} title="Remove key" className={`p-1.5 rounded-lg ${isDark ? "hover:bg-white/10 text-white/50" : "hover:bg-slate-100 text-slate-500"}`}>
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+            <div className={`text-[9px] font-mono mt-1.5 ${muted}`}>{group.map(p => p.name.split(" (")[0]).join(" · ")}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
 // Model Control Center: pick the engine the swarm thinks with, bring your own
 // keys, and verify the connection live. Keys live in server memory only.
 export const SettingsModal: React.FC<SettingsModalProps> = ({ isDark, onClose, onSaved }) => {
@@ -422,6 +501,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isDark, onClose, o
                   <Sparkles className="w-3 h-3 mt-0.5 flex-shrink-0 text-indigo-400" />
                   Pinning a provider makes it the primary engine; the rest of the configured chain stays as automatic fallback, so a demo never dies mid-run.
                 </p>
+
+                <div className={`h-px ${isDark ? "bg-white/8" : "bg-slate-200"}`} />
+                <MediaEngines isDark={isDark} />
               </>
             )}
           </div>

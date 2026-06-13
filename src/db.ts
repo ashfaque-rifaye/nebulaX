@@ -1,4 +1,4 @@
-import { WeaveNode, WeaveEdge, ProposedAction, Mission, AgentStatus, ActivityFeedEvent, ResearchBrief, TraceableSentence, Profile, MissionFootprint, MissionRun, ChatTurn, CustomAgent, Session, LedgerEntry } from "./types.ts";
+import { WeaveNode, WeaveEdge, ProposedAction, Mission, AgentStatus, ActivityFeedEvent, ResearchBrief, TraceableSentence, Profile, MissionFootprint, MissionRun, ChatTurn, CustomAgent, Session, LedgerEntry, MediaAsset } from "./types.ts";
 import { STARTER_CREDITS } from "./footprint.ts";
 import * as fs from "fs";
 import * as path from "path";
@@ -17,6 +17,7 @@ interface DBState {
   customAgents: CustomAgent[];
   sessions?: Session[];
   ledger?: LedgerEntry[];
+  media?: MediaAsset[];
 }
 
 // Pre-seeded high-fidelity missions to provide an immediate "wow" factor
@@ -433,7 +434,8 @@ class Database {
     chats: [],
     customAgents: [],
     sessions: [],
-    ledger: []
+    ledger: [],
+    media: []
   };
 
   constructor() {
@@ -480,6 +482,7 @@ class Database {
         if (!this.state.customAgents) this.state.customAgents = [];
         if (!this.state.sessions) this.state.sessions = [];
         if (!this.state.ledger) this.state.ledger = [];
+        if (!this.state.media) this.state.media = [];
         // Backfill profiles created before the wallet ledger existed.
         for (const p of this.state.profiles) if (p.totalSpent === undefined) p.totalSpent = 0;
         this.save();
@@ -495,7 +498,8 @@ class Database {
           chats: [],
           customAgents: [],
           sessions: [],
-          ledger: []
+          ledger: [],
+          media: []
         };
         this.save();
       }
@@ -509,7 +513,10 @@ class Database {
         events: [...SEEDED_EVENTS],
         profiles: [],
         chats: [],
-        customAgents: []
+        customAgents: [],
+        sessions: [],
+        ledger: [],
+        media: []
       };
     }
   }
@@ -781,6 +788,27 @@ class Database {
     this.addLedger({ handle, direction: "earn", amount, balance: p.credits, ...meta });
     this.save();
     return amount;
+  }
+
+  // ─── Media assets (Visualizer / Cinematographer output) ────────────────────
+  public addMediaAsset(asset: MediaAsset) {
+    if (!this.state.media) this.state.media = [];
+    this.state.media.push(asset);
+    this.save();
+  }
+
+  public getMediaAssets(missionId: string): MediaAsset[] {
+    return (this.state.media || []).filter(m => m.mission_id === missionId).reverse();
+  }
+
+  public getMediaAsset(id: string): MediaAsset | undefined {
+    return (this.state.media || []).find(m => m.id === id);
+  }
+
+  public deleteMediaAsset(id: string) {
+    if (!this.state.media) return;
+    this.state.media = this.state.media.filter(m => m.id !== id);
+    this.save();
   }
 
   // ─── Runs (mission history / time-series) ──────────────────────────────────

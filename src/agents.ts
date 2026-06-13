@@ -1,7 +1,7 @@
 import { db } from "./db.ts";
 import { WeaveNode, WeaveEdge, ProposedAction, ActivityFeedEvent, MissionPlanVariant, MissionRun } from "./types.ts";
 import { chatJSON, isLLMAvailable, getProviderNames } from "./llm.ts";
-import { estimateFootprint, efficiencyDividend } from "./footprint.ts";
+import { estimateFootprint, efficiencyDividend, creditsForTokens } from "./footprint.ts";
 import { gatherWebIntelligence } from "./web.ts";
 
 // Nebula's AI layer is now provider-agnostic: Groq (primary) → Cerebras → Hugging Face.
@@ -390,6 +390,12 @@ export async function runMissionSensing(
   let totalTokens = 0;
   let runProvider = getProviderNames()[0] || "Groq";
 
+  // Respect the mission's active agent roster. The sense→verify→weave spine
+  // always runs; optional specialists (sentinel/oracle/scribe/actor) can be
+  // toggled off in Edit Swarm.
+  const roster = db.getMission(missionId)?.agents;
+  const agentOn = (id: string) => !roster || roster.length === 0 || roster.includes(id);
+
   // Open a sensing run for this pass so the mission becomes a time-series.
   const runStartMs = Date.now();
   const existingRuns = db.getRuns(missionId);
@@ -617,7 +623,7 @@ Return JSON:
           synthesisTitle = parsedReasoning.synthesis_title || synthesisTitle;
           synthesisContent = parsedReasoning.synthesis_content || synthesisContent;
 
-          if (parsedReasoning.has_contradiction && parsedReasoning.contradiction_title) {
+          if (agentOn("sentinel") && parsedReasoning.has_contradiction && parsedReasoning.contradiction_title) {
             logEvent("Sentinel", "Systemic conflict sensor sparked: Analyzing statement details...", "warn");
             conflictNode = {
               id: `node-contradict-${Math.random().toString(36).substr(2, 5)}`,
@@ -731,8 +737,8 @@ Return JSON:
     logEvent("Actor", "Actor assembling email correspondence drafts and calendar prompts...", "info");
     await sleep(1200);
 
-    // Add proposed actions via AI
-    if (llmReady() && discoveredNodes.length > 0) {
+    // Add proposed actions via AI (Actor specialist — skippable via Edit Swarm)
+    if (agentOn("actor") && llmReady() && discoveredNodes.length > 0) {
       try {
         logEvent("Actor", "Actor model creating executable workflows from synthesis.", "info");
         const { data: parsedActions, tokens: aTokens } = await chatJSON<{ actions: any[] }>(
@@ -809,14 +815,30 @@ Return JSON:
     // Propagate confidence scores
     db.propagateConfidence(missionId);
 
+    // Simulated run (no live LLM key): estimate a representative token count
+    // from the work produced so the Green-Credit economy still meters a
+    // realistic per-run cost. Real runs use the actual token tally.
+    if (totalTokens === 0) {
+      const produced = db.getNodes(missionId).filter(n => new Date(n.created_at).getTime() >= runStartMs).length;
+      totalTokens = 1200 + produced * 480;
+    }
+
     // Meter the carbon & cost ledger for this run and credit the efficiency dividend.
     const fp = estimateFootprint(totalTokens, runProvider);
     const footprint = { ...fp, creditsEarned: efficiencyDividend(fp) };
     if (owner) {
+      // Charge the wallet for the model run, metered by ACTUAL tokens consumed…
+      const spendSource = trigger === "initial" ? "deploy" : trigger === "edit" ? "edit" : "resense";
+      const charged = db.debit(owner, creditsForTokens(totalTokens, runProvider), {
+        source: spendSource,
+        note: `${trigger === "initial" ? "Deployed" : "Re-sensed"} swarm on ${fp.provider} (~${totalTokens} tokens)`,
+        tokens: totalTokens, provider: fp.provider, mission_id: missionId,
+      });
+      // …then bank the green efficiency dividend for the footprint avoided.
       db.recordMissionImpact(owner, missionId, footprint);
       logEvent(
         "Conductor",
-        `Ledger: ran on ${fp.provider} (~${totalTokens} tokens, ~${fp.co2_g} gCO₂). Avoided ~${fp.co2Saved_g} gCO₂ and $${fp.costSavedUsd.toFixed(4)} vs a GPT-4-class baseline → +${footprint.creditsEarned} Green Credits banked to ${owner}.`,
+        `Ledger: ran on ${fp.provider} (~${totalTokens} tokens, ~${fp.co2_g} gCO₂) → −${charged} credits. Avoided ~${fp.co2Saved_g} gCO₂ and $${fp.costSavedUsd.toFixed(4)} vs a GPT-4-class baseline → +${footprint.creditsEarned} Green Credits.`,
         "success"
       );
     } else {
@@ -933,7 +955,7 @@ export async function executeSingleAgentCognition(missionId: string, agentId: st
   logEvent(senderName, `Cognitive manual run initiated for agent ${senderName}. Ingestion state: optimized.`, "info");
   await sleep(1500);
 
-  let resultData: any = { status: "success", agentId };
+  let resultData: any = { status: "success", agentId, tokens: 0 };
 
   if (agentId === "conductor") {
     logEvent("Conductor", `Analyzing mission parameters: "${prompt}". Recalculating task graphs.`, "info");
@@ -1032,13 +1054,14 @@ export async function executeSingleAgentCognition(missionId: string, agentId: st
 
     if (llmReady()) {
       try {
-        const { data: parsed } = await chatJSON<any>(
+        const { data: parsed, tokens: _t } = await chatJSON<any>(
           `Create a brief business contradiction or point of friction based on this intelligence target: "${prompt}". Return JSON:
 {
   "title": "Short title describing the conflict",
   "description": "Fascinating detailed description of the conflicting statements or policies."
 }`
         );
+        resultData.tokens += _t;
         if (parsed.title && parsed.description) {
           conflictTitle = parsed.title;
           conflictContent = parsed.description;
@@ -1076,13 +1099,14 @@ export async function executeSingleAgentCognition(missionId: string, agentId: st
 
     if (llmReady()) {
       try {
-        const { data: parsed } = await chatJSON<any>(
+        const { data: parsed, tokens: _t } = await chatJSON<any>(
           `Create a professional strategic recommendation or synthesis for an executive regarding this context: "${prompt}". Return JSON:
 {
   "title": "Title of synthesis",
   "content": "Professional strategic advice/insight summary."
 }`
         );
+        resultData.tokens += _t;
         if (parsed.title && parsed.content) {
           synthTitle = parsed.title;
           synthContent = parsed.content;
@@ -1127,7 +1151,7 @@ export async function executeSingleAgentCognition(missionId: string, agentId: st
 
     if (llmReady()) {
       try {
-        const { data: parsed } = await chatJSON<any>(
+        const { data: parsed, tokens: _t } = await chatJSON<any>(
           `Suggest a single actionable step or reminder for a "${persona}" researching "${prompt}". Return JSON:
 {
   "title": "Action Title",
@@ -1135,6 +1159,7 @@ export async function executeSingleAgentCognition(missionId: string, agentId: st
   "body": "Markdown text with bullets/steps of the action"
 }`
         );
+        resultData.tokens += _t;
         if (parsed.title && parsed.rationale && parsed.body) {
           actTitle = parsed.title;
           actRationale = parsed.rationale;

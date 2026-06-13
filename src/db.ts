@@ -1,4 +1,4 @@
-import { WeaveNode, WeaveEdge, ProposedAction, Mission, AgentStatus, ActivityFeedEvent, ResearchBrief, TraceableSentence, Profile, MissionFootprint, MissionRun, ChatTurn, CustomAgent } from "./types.ts";
+import { WeaveNode, WeaveEdge, ProposedAction, Mission, AgentStatus, ActivityFeedEvent, ResearchBrief, TraceableSentence, Profile, MissionFootprint, MissionRun, ChatTurn, CustomAgent, Session, LedgerEntry, MediaAsset } from "./types.ts";
 import { STARTER_CREDITS } from "./footprint.ts";
 import * as fs from "fs";
 import * as path from "path";
@@ -15,6 +15,9 @@ interface DBState {
   profiles: Profile[];
   chats: ChatTurn[];
   customAgents: CustomAgent[];
+  sessions?: Session[];
+  ledger?: LedgerEntry[];
+  media?: MediaAsset[];
 }
 
 // Pre-seeded high-fidelity missions to provide an immediate "wow" factor
@@ -429,7 +432,10 @@ class Database {
     events: [],
     profiles: [],
     chats: [],
-    customAgents: []
+    customAgents: [],
+    sessions: [],
+    ledger: [],
+    media: []
   };
 
   constructor() {
@@ -474,6 +480,11 @@ class Database {
         if (!this.state.profiles) this.state.profiles = [];
         if (!this.state.chats) this.state.chats = [];
         if (!this.state.customAgents) this.state.customAgents = [];
+        if (!this.state.sessions) this.state.sessions = [];
+        if (!this.state.ledger) this.state.ledger = [];
+        if (!this.state.media) this.state.media = [];
+        // Backfill profiles created before the wallet ledger existed.
+        for (const p of this.state.profiles) if (p.totalSpent === undefined) p.totalSpent = 0;
         this.save();
       } else {
         // Initial bootstrap with pre-seeds
@@ -485,7 +496,10 @@ class Database {
           events: [...SEEDED_EVENTS],
           profiles: [],
           chats: [],
-          customAgents: []
+          customAgents: [],
+          sessions: [],
+          ledger: [],
+          media: []
         };
         this.save();
       }
@@ -499,7 +513,10 @@ class Database {
         events: [...SEEDED_EVENTS],
         profiles: [],
         chats: [],
-        customAgents: []
+        customAgents: [],
+        sessions: [],
+        ledger: [],
+        media: []
       };
     }
   }
@@ -596,6 +613,7 @@ class Database {
         credits: STARTER_CREDITS,
         totalCo2Saved_g: 0,
         totalCostSaved_usd: 0,
+        totalSpent: 0,
         missionsDeployed: 0,
         pledges: [],
         created_at: new Date().toISOString(),
@@ -634,6 +652,10 @@ class Database {
     p.credits += credits;
     p.totalCo2Saved_g += co2_g;
     p.updated_at = new Date().toISOString();
+    this.addLedger({
+      handle, direction: "earn", amount: credits, balance: p.credits, source: "pledge",
+      note: `Eco-pledge claimed — saved ~${co2_g >= 1000 ? (co2_g / 1000).toFixed(1) + "kg" : co2_g + "g"} CO₂`,
+    });
     this.save();
     return p;
   }
@@ -660,6 +682,132 @@ class Database {
     p.totalCostSaved_usd += footprint.costSavedUsd;
     p.missionsDeployed += 1;
     p.updated_at = new Date().toISOString();
+    this.addLedger({
+      handle, direction: "earn", amount: footprint.creditsEarned, source: "dividend",
+      note: `Efficiency dividend — avoided ~${footprint.co2Saved_g}g CO₂ vs baseline`,
+      tokens: footprint.tokens, provider: footprint.provider, mission_id: missionId,
+    });
+    this.save();
+  }
+
+  // ─── Auth: credentials & sessions ──────────────────────────────────────────
+  /** Strip server-only secrets before sending a profile to the client. */
+  public publicProfile(p: Profile): Omit<Profile, "credential"> {
+    const { credential, ...rest } = p as any;
+    return rest;
+  }
+
+  public hasCredential(handle: string): boolean {
+    return !!this.getProfile(handle)?.credential;
+  }
+
+  public setCredential(handle: string, credential: string): Profile {
+    const p = this.getOrCreateProfile(handle);
+    p.credential = credential;
+    p.updated_at = new Date().toISOString();
+    this.save();
+    return p;
+  }
+
+  public getCredential(handle: string): string | undefined {
+    return this.getProfile(handle)?.credential;
+  }
+
+  public createSession(handle: string, token: string, ttlMs: number): Session {
+    if (!this.state.sessions) this.state.sessions = [];
+    const now = Date.now();
+    // prune expired
+    this.state.sessions = this.state.sessions.filter(s => new Date(s.expires_at).getTime() > now);
+    const session: Session = {
+      token, handle,
+      created_at: new Date(now).toISOString(),
+      expires_at: new Date(now + ttlMs).toISOString(),
+    };
+    this.state.sessions.push(session);
+    this.save();
+    return session;
+  }
+
+  public getSessionHandle(token: string | undefined): string | null {
+    if (!token || !this.state.sessions) return null;
+    const s = this.state.sessions.find(s => s.token === token);
+    if (!s) return null;
+    if (new Date(s.expires_at).getTime() <= Date.now()) {
+      this.deleteSession(token);
+      return null;
+    }
+    return s.handle;
+  }
+
+  public deleteSession(token: string | undefined) {
+    if (!token || !this.state.sessions) return;
+    this.state.sessions = this.state.sessions.filter(s => s.token !== token);
+    this.save();
+  }
+
+  // ─── Wallet: ledger, metered debit / credit ────────────────────────────────
+  private addLedger(e: Omit<LedgerEntry, "id" | "ts" | "balance"> & { balance?: number }) {
+    if (!this.state.ledger) this.state.ledger = [];
+    const profile = this.getProfile(e.handle);
+    const entry: LedgerEntry = {
+      id: `lx-${Math.random().toString(36).substr(2, 9)}`,
+      ts: new Date().toISOString(),
+      balance: e.balance ?? profile?.credits ?? 0,
+      ...e,
+    };
+    this.state.ledger.push(entry);
+    // keep the ledger bounded
+    if (this.state.ledger.length > 5000) this.state.ledger = this.state.ledger.slice(-4000);
+    return entry;
+  }
+
+  public getLedger(handle: string, limit = 100): LedgerEntry[] {
+    const all = (this.state.ledger || []).filter(l => l.handle.toLowerCase() === handle.toLowerCase());
+    return all.slice(-limit).reverse();
+  }
+
+  /** Metered spend. Clamps to available balance; records a ledger entry. Returns credits actually charged. */
+  public debit(handle: string, amount: number, meta: { source: string; note: string; tokens?: number; provider?: string; mission_id?: string }): number {
+    if (!handle || amount <= 0) return 0;
+    const p = this.getOrCreateProfile(handle);
+    const charge = Math.min(amount, p.credits);
+    p.credits -= charge;
+    p.totalSpent = (p.totalSpent || 0) + charge;
+    p.updated_at = new Date().toISOString();
+    this.addLedger({ handle, direction: "spend", amount: charge, balance: p.credits, ...meta });
+    this.save();
+    return charge;
+  }
+
+  /** Credit (earn) with a ledger entry. */
+  public creditWallet(handle: string, amount: number, meta: { source: string; note: string; mission_id?: string }): number {
+    if (!handle || amount <= 0) return 0;
+    const p = this.getOrCreateProfile(handle);
+    p.credits += amount;
+    p.updated_at = new Date().toISOString();
+    this.addLedger({ handle, direction: "earn", amount, balance: p.credits, ...meta });
+    this.save();
+    return amount;
+  }
+
+  // ─── Media assets (Visualizer / Cinematographer output) ────────────────────
+  public addMediaAsset(asset: MediaAsset) {
+    if (!this.state.media) this.state.media = [];
+    this.state.media.push(asset);
+    this.save();
+  }
+
+  public getMediaAssets(missionId: string): MediaAsset[] {
+    return (this.state.media || []).filter(m => m.mission_id === missionId).reverse();
+  }
+
+  public getMediaAsset(id: string): MediaAsset | undefined {
+    return (this.state.media || []).find(m => m.id === id);
+  }
+
+  public deleteMediaAsset(id: string) {
+    if (!this.state.media) return;
+    this.state.media = this.state.media.filter(m => m.id !== id);
     this.save();
   }
 
@@ -755,12 +903,14 @@ class Database {
     if (m) { m.monitoring = monitoring; m.updated_at = new Date().toISOString(); this.save(); }
   }
 
-  public updateMissionSpec(id: string, patch: { prompt?: string; persona?: string | null; targets?: string[] }): Mission | undefined {
+  public updateMissionSpec(id: string, patch: { prompt?: string; persona?: string | null; targets?: string[]; agents?: string[]; cadence?: number }): Mission | undefined {
     const m = this.getMission(id);
     if (m) {
       if (patch.prompt !== undefined) m.prompt = patch.prompt;
       if (patch.persona !== undefined) m.persona = patch.persona;
       if (patch.targets !== undefined) m.targets = patch.targets;
+      if (patch.agents !== undefined) m.agents = patch.agents;
+      if (patch.cadence !== undefined) m.cadence = Math.max(10, Math.min(3600, patch.cadence));
       m.updated_at = new Date().toISOString();
       this.save();
     }

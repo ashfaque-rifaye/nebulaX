@@ -62,7 +62,11 @@ import {
   ChevronUp,
   ChevronDown,
   GitBranch,
-  Crosshair
+  Crosshair,
+  SlidersHorizontal,
+  Wallet as WalletIcon,
+  Clapperboard,
+  Image as ImageIcon
 } from "lucide-react";
 import { Mission, WeaveNode, WeaveEdge, ProposedAction, ActivityFeedEvent, ResearchBrief, AgentStatus, MissionPlanVariant, Profile, ChatTurn, MissionRun, CustomAgent } from "./types.ts";
 import { GreenCredits, PledgeDef } from "./components/GreenCredits.tsx";
@@ -78,8 +82,12 @@ import { TriageBoard } from "./components/TriageBoard.tsx";
 import { MissionReplay } from "./components/MissionReplay.tsx";
 import { Constellation3D } from "./components/Constellation3D.tsx";
 import { MissionPlanner } from "./components/MissionPlanner.tsx";
+import { MissionSettings, MissionPatch } from "./components/MissionSettings.tsx";
 import { SettingsModal } from "./components/SettingsModal.tsx";
 import { OnboardingTour, TourStep } from "./components/OnboardingTour.tsx";
+import { AuthModal } from "./components/AuthModal.tsx";
+import { Wallet } from "./components/Wallet.tsx";
+import { MediaStudio } from "./components/MediaStudio.tsx";
 
 // Workspace lens definitions: one fabric, five complementary views.
 const WORKSPACE_VIEWS = [
@@ -110,6 +118,8 @@ const AGENT_ICONS: Record<string, React.ComponentType<{ className?: string }>> =
   oracle: Sparkles,
   scribe: BookOpen,
   actor: Mail,
+  visualizer: ImageIcon,
+  cinematographer: Clapperboard,
 };
 
 export default function App() {
@@ -212,15 +222,19 @@ export default function App() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isListening, setIsListening] = useState(false);
 
-  // Green Credits / profile (earn credits via eco-pledges, spend to deploy agents)
-  const [handle, setHandleState] = useState<string | null>(() => {
-    try { return localStorage.getItem("nebula-handle"); } catch { return null; }
-  });
+  // Green Credits / profile + auth. Identity is now a real session (httpOnly
+  // cookie); `handle` is set only once the user is signed in.
+  const [handle, setHandleState] = useState<string | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [pledges, setPledges] = useState<PledgeDef[]>([]);
   const [deployCost, setDeployCost] = useState(25);
+  const [minReserve, setMinReserve] = useState(4);
   const [profileLoading, setProfileLoading] = useState(false);
   const [claimingPledgeId, setClaimingPledgeId] = useState<string | null>(null);
+  // Auth modal ({ reason }) + wallet modal
+  const [authPrompt, setAuthPrompt] = useState<{ reason?: string; mode?: "login" | "signup" } | null>(null);
+  const [walletOpen, setWalletOpen] = useState(false);
+  const authed = !!handle;
 
   // Dismissible workspace guidance ("what am I looking at?")
   const [showGuide, setShowGuide] = useState<boolean>(() => {
@@ -247,22 +261,34 @@ export default function App() {
   const [forecasting, setForecasting] = useState(false);
   const handleForecast = async () => {
     if (!selectedMissionId) return;
+    if (!authed) { requireAuth("Sign in to forecast futures — it runs the Oracle agent."); return; }
     setForecasting(true);
     try {
       const res = await fetch(`/api/missions/${selectedMissionId}/forecast`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ handle })
+        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({})
       });
       if (res.ok) {
         await fetchMissionData(selectedMissionId);
         if (handle) fetchProfile(handle);
+      } else if (res.status === 401) {
+        requireAuth("Your session expired — sign in to forecast.", "login");
       } else if (res.status === 402) {
         const e = await res.json().catch(() => ({}));
         alert(e.error || "Not enough Green Credits to forecast.");
+        setWalletOpen(true);
       }
     } catch (err) { console.error("Forecast failed:", err); }
     finally { setForecasting(false); }
   };
   const layoutSaveTimer = useRef<any>(null);
+
+  // Edit Swarm (modify the live mission: goal, persona, targets, roster, cadence)
+  const [editOpen, setEditOpen] = useState(false);
+  const [editSaving, setEditSaving] = useState(false);
+
+  // Media Studio (Visualizer / Cinematographer)
+  const [studioOpen, setStudioOpen] = useState(false);
+  const [studioSeed, setStudioSeed] = useState<string>("");
 
   // Mission planner (pick a strategic angle before deploying the swarm)
   const [showPlanner, setShowPlanner] = useState(false);
@@ -365,7 +391,7 @@ export default function App() {
     fetchLlmStatus();
     fetchLlmConfig();
     fetchPledges();
-    fetchProfile(handle);
+    fetchMe();
 
     // Sync theme class to document element
     if (theme === "dark") {
@@ -440,9 +466,10 @@ export default function App() {
   // Live monitor: auto re-sense on an interval while the workspace is open.
   useEffect(() => {
     if (!launched || !selectedMission?.monitoring || selectedMission?.status !== "ready") return;
-    const iv = setInterval(() => { handleResense("monitor"); }, 45000);
+    const everyMs = Math.max(10, selectedMission?.cadence || 45) * 1000;
+    const iv = setInterval(() => { handleResense("monitor"); }, everyMs);
     return () => clearInterval(iv);
-  }, [launched, selectedMission?.monitoring, selectedMission?.status, selectedMissionId]);
+  }, [launched, selectedMission?.monitoring, selectedMission?.status, selectedMission?.cadence, selectedMissionId]);
 
   // Load chat when the panel opens or the mission changes.
   useEffect(() => {
@@ -545,6 +572,7 @@ export default function App() {
         const data = await res.json();
         setPledges(data.pledges || []);
         if (data.deployCost) setDeployCost(data.deployCost);
+        if (data.minReserve) setMinReserve(data.minReserve);
       }
     } catch (err) {
       console.error("Failed to fetch pledges:", err);
@@ -564,19 +592,48 @@ export default function App() {
     }
   };
 
-  const persistHandle = (h: string) => {
-    try { localStorage.setItem("nebula-handle", h); } catch {}
-    setHandleState(h);
-    fetchProfile(h);
+  // Restore an existing session on load (httpOnly cookie → profile).
+  const fetchMe = async () => {
+    try {
+      const res = await fetch("/api/auth/me", { credentials: "include" });
+      if (res.ok) {
+        const p: Profile = await res.json();
+        setProfile(p);
+        setHandleState(p.handle);
+      } else {
+        setHandleState(null);
+        setProfile(null);
+      }
+    } catch { /* offline — stay signed out */ }
+  };
+
+  // Called by the AuthModal on a successful signup/login.
+  const onAuthed = (p: Profile) => {
+    setProfile(p);
+    setHandleState(p.handle);
+    setAuthPrompt(null);
+  };
+
+  // Open the auth modal with an optional contextual reason.
+  const requireAuth = (reason?: string, mode: "login" | "signup" = "signup") => {
+    setAuthPrompt({ reason, mode });
+  };
+
+  const signOut = async () => {
+    try { await fetch("/api/auth/logout", { method: "POST", credentials: "include" }); } catch {}
+    setHandleState(null);
+    setProfile(null);
+    setWalletOpen(false);
   };
 
   const claimPledge = async (pledgeId: string) => {
-    if (!handle) return;
+    if (!handle) { requireAuth("Create an account to start banking Green Credits."); return; }
     setClaimingPledgeId(pledgeId);
     try {
       const res = await fetch(`/api/profile/${encodeURIComponent(handle)}/pledge`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ pledgeId })
       });
       if (res.ok) {
@@ -584,6 +641,8 @@ export default function App() {
         setProfile(data.profile);
       } else if (res.status === 409) {
         await fetchProfile(handle); // already claimed today — resync
+      } else if (res.status === 401) {
+        requireAuth("Your session expired — sign in to continue.", "login");
       }
     } catch (err) {
       console.error("Failed to claim pledge:", err);
@@ -652,6 +711,7 @@ export default function App() {
     e.preventDefault();
     const p = newPrompt.trim();
     if (!p) return;
+    if (!authed) { requireAuth("Sign in to deploy a swarm — runs are paid in Green Credits."); return; }
 
     setPlanPrompt(p);
     setPlanVariants([]);
@@ -685,25 +745,31 @@ export default function App() {
       const res = await fetch("/api/missions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, persona: selectedPersona, handle })
+        credentials: "include",
+        body: JSON.stringify({ prompt, persona: selectedPersona })
       });
       if (res.ok) {
         const createdMission = await res.json();
         await fetchMissions();
-        if (handle) fetchProfile(handle); // reflect the spent credits
+        // Credits are metered after the run finishes — refresh shortly after.
+        if (handle) { fetchProfile(handle); setTimeout(() => fetchProfile(handle), 9000); }
         setNewPrompt("");
         setActiveTab("analysis");
         setShowPlanner(false);
         setPlanVariants([]);
         setPlanDeployingId(null);
         launchMission(createdMission.id, "canvas");
+      } else if (res.status === 401) {
+        setPlanDeployingId(null);
+        setShowPlanner(false);
+        requireAuth("Sign in to deploy a swarm.", "login");
       } else if (res.status === 402) {
         const err = await res.json().catch(() => ({}));
         if (handle) fetchProfile(handle);
         setPlanDeployingId(null);
         alert(err.error || "Not enough Green Credits. Earn more with eco-pledges on the dashboard.");
         setShowPlanner(false);
-        setCurrentView("home"); // send them to the Green Credits panel to earn
+        setWalletOpen(true); // open the wallet so they can earn
       } else {
         setPlanDeployingId(null);
       }
@@ -723,24 +789,56 @@ export default function App() {
   // ─── Living missions: re-sense, monitor, chat, deep-dive, curation ──────────
   const handleResense = async (trigger: "resense" | "monitor" = "resense") => {
     if (!selectedMissionId) return;
+    if (trigger === "resense" && !authed) { requireAuth("Sign in to re-sense — it runs the swarm again."); return; }
     if (trigger === "resense") setResensing(true);
     try {
       const res = await fetch(`/api/missions/${selectedMissionId}/resense`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ handle, trigger })
+        credentials: "include",
+        body: JSON.stringify({ trigger })
       });
       if (res.ok) {
         await fetchMissions();
-        if (handle) fetchProfile(handle);
+        if (handle) { fetchProfile(handle); setTimeout(() => fetchProfile(handle), 9000); }
+      } else if (res.status === 401 && trigger === "resense") {
+        requireAuth("Your session expired — sign in to re-sense.", "login");
       } else if (res.status === 402 && trigger === "resense") {
         const e = await res.json().catch(() => ({}));
         alert(e.error || "Not enough Green Credits to re-sense. Earn more via eco-pledges.");
+        setWalletOpen(true);
       }
     } catch (err) {
       console.error("Re-sense failed:", err);
     } finally {
       if (trigger === "resense") setResensing(false);
+    }
+  };
+
+  // Save edits to the live mission spec (goal / persona / targets / roster / cadence).
+  const handleSaveMissionSpec = async (patch: MissionPatch, resense: boolean) => {
+    if (!selectedMissionId) return;
+    setEditSaving(true);
+    try {
+      const res = await fetch(`/api/missions/${selectedMissionId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ ...patch, resense, handle })
+      });
+      if (res.ok) {
+        await fetchMissions();
+        if (selectedMissionId) await fetchMissionData(selectedMissionId);
+        if (handle) fetchProfile(handle);
+        setEditOpen(false);
+      } else if (res.status === 402) {
+        const e = await res.json().catch(() => ({}));
+        alert(e.error || "Not enough Green Credits to re-sense. Earn more via eco-pledges.");
+      }
+    } catch (err) {
+      console.error("Failed to save mission spec:", err);
+    } finally {
+      setEditSaving(false);
     }
   };
 
@@ -781,18 +879,22 @@ export default function App() {
 
   const runCustomAgentClient = async (agentId: string) => {
     if (!selectedMissionId) return;
+    if (!authed) { requireAuth("Sign in to run your agents — each run is metered in credits."); return; }
     setCustomRunningId(agentId);
     try {
       const res = await fetch(`/api/custom-agents/${agentId}/run`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ handle })
+        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({})
       });
       if (res.ok) {
         await fetchMissionData(selectedMissionId);
         await fetchCustomAgents(selectedMissionId);
         if (handle) fetchProfile(handle);
+      } else if (res.status === 401) {
+        requireAuth("Your session expired — sign in to run agents.", "login");
       } else if (res.status === 402) {
         const e = await res.json().catch(() => ({}));
         alert(e.error || "Not enough Green Credits to run this agent.");
+        setWalletOpen(true);
       }
     } catch (err) { console.error("Run custom agent failed:", err); }
     finally { setCustomRunningId(null); }
@@ -819,6 +921,7 @@ export default function App() {
 
   const askFabric = async (question: string) => {
     if (!selectedMissionId) return;
+    if (!authed) { requireAuth("Sign in to ask the fabric — answers run a grounded model."); return; }
     // optimistic user turn
     setChatMessages(prev => [...prev, {
       id: `tmp-${Date.now()}`, mission_id: selectedMissionId, role: "user", content: question, created_at: new Date().toISOString()
@@ -828,15 +931,19 @@ export default function App() {
       const res = await fetch(`/api/missions/${selectedMissionId}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question, handle })
+        credentials: "include",
+        body: JSON.stringify({ question })
       });
       if (res.ok) {
         await fetchChat(selectedMissionId);
         if (handle) fetchProfile(handle);
+      } else if (res.status === 401) {
+        requireAuth("Your session expired — sign in to ask.", "login");
       } else if (res.status === 402) {
         const e = await res.json().catch(() => ({}));
         await fetchChat(selectedMissionId);
         alert(e.error || "Not enough Green Credits to ask. Earn more via eco-pledges.");
+        setWalletOpen(true);
       }
     } catch (err) {
       console.error("Chat failed:", err);
@@ -847,22 +954,27 @@ export default function App() {
 
   const deepDive = async (seed: string) => {
     if (!selectedMissionId) return;
+    if (!authed) { requireAuth("Sign in to spawn a deep-dive — it deploys a child swarm."); return; }
     const childPrompt = `Deep dive: ${seed} — a focused investigation branching from "${selectedMission?.prompt || ""}".`;
     try {
       const res = await fetch("/api/missions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: childPrompt, persona: selectedPersona, handle, parent_id: selectedMissionId })
+        credentials: "include",
+        body: JSON.stringify({ prompt: childPrompt, persona: selectedPersona, parent_id: selectedMissionId })
       });
       if (res.ok) {
         const child = await res.json();
         await fetchMissions();
-        if (handle) fetchProfile(handle);
+        if (handle) { fetchProfile(handle); setTimeout(() => fetchProfile(handle), 9000); }
         setChatOpen(false);
         launchMission(child.id, "canvas");
+      } else if (res.status === 401) {
+        requireAuth("Your session expired — sign in to deep-dive.", "login");
       } else if (res.status === 402) {
         const e = await res.json().catch(() => ({}));
         alert(e.error || "Not enough Green Credits to spawn a deep-dive mission.");
+        setWalletOpen(true);
       }
     } catch (err) {
       console.error("Deep-dive failed:", err);
@@ -1239,18 +1351,27 @@ export default function App() {
           </form>
         )}
 
-        {/* GREEN CREDITS BALANCE CHIP */}
-        {handle && (
+        {/* GREEN CREDITS WALLET CHIP / SIGN-IN */}
+        {handle ? (
           <button
-            onClick={() => setCurrentView("home")}
-            title={`${profile?.credits ?? 0} Green Credits · ${((profile?.totalCo2Saved_g ?? 0) / 1000).toFixed(2)} kg CO₂ saved — click to earn more`}
+            onClick={() => setWalletOpen(true)}
+            title={`${profile?.credits ?? 0} Green Credits · ${((profile?.totalCo2Saved_g ?? 0) / 1000).toFixed(2)} kg CO₂ saved — open wallet`}
             className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 transition-all cursor-pointer ${
               isDark ? "border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20" : "border-emerald-500/30 bg-emerald-50 hover:bg-emerald-100"
             }`}
           >
-            <Leaf className="w-3.5 h-3.5 text-emerald-500" />
+            <WalletIcon className="w-3.5 h-3.5 text-emerald-500" />
             <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">{profile?.credits ?? "…"}</span>
             <span className="text-[9px] font-mono text-emerald-600/70 dark:text-emerald-400/70 hidden sm:inline">cr</span>
+          </button>
+        ) : (
+          <button
+            onClick={() => requireAuth()}
+            title="Sign in or create your Green account"
+            className="flex items-center gap-1.5 rounded-full px-4 py-1.5 transition-all cursor-pointer bg-luna-gradient cta-luna text-white text-xs font-bold"
+          >
+            <User className="w-3.5 h-3.5" />
+            Sign in
           </button>
         )}
 
@@ -1471,7 +1592,8 @@ export default function App() {
                     deployCost={deployCost}
                     loading={profileLoading}
                     claimingId={claimingPledgeId}
-                    onSetHandle={persistHandle}
+                    onAuth={() => requireAuth()}
+                    onOpenWallet={() => setWalletOpen(true)}
                     onClaim={claimPledge}
                   />
                 </div>
@@ -1859,6 +1981,7 @@ export default function App() {
                 const isWorking = currentWork === "working" || runningAgentId === a.id;
                 const isFocused = focusedAgent?.id === a.id;
                 const AgentIcon = AGENT_ICONS[a.id] || Bot;
+                const rosterOff = !!(selectedMission?.agents && selectedMission.agents.length && !selectedMission.agents.includes(a.id));
 
                 // Live "what it's doing" — newest event emitted by this agent.
                 const liveEvent = [...events].reverse().find(
@@ -1889,10 +2012,10 @@ export default function App() {
                       setSelectedNodeId(null); setChatOpen(false); setCustomOpen(false);
                       setFocusedAgent(isFocused ? null : a);
                     }}
-                    title={`${a.name}: ${a.task} — click to open console`}
+                    title={rosterOff ? `${a.name} is OFF for this swarm — enable it in Edit Swarm` : `${a.name}: ${a.task} — click to open console`}
                     className={`flex flex-col gap-1 p-2 rounded-xl border text-left transition-all relative cursor-pointer select-none overflow-hidden min-w-[148px] md:min-w-0 press ${
                       isWorking ? "agent-working" : ""
-                    } ${
+                    } ${rosterOff ? "opacity-40 grayscale" : ""} ${
                       isFocused
                         ? "bg-indigo-600/10 border-indigo-500/70 ring-1 ring-indigo-500/35 shadow-lg shadow-indigo-500/10"
                         : isWorking
@@ -2022,6 +2145,19 @@ export default function App() {
 
                 <div className={`w-px h-5 ${isDark ? "bg-white/10" : "bg-slate-200"}`} />
 
+                {/* Edit Swarm */}
+                <button
+                  onClick={() => setEditOpen(true)}
+                  disabled={!selectedMission}
+                  title="Edit this swarm — goal, persona, watchlist, active agents, cadence"
+                  className={`text-[10px] font-semibold px-2.5 py-1.5 border rounded-lg transition-all flex items-center gap-1.5 disabled:opacity-50 select-none press ${
+                    isDark ? "text-violet-200 hover:text-white bg-violet-500/10 border-violet-500/25 hover:border-violet-500/50" : "text-violet-700 hover:text-violet-800 bg-violet-500/5 border-violet-500/20 hover:border-violet-500/40"
+                  }`}
+                >
+                  <SlidersHorizontal className="w-3 h-3" />
+                  <span className="hidden md:inline">Edit Swarm</span>
+                </button>
+
                 {/* Re-sense */}
                 <button
                   onClick={() => handleResense("resense")}
@@ -2076,6 +2212,19 @@ export default function App() {
                 >
                   <Wand2 className="w-3 h-3" />
                   <span className="hidden md:inline">My Agents</span>
+                </button>
+
+                {/* Media Studio */}
+                <button
+                  onClick={() => { setStudioSeed(""); setStudioOpen(true); }}
+                  disabled={!selectedMission}
+                  title="Media Studio — generate images & video from this mission"
+                  className={`text-[10px] font-semibold px-2.5 py-1.5 border rounded-lg transition-all flex items-center gap-1.5 select-none press disabled:opacity-50 ${
+                    isDark ? "text-violet-200 hover:text-white bg-violet-500/10 border-violet-500/25 hover:border-violet-500/50" : "text-violet-700 hover:text-violet-800 bg-violet-500/5 border-violet-500/20 hover:border-violet-500/40"
+                  }`}
+                >
+                  <Clapperboard className="w-3 h-3" />
+                  <span className="hidden md:inline">Studio</span>
                 </button>
 
                 <button
@@ -3165,6 +3314,20 @@ export default function App() {
                           </a>
                         </div>
                       )}
+
+                      {/* Visualize this finding in the Media Studio */}
+                      <button
+                        onClick={() => {
+                          setStudioSeed(`${selectedNode.title} — ${selectedNode.content.slice(0, 180)}`);
+                          setStudioOpen(true);
+                        }}
+                        className={`mt-2 w-full flex items-center justify-center gap-1.5 text-[10px] font-bold py-2 rounded-lg border transition-all press no-pan ${
+                          isDark ? "text-violet-200 bg-violet-500/10 border-violet-500/25 hover:border-violet-500/50" : "text-violet-700 bg-violet-500/5 border-violet-500/20 hover:border-violet-500/40"
+                        }`}
+                        title="Generate an image or video from this finding"
+                      >
+                        <ImageIcon className="w-3 h-3" /> Visualize this finding
+                      </button>
                     </div>
 
                     {/* CITATION AND PROVENANCE LISTS */}
@@ -3314,20 +3477,29 @@ export default function App() {
                     disabled={runningAgentId !== null || !!isSubmitting || selectedMission?.status !== "ready"}
                     onClick={async () => {
                       if (!selectedMission) return;
+                      // Media agents open the Studio rather than the text executor.
+                      if (focusedAgent.id === "visualizer" || focusedAgent.id === "cinematographer") {
+                        setStudioSeed(""); setStudioOpen(true); return;
+                      }
+                      if (!authed) { requireAuth("Sign in to run an agent — each run is metered in credits."); return; }
                       setRunningAgentId(focusedAgent.id);
                       try {
                         const res = await fetch(`/api/missions/${selectedMission.id}/agents/${focusedAgent.id}/execute`, {
                           method: "POST",
                           headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ handle })
+                          credentials: "include",
+                          body: JSON.stringify({})
                         });
                         if (res.ok) {
                           await fetchMissions();
                           await fetchMissionData(selectedMission.id);
                           await fetchAgents();
                           if (handle) fetchProfile(handle);
+                        } else if (res.status === 401) {
+                          requireAuth("Your session expired — sign in to run agents.", "login");
                         } else {
-                          const errData = await res.json();
+                          const errData = await res.json().catch(() => ({}));
+                          if (res.status === 402) setWalletOpen(true);
                           alert(`Execution warning: ${errData.error || "Execution failed"}`);
                         }
                       } catch (err: any) {
@@ -3344,10 +3516,12 @@ export default function App() {
                         : "bg-violet-600 hover:bg-violet-500 text-white shadow-lg cursor-pointer hover:shadow-violet-600/10 active:scale-[0.98]"
                     }`}
                   >
-                    {runningAgentId === focusedAgent.id 
-                      ? "⚡ NEURAL THREAD RUNNING..." 
+                    {runningAgentId === focusedAgent.id
+                      ? "⚡ NEURAL THREAD RUNNING..."
                       : selectedMission?.status !== "ready"
                       ? "Pipeline Inactive"
+                      : (focusedAgent.id === "visualizer" || focusedAgent.id === "cinematographer")
+                      ? `🎬 OPEN ${focusedAgent.name.toUpperCase()} STUDIO`
                       : `⚡ EXECUTE ${focusedAgent.name.toUpperCase()} COGNITION`}
                   </button>
                 </div>
@@ -3568,6 +3742,58 @@ export default function App() {
           </main>
 
         </div>
+      )}
+
+      {/* --- AUTH: sign in / create account --- */}
+      {authPrompt && (
+        <AuthModal
+          isDark={isDark}
+          initialMode={authPrompt.mode || "signup"}
+          reason={authPrompt.reason}
+          onClose={() => setAuthPrompt(null)}
+          onAuthed={onAuthed}
+        />
+      )}
+
+      {/* --- WALLET: balance, metered ledger, earn credits --- */}
+      {walletOpen && handle && (
+        <Wallet
+          isDark={isDark}
+          profile={profile}
+          pledges={pledges}
+          minReserve={minReserve}
+          claimingId={claimingPledgeId}
+          onClaim={claimPledge}
+          onClose={() => setWalletOpen(false)}
+          onSignOut={signOut}
+        />
+      )}
+
+      {/* --- MEDIA STUDIO: Visualizer / Cinematographer --- */}
+      {studioOpen && selectedMission && (
+        <MediaStudio
+          isDark={isDark}
+          missionId={selectedMission.id}
+          authed={authed}
+          seedPrompt={studioSeed}
+          onRequireAuth={(reason) => requireAuth(reason)}
+          onOpenSettings={() => { setStudioOpen(false); setSettingsOpen(true); }}
+          onSpent={() => { if (handle) fetchProfile(handle); }}
+          onClose={() => setStudioOpen(false)}
+        />
+      )}
+
+      {/* --- EDIT SWARM: reshape the live mission --- */}
+      {editOpen && selectedMission && (
+        <MissionSettings
+          isDark={isDark}
+          mission={selectedMission}
+          personas={PERSONAS}
+          busy={editSaving}
+          resenseCost={deployCost}
+          onClose={() => setEditOpen(false)}
+          onSave={handleSaveMissionSpec}
+        />
       )}
 
       {/* --- MISSION PLANNER: choose a strategic angle before deploying --- */}

@@ -67,6 +67,18 @@ export const AGENTS: AgentInfo[] = [
     detail: "Prepares executable actions — an outreach email, a calendar reminder, a brief — ready for one-click approval. Never sends anything on its own.",
     icon: "Mail", color: "text-fuchsia-500",
   },
+  {
+    id: "visualizer", codename: "Visualizer", role: "Image Maker",
+    blurb: "Turns a finding into an on-brand image.",
+    detail: "On request, renders a still from any finding or prompt using FLUX, SDXL, Stability or GPT-Image — bring your own key, or get an instant on-brand preview.",
+    icon: "Image", color: "text-violet-400",
+  },
+  {
+    id: "cinematographer", codename: "Cinematographer", role: "Video Maker",
+    blurb: "Generates short clips from a prompt.",
+    detail: "Animates a scene from a finding or prompt via Higgsfield, Kling, Runway, Luma, Hunyuan and more — swarmed on demand and metered per second.",
+    icon: "Clapperboard", color: "text-fuchsia-400",
+  },
 ];
 
 export interface UseCase {

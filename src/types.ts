@@ -13,6 +13,8 @@ export interface Mission {
   // ── living-mission fields ──
   parent_id?: string;              // set if this is a deep-dive child of another mission
   monitoring?: boolean;            // live monitor toggle (client auto re-senses)
+  cadence?: number;                // monitor cadence in seconds (default 45)
+  agents?: string[];               // enabled specialist agent ids (undefined = all on)
   archived?: boolean;              // lifecycle: archived missions are hidden by default
   runs?: MissionRun[];             // history of sensing runs
   layout?: { [nodeId: string]: { x: number; y: number } }; // persisted canvas layout
@@ -69,10 +71,56 @@ export interface Profile {
   credits: number;
   totalCo2Saved_g: number;         // pledges + efficiency dividends
   totalCostSaved_usd: number;      // vs GPT-4-class baseline
+  totalSpent: number;              // lifetime credits spent on model runs
   missionsDeployed: number;
   pledges: { id: string; date: string }[]; // claim history (date = UTC day)
+  credential?: string;             // server-only: "salt:hash" (never serialized to client)
   created_at: string;
   updated_at: string;
+}
+
+// A server-side session (opaque token → handle, with expiry).
+export interface Session {
+  token: string;
+  handle: string;
+  created_at: string;
+  expires_at: string;
+}
+
+// One movement in a profile's Green-Credit wallet (earn or spend).
+export interface LedgerEntry {
+  id: string;
+  handle: string;
+  ts: string;
+  direction: "earn" | "spend";
+  amount: number;                  // always positive; direction carries the sign
+  balance: number;                 // running balance AFTER this entry
+  source: string;                  // "deploy" | "resense" | "custom-agent" | "chat" | "forecast" | "agent" | "media-image" | "media-video" | "pledge" | "dividend"
+  note: string;                    // human-readable description
+  tokens?: number;                 // model tokens consumed (for metered spends)
+  provider?: string;               // model/provider used
+  mission_id?: string;
+}
+
+// A generated media artifact (image or video) for a mission, produced by the
+// Visualizer / Cinematographer agents. URL is a remote link (live) or an
+// on-brand SVG data-URI (simulated fallback).
+export interface MediaAsset {
+  id: string;
+  mission_id: string;
+  kind: "image" | "video";
+  prompt: string;
+  providerId: string;
+  provider: string;        // human-readable provider/model label
+  model: string;
+  url: string;
+  poster?: string;         // poster frame for video
+  seconds?: number;        // clip length for video
+  simulated: boolean;      // true = preview placeholder (no live key)
+  credits: number;         // credits charged for this generation
+  note?: string;
+  source_node_id?: string; // finding this visual was derived from, if any
+  created_at: string;
 }
 
 export type NodeType = "web-signal" | "human-note" | "synthesis" | "correction" | "output" | "memory" | "action";

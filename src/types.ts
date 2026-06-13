@@ -165,15 +165,31 @@ export interface WeaveEdge {
   created_at: string;
 }
 
+// The swarm's "next moves". Beyond drafting an email, it can propose a standing
+// watch, a focused deep-dive mission, a strategic decision, or a deadline — each
+// wired to a real, one-click handoff in the workspace.
+export type ActionKind =
+  | "outreach"      // contact a person (email draft)
+  | "monitor"       // stand up a continuous watch
+  | "deep-dive"     // spawn a focused child mission
+  | "decision"      // a strategic move to lock in
+  | "reminder"      // a deadline / calendar item
+  | "draft-brief"   // a document to copy / export
+  // legacy aliases (older runs / data):
+  | "draft-email" | "draft-application" | "alert" | "other";
+
 export interface ProposedAction {
   id: string;
   mission_id: string;
-  kind: "draft-email" | "draft-application" | "draft-brief" | "reminder" | "other";
+  kind: ActionKind;
   title: string;
   payload: {
     to?: string;
     subject?: string;
     body: string;
+    seed?: string;       // deep-dive: the child mission prompt
+    target?: string;     // monitor: the entity/url to watch
+    deadline?: string;   // reminder: ISO date
     [key: string]: any;
   };
   rationale: string;             // why did Oracle propose it

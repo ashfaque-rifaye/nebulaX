@@ -319,39 +319,65 @@ const SEEDED_EDGES: WeaveEdge[] = [
 ];
 
 const SEEDED_ACTIONS: ProposedAction[] = [
-  // --- Mission PAYMENTS Actions ---
+  // --- Mission PAYMENTS Actions — a varied "next move" set ---
   {
     id: "action-p1",
     mission_id: "mission-payments",
-    kind: "draft-email",
-    title: "Draft Pricing Renegotiation Mail to Razorpay Account Manager",
+    kind: "outreach",
+    title: "Open a pricing renegotiation with Razorpay",
     payload: {
       to: "sales-billing@razorpay.com",
-      subject: "Custom Pricing Revision Proposal - Nebula AI routing insights",
+      subject: "Custom pricing revision — AI-routing benchmark",
       body: `Dear Strategic Pricing Director,
 
-In reviewing payments platform routes for our checkout endpoints, we note customized routing slabs in the target Indian merchant corridor currently stabilizing at 1.80% API routing fee + 0.05% AI Optimizer premium.
+Reviewing our checkout routing, we see Razorpay's custom enterprise tier sitting at 1.80% API routing + 0.05% AI Optimizer premium.
 
-As a high-priority enterprise partner servicing over thousand concurrent checkout operations, we would like to formally request our transaction fees be reassessed to a flat inline tier of 1.75% for basic debit/UPI operations and 1.82% for corporate cards.
+As a high-volume partner running 1,000+ concurrent checkouts, we'd like our rate reassessed to a flat 1.75% on debit/UPI and 1.82% on corporate cards, with an AI-routing trial this quarter.
 
-We seek an active routing trial parameters integration this quarter. Please share availability this upcoming week.
+Could we find 30 minutes this week?
 
 Best regards,
 Enterprise Operations Lead`
     },
-    rationale: "Oracle Recommendation: Razorpay's newly emerged 1.80% custom tier gives high-volume founders leverage to pitch for 1.75%-1.82% flats on equivalent checkouts.",
+    rationale: "Razorpay's newly surfaced 1.80% custom tier gives high-volume founders concrete leverage to pitch a flat 1.75–1.82% on equivalent checkouts.",
     provenance: ["node-p1", "node-p7"],
     status: "proposed"
   },
   {
     id: "action-p2",
     mission_id: "mission-payments",
-    kind: "reminder",
-    title: "Set Up Onboarding Audit Waiver",
+    kind: "monitor",
+    title: "Put Cashfree's developer terms on a standing watch",
     payload: {
-      body: "Audit developer onboard pipeline before onboarding Cashfree to assert they manually enforce the ₹500 Smart Routing monthly subscription waiver on our billing portal as promised by policy."
+      target: "cashfree.com/terms/developer",
+      body: "Stand up a daily watch on Cashfree's developer terms (Clause 4.2). Alert me if the ₹500/mo Smart Routing fee, or its conditional waiver wording, changes — the public ‘₹0 maintenance’ pledge already contradicts the fine print once."
     },
-    rationale: "Sentinel safety check: ensures the developer fee waiver mentioned in human-corrective state node is hard-locked in the onboarding contract.",
+    rationale: "Sentinel flagged a live contradiction between Cashfree's public pricing and its developer terms; the waiver is conditional, so the clause is worth watching continuously.",
+    provenance: ["node-p3", "node-p6"],
+    status: "proposed"
+  },
+  {
+    id: "action-p3",
+    mission_id: "mission-payments",
+    kind: "deep-dive",
+    title: "Deep-dive PayU's enterprise AI roadmap",
+    payload: {
+      seed: "Track PayU's enterprise pricing tiers and AI checkout features, and how they compare to Razorpay's AI Optimizer and Cashfree's Smart Routing",
+      body: "Spawn a focused child mission on PayU: enterprise pricing, AI checkout/routing features, and recent launches — to complete the three-way competitive picture against Razorpay and Cashfree."
+    },
+    rationale: "The fabric covers Razorpay and Cashfree in depth but PayU is thin; a scoped deep-dive closes the competitive gap.",
+    provenance: ["node-p5", "node-p7"],
+    status: "proposed"
+  },
+  {
+    id: "action-p4",
+    mission_id: "mission-payments",
+    kind: "decision",
+    title: "Lock the verified ₹0-maintenance waiver into the MSA",
+    payload: {
+      body: "Decision: before signing, cite the human-verified correction — Cashfree's ₹500/mo Smart Routing fee is waived in perpetuity for merchants onboarding before June 2026. Get the waiver written into the MSA, not left to policy."
+    },
+    rationale: "A human veto already corrected and confidence-healed this claim to 100%; turning it into a contract clause converts verified intelligence into a protected commercial term.",
     provenance: ["node-p4", "node-p6"],
     status: "proposed"
   },
@@ -360,13 +386,26 @@ Enterprise Operations Lead`
   {
     id: "action-b1",
     mission_id: "mission-battery",
-    kind: "draft-brief",
-    title: "Prep Investment Brief Addendum: Solid Power bottlenecks",
+    kind: "decision",
+    title: "Re-weight capital from Solid Power toward Factorial Energy",
     payload: {
-      body: "REVISED ALERT: Pivot cleantech funding parameters representation. Shift Solid Power allocations timeline outwards by 3-4 quarters. Solid Power powder fabrication is fundamentally limited by thermal humidity instability which restricts active A-sample shipping cells. Direct surplus allocations to Factorial Energy on the backs of their flawless 391 Wh/kg TUV SUD certs."
+      body: "Decision: shift Solid Power's allocation out 3–4 quarters and redirect surplus to Factorial Energy. Solid Power's powder fabrication is thermally constrained, capping A-sample shipping cells; Factorial holds flawless 391 Wh/kg TÜV SÜD certs."
     },
-    rationale: "Oracle Recommendation: Solid Powders bottleneck represents structural risk. Re-routing capital towards Factorial minimizes cycle delays.",
+    rationale: "Solid Power's bottleneck is a structural risk to the timeline; re-routing capital to the certified leader minimizes cycle delays.",
     provenance: ["node-b2", "node-b3", "node-b4"],
+    status: "proposed"
+  },
+  {
+    id: "action-b2",
+    mission_id: "mission-battery",
+    kind: "monitor",
+    title: "Watch QuantumScape for A0 shipping cadence",
+    payload: {
+      target: "quantumscape.com/investor-sec",
+      body: "Stand up a watch on QuantumScape's investor/SEC updates for A0 prototype shipment volume and cycle-retention figures — the leading indicator that the 24-layer cells are scaling."
+    },
+    rationale: "A0 shipments to automotive partners are the clearest near-term signal of QuantumScape's execution; cadence changes move the thesis.",
+    provenance: ["node-b1", "node-b4"],
     status: "proposed"
   }
 ];

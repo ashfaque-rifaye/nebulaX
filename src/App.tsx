@@ -1048,46 +1048,86 @@ export default function App() {
   };
 
   // Node position preset base lookup mapping 
-  const getNodePosition = (node: WeaveNode, index: number) => {
-    const layoutPaymentsMap: { [key: string]: { x: number; y: number } } = {
-      "node-p1": { x: 180, y: 150 },
-      "node-p2": { x: 420, y: 80 },
-      "node-p3": { x: 680, y: 120 },
-      "node-p4": { x: 690, y: 350 },
-      "node-p5": { x: 190, y: 360 },
-      "node-p6": { x: 415, y: 240 },
-      "node-p7": { x: 430, y: 410 }
+  // ── Memory-fabric layout ──────────────────────────────────────────────────
+  // The evidence board reads left → right as the swarm's pipeline: sensed
+  // sources on the left, woven synthesis / flagged contradictions in the middle,
+  // corrections and proposed outputs on the right. We compute this with
+  // longest-path layering over the provenance edges (so every edge flows
+  // forward) plus a barycenter sweep (so connected nodes line up and edges stop
+  // crossing). One processed graph instead of a hand-placed tangle.
+  const BOARD_W = 1100, BOARD_H = 760, COL_W = 330, ROW_GAP = 188;
+  const graphLayout = React.useMemo(() => {
+    const pos: Record<string, { x: number; y: number; layer: number }> = {};
+    if (nodes.length === 0) return pos;
+
+    const ids = new Set(nodes.map(n => n.id));
+    const preds = new Map<string, string[]>();
+    const succs = new Map<string, string[]>();
+    nodes.forEach(n => { preds.set(n.id, []); succs.set(n.id, []); });
+    edges.forEach(e => {
+      if (ids.has(e.source) && ids.has(e.target) && e.source !== e.target) {
+        preds.get(e.target)!.push(e.source);
+        succs.get(e.source)!.push(e.target);
+      }
+    });
+
+    // Longest-path layering (depth from any root), cycle-guarded.
+    const layer = new Map<string, number>();
+    const depth = (id: string, stack: Set<string>): number => {
+      if (layer.has(id)) return layer.get(id)!;
+      if (stack.has(id)) return 0;
+      stack.add(id);
+      let L = 0;
+      for (const p of preds.get(id) || []) L = Math.max(L, depth(p, stack) + 1);
+      stack.delete(id);
+      layer.set(id, L);
+      return L;
     };
+    nodes.forEach(n => depth(n.id, new Set()));
 
-    const layoutBatteryMap: { [key: string]: { x: number; y: number } } = {
-      "node-b1": { x: 190, y: 150 },
-      "node-b2": { x: 490, y: 130 },
-      "node-b3": { x: 790, y: 160 },
-      "node-b4": { x: 490, y: 380 }
-    };
-
-    if (node.mission_id === "mission-payments" && layoutPaymentsMap[node.id]) {
-      return layoutPaymentsMap[node.id];
-    }
-    if (node.mission_id === "mission-battery" && layoutBatteryMap[node.id]) {
-      return layoutBatteryMap[node.id];
-    }
-
-    // Stage lanes for dynamically spawned missions: sense → synthesize → act,
-    // left to right. Each finding sits in the lane for its pipeline stage and
-    // stacks among its peers, so the board reads in one glance instead of the
-    // old index grid where cards collided and edges looked detached.
-    const stageOf = (n: WeaveNode) =>
+    // Isolated nodes (no edges) fall back to a type-based column.
+    const typeLayer = (n: WeaveNode) =>
       n.type === "synthesis" ? 1
-      : (n.type === "correction" || n.type === "action" || n.type === "output") ? 2
-      : 0;
-    const stage = stageOf(node);
-    const peers = nodes.filter((n) => stageOf(n) === stage);
-    const within = Math.max(0, peers.findIndex((n) => n.id === node.id));
-    const laneX = [205, 525, 845][stage];
-    const gapY = 198;
-    const colHeight = (peers.length - 1) * gapY;
-    return { x: laneX, y: 380 - colHeight / 2 + within * gapY };
+      : (n.type === "correction" || n.type === "action" || n.type === "output") ? 2 : 0;
+    nodes.forEach(n => {
+      if ((preds.get(n.id)!.length === 0) && (succs.get(n.id)!.length === 0)) {
+        layer.set(n.id, typeLayer(n));
+      }
+    });
+
+    const maxLayer = Math.max(0, ...nodes.map(n => layer.get(n.id) || 0));
+    const buckets: WeaveNode[][] = Array.from({ length: maxLayer + 1 }, () => []);
+    nodes.forEach(n => buckets[layer.get(n.id) || 0].push(n));
+
+    // Order within each column: column 0 by recency; later columns by the mean
+    // row of their already-placed predecessors (barycenter), which untangles edges.
+    const row = new Map<string, number>();
+    buckets.forEach((bucket, L) => {
+      if (L === 0) {
+        bucket.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      } else {
+        const bary = (n: WeaveNode) => {
+          const ps = (preds.get(n.id) || []).map(p => row.get(p)).filter((v): v is number => v !== undefined);
+          return ps.length ? ps.reduce((s, v) => s + v, 0) / ps.length : 1e6;
+        };
+        bucket.sort((a, b) => bary(a) - bary(b));
+      }
+      bucket.forEach((n, i) => row.set(n.id, i));
+    });
+
+    const startX = (BOARD_W - maxLayer * COL_W) / 2;
+    buckets.forEach((bucket, L) => {
+      const x = startX + L * COL_W;
+      const colH = (bucket.length - 1) * ROW_GAP;
+      bucket.forEach((n, i) => { pos[n.id] = { x, y: BOARD_H / 2 - colH / 2 + i * ROW_GAP, layer: L }; });
+    });
+    return pos;
+  }, [nodes, edges]);
+
+  const getNodePosition = (node: WeaveNode, index: number) => {
+    const p = graphLayout[node.id];
+    if (p) return { x: p.x, y: p.y };
+    return { x: 200 + (index % 3) * COL_W, y: 200 + Math.floor(index / 3) * ROW_GAP };
   };
 
   // Computes base preset coordinates combined with user-dragged relative offsets 
@@ -1210,7 +1250,7 @@ export default function App() {
 
       {/* --- RE-ENGINEERED NAVBAR GLOBAL PANEL --- */}
       {!isMaximized && (
-      <header className={`px-6 py-3 sticky top-0 z-30 flex flex-wrap items-center justify-between gap-4 border-b glass ${t.bgHeader}`}>
+      <header className={`px-5 py-3 sticky top-0 z-30 flex flex-wrap items-center justify-between gap-3 border-b glass ${t.bgHeader}`}>
         {/* LOGO TITLE SECTION */}
         <div className="flex items-center gap-3">
           <div className="relative">
@@ -1225,7 +1265,7 @@ export default function App() {
                 Team Fabric
               </span>
             </h1>
-            <p className={`text-[10px] font-mono ${t.textMute}`}>Autonomous Self-Correcting Web Intelligence Swarm</p>
+            <p className={`text-[10px] font-mono hidden 2xl:block ${t.textMute}`}>Autonomous Self-Correcting Web Intelligence Swarm</p>
           </div>
         </div>
 
@@ -1242,7 +1282,7 @@ export default function App() {
             }`}
           >
             <Compass className="w-3.5 h-3.5" />
-            Overview Dashboard
+            Overview
           </button>
 
           <button
@@ -1254,7 +1294,7 @@ export default function App() {
             }`}
           >
             <LayoutGrid className="w-3.5 h-3.5" />
-            Swarm Workspace
+            Workspace
           </button>
 
           {([
@@ -1351,6 +1391,8 @@ export default function App() {
           </form>
         )}
 
+        {/* RIGHT ACTION CLUSTER — account · model · theme (kept as one unit) */}
+        <div className="flex items-center gap-2 flex-shrink-0">
         {/* GREEN CREDITS WALLET CHIP / SIGN-IN */}
         {handle ? (
           <button
@@ -1405,6 +1447,7 @@ export default function App() {
             <Moon className="w-4 h-4 text-slate-700" />
           )}
         </button>
+        </div>
       </header>
       )}
 
@@ -2478,23 +2521,33 @@ export default function App() {
                 >
                   
                   {/* CENTRAL VIRTUAL BOARD AREAL */}
-                  <div className="w-[1050px] h-[750px] absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-                    
+                  <div className="w-[1100px] h-[760px] absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+
                     {/* SVG EDGE RENDERING LAYER */}
-                    <svg className="absolute inset-0 w-full h-full pointer-events-none z-0">
+                    <svg className="absolute inset-0 w-full h-full pointer-events-none z-0" style={{ overflow: "visible" }}>
                       <defs>
-                        <marker id="arrow" viewBox="0 0 10 10" refX="28" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                          <path d="M 0 1 L 10 5 L 0 9 z" fill={t.svgLines} />
+                        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
+                          <path d="M 0 1 L 9 5 L 0 9 z" fill={isDark ? "#3a4467" : "#b9b3d6"} />
                         </marker>
-                        <marker id="arrow-contradict" viewBox="0 0 10 10" refX="28" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                          <path d="M 0 1 L 10 5 L 0 9 z" fill="#cb2e2e" />
+                        <marker id="arrow-active" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
+                          <path d="M 0 1 L 9 5 L 0 9 z" fill="#9d85ff" />
                         </marker>
-                        <marker id="arrow-correct" viewBox="0 0 10 10" refX="28" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                          <path d="M 0 1 L 10 5 L 0 9 z" fill="#167e45" />
+                        <marker id="arrow-contradict" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
+                          <path d="M 0 1 L 9 5 L 0 9 z" fill="#fb7185" />
                         </marker>
+                        <marker id="arrow-correct" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
+                          <path d="M 0 1 L 9 5 L 0 9 z" fill="#34d399" />
+                        </marker>
+                        <filter id="edge-glow" x="-30%" y="-30%" width="160%" height="160%">
+                          <feGaussianBlur stdDeviation="3.5" result="b" />
+                          <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+                        </filter>
                       </defs>
 
-                      {/* Connects all edges with responsive Bezier Curves */}
+                      {/* Provenance edges: boundary-anchored cubic curves that flow
+                          forward through the layered fabric. Idle edges are a calm
+                          baseline; the focused thread (selected / hovered node or
+                          brief sentence) brightens, glows and reveals its label. */}
                       {edges.map(edge => {
                         const srcNode = nodes.find(n => n.id === edge.source);
                         const tgtNode = nodes.find(n => n.id === edge.target);
@@ -2502,58 +2555,64 @@ export default function App() {
 
                         const srcIndex = nodes.findIndex(n => n.id === edge.source);
                         const tgtIndex = nodes.findIndex(n => n.id === edge.target);
-                        
-                        // Grab actual positions incorporating real-time offsets
                         const p1 = getActualNodePosition(srcNode, srcIndex);
                         const p2 = getActualNodePosition(tgtNode, tgtIndex);
 
-                        // Curvatures math around centers
-                        const offsetCurve = 45; 
-                        const midX = (p1.x + p2.x) / 2;
-                        const midY = (p1.y + p2.y) / 2 - (p1.x === p2.x ? 0 : offsetCurve);
+                        // Anchor at the vertical centre of each card; exit/enter on the
+                        // side that faces the other card so the curve never crosses a card.
+                        const HALF_W = 106, MID_Y = 46;
+                        const fwd = p2.x >= p1.x;
+                        const sx = p1.x + (fwd ? HALF_W : -HALF_W), sy = p1.y + MID_Y;
+                        const tx = p2.x + (fwd ? -HALF_W : HALF_W), ty = p2.y + MID_Y;
+                        const dx = (fwd ? 1 : -1) * Math.max(40, Math.abs(tx - sx) * 0.45);
+                        const path = `M ${sx} ${sy} C ${sx + dx} ${sy}, ${tx - dx} ${ty}, ${tx} ${ty}`;
+                        const lx = (sx + tx) / 2, ly = (sy + ty) / 2;
 
                         const isConContradict = edge.relation === "contradicts";
                         const isConCorrect = edge.relation === "correction-applied";
-                        
-                        const isEdgeActive =
-                          !isThreadPullingActive() ||
-                          (selectedNodeId && (edge.source === selectedNodeId || edge.target === selectedNodeId)) ||
-                          (hoveredNodeId && (edge.source === hoveredNodeId || edge.target === hoveredNodeId)) ||
-                          (hoveredSentenceId && brief?.sentences.find(s => s.id === hoveredSentenceId)?.provenance.includes(edge.source) && brief?.sentences.find(s => s.id === hoveredSentenceId)?.provenance.includes(edge.target));
 
-                        const edgeColor = isConContradict
-                          ? "stroke-red-500/35"
-                          : isConCorrect
-                          ? "stroke-emerald-500/35"
-                          : isDark ? "stroke-slate-800" : "stroke-slate-200/90";
+                        const threading = isThreadPullingActive();
+                        const sentence = hoveredSentenceId ? brief?.sentences.find(s => s.id === hoveredSentenceId) : null;
+                        const touchesFocus =
+                          (selectedNodeId === edge.source || selectedNodeId === edge.target) ||
+                          (hoveredNodeId === edge.source || hoveredNodeId === edge.target) ||
+                          (!!sentence && sentence.provenance.includes(edge.source) && sentence.provenance.includes(edge.target));
+                        const focused = threading && touchesFocus;
 
-                        const activeEdgeColor = isConContradict
-                          ? "stroke-red-500"
-                          : isConCorrect
-                          ? "stroke-emerald-500"
-                          : "stroke-violet-500";
+                        // Idle baseline keeps the whole fabric readable without shouting.
+                        const idleStroke = isConContradict ? "#fb7185" : isConCorrect ? "#34d399" : (isDark ? "#2b3357" : "#cfc9e4");
+                        const activeStroke = isConContradict ? "#fb7185" : isConCorrect ? "#34d399" : "#9d85ff";
+                        const stroke = focused ? activeStroke : idleStroke;
+                        const dimmed = threading && !touchesFocus;
+                        const marker = focused
+                          ? (isConContradict ? "arrow-contradict" : isConCorrect ? "arrow-correct" : "arrow-active")
+                          : (isConContradict ? "arrow-contradict" : isConCorrect ? "arrow-correct" : "arrow");
 
                         return (
-                          <g key={edge.id} className="transition-all duration-300">
+                          <g key={edge.id} style={{ opacity: dimmed ? 0.12 : 1, transition: "opacity 0.25s ease" }}>
+                            {focused && (
+                              <path d={path} fill="none" stroke={activeStroke} strokeWidth={6} strokeLinecap="round"
+                                    opacity={0.22} filter="url(#edge-glow)" />
+                            )}
                             <path
-                              d={`M ${p1.x} ${p1.y + 35} Q ${midX} ${midY} ${p2.x} ${p2.y}`}
+                              d={path}
                               fill="none"
-                              className={`${isEdgeActive ? activeEdgeColor : edgeColor} transition-all`}
-                              strokeWidth={isEdgeActive ? 2.5 : 1.2}
-                              strokeDasharray={isConContradict ? "3 3" : undefined}
-                              markerEnd={`url(#${isConContradict ? "arrow-contradict" : isConCorrect ? "arrow-correct" : "arrow"})`}
+                              stroke={stroke}
+                              strokeWidth={focused ? 2.4 : 1.5}
+                              strokeLinecap="round"
+                              strokeDasharray={isConContradict ? "1 6" : undefined}
+                              style={{ transition: "stroke 0.25s ease, stroke-width 0.25s ease" }}
+                              markerEnd={`url(#${marker})`}
                             />
-                            {/* Interactive displaying path connections labels */}
-                            {isEdgeActive && (
-                              <text
-                                x={midX}
-                                y={midY - 4}
-                                fill={isConContradict ? "#ef4444" : isConCorrect ? "#10b981" : "#7c5cff"}
-                                className="text-[8px] font-mono uppercase font-bold text-anchor-middle select-none text-center bg-white dark:bg-black p-0.5"
-                                textAnchor="middle"
-                              >
-                                {edge.label}
-                              </text>
+                            {focused && (
+                              <g>
+                                <rect x={lx - edge.label.length * 3.1 - 5} y={ly - 17} width={edge.label.length * 6.2 + 10} height={13}
+                                      rx={6.5} fill={isDark ? "#0c101f" : "#ffffff"} stroke={activeStroke} strokeOpacity={0.4} strokeWidth={0.75} />
+                                <text x={lx} y={ly - 7.5} fill={activeStroke} textAnchor="middle"
+                                      className="text-[8px] font-mono uppercase font-bold tracking-wide select-none">
+                                  {edge.label}
+                                </text>
+                              </g>
                             )}
                           </g>
                         );
@@ -2602,7 +2661,7 @@ export default function App() {
                               : isSelected
                               ? "ring-1 ring-indigo-500 scale-[1.02] shadow-xl"
                               : "shadow-md hover:shadow-lg hover:-translate-y-0.5"
-                          } ${isFocused ? "opacity-100 filter-none" : "opacity-30 scale-[0.96] blur-[0.5px]"} ${
+                          } ${isFocused ? "opacity-100" : "opacity-40 scale-[0.98]"} ${
                             isDark ? "bg-[#0c101f]/95 border-white/10 text-slate-200 hover:border-indigo-400/50" : "bg-white border-slate-200 text-slate-800 hover:border-indigo-400/60"
                           }`}
                         >
@@ -2981,64 +3040,109 @@ export default function App() {
                             <Mail className="w-5 h-5 text-indigo-400" />
                           </span>
                           <p className={`text-xs max-w-sm leading-relaxed ${t.textMute}`}>
-                            The Actor agent turns verified findings into ready-to-send email drafts, briefs and reminders. Approve one and it's on your clipboard.
+                            The Actor agent turns verified findings into next moves: outreach to draft, an entity to watch, a thread to deep-dive, or a decision to lock in. Each is one click, and never auto-sends.
                           </p>
                         </div>
                       )}
-                      {actions.map(act => (
+                      {actions.map(act => {
+                        const copy = (txt: string) => { try { navigator.clipboard.writeText(txt); } catch (e) { console.error(e); } };
+                        const k = act.kind;
+                        const isMail = k === "outreach" || k === "draft-email" || k === "draft-application";
+                        const meta =
+                          isMail ? { Icon: Mail, label: "Outreach", tone: "violet" } :
+                          k === "monitor" ? { Icon: Radio, label: "Standing Watch", tone: "emerald" } :
+                          k === "deep-dive" ? { Icon: Crosshair, label: "Deep Dive", tone: "cyan" } :
+                          k === "decision" ? { Icon: Zap, label: "Decision", tone: "amber" } :
+                          k === "reminder" ? { Icon: Clock, label: "Reminder", tone: "amber" } :
+                          k === "alert" ? { Icon: ShieldAlert, label: "Alert", tone: "rose" } :
+                          { Icon: FileText, label: "Brief", tone: "violet" };
+                        const tones: Record<string, { text: string; chip: string; solid: string; dot: string }> = {
+                          violet: { text: "text-violet-600 dark:text-violet-300", chip: "border-violet-500/25 bg-violet-500/10", solid: "bg-violet-600 hover:bg-violet-500", dot: "bg-violet-500" },
+                          emerald: { text: "text-emerald-600 dark:text-emerald-300", chip: "border-emerald-500/25 bg-emerald-500/10", solid: "bg-emerald-600 hover:bg-emerald-500", dot: "bg-emerald-500" },
+                          cyan: { text: "text-cyan-600 dark:text-cyan-300", chip: "border-cyan-500/25 bg-cyan-500/10", solid: "bg-cyan-600 hover:bg-cyan-500", dot: "bg-cyan-500" },
+                          amber: { text: "text-amber-600 dark:text-amber-300", chip: "border-amber-500/25 bg-amber-500/10", solid: "bg-amber-600 hover:bg-amber-500", dot: "bg-amber-500" },
+                          rose: { text: "text-rose-600 dark:text-rose-300", chip: "border-rose-500/25 bg-rose-500/10", solid: "bg-rose-600 hover:bg-rose-500", dot: "bg-rose-500" },
+                        };
+                        const tone = tones[meta.tone];
+                        const MetaIcon = meta.Icon;
+
+                        // Type-specific one-click handoff (also marks the move as taken).
+                        const primary =
+                          isMail ? {
+                            label: act.payload.to ? "Open in Mail" : "Copy draft", Icon: Mail,
+                            run: () => { copy(act.payload.body); if (act.payload.to) window.open(`mailto:${act.payload.to}?subject=${encodeURIComponent(act.payload.subject || act.title)}&body=${encodeURIComponent(act.payload.body || "")}`); handleApproveAction(act.id); }
+                          } : k === "monitor" ? {
+                            label: "Start watch", Icon: Radio,
+                            run: () => { handleApproveAction(act.id); if (!selectedMission?.monitoring) toggleMonitor(); }
+                          } : k === "deep-dive" ? {
+                            label: "Launch deep-dive", Icon: Crosshair,
+                            run: () => { handleApproveAction(act.id); deepDive(act.payload.seed || act.title); }
+                          } : k === "reminder" && act.payload.deadline ? {
+                            label: "Add to calendar", Icon: Clock,
+                            run: () => { window.open(`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(act.title)}&details=${encodeURIComponent(act.payload.body || "")}&dates=${String(act.payload.deadline).replace(/-/g, "")}/${String(act.payload.deadline).replace(/-/g, "")}`, "_blank"); handleApproveAction(act.id); }
+                          } : {
+                            label: "Copy & commit", Icon: Check,
+                            run: () => { copy(act.payload.body); handleApproveAction(act.id); }
+                          };
+                        const PrimaryIcon = primary.Icon;
+
+                        return (
                         <div
                           key={act.id}
-                          className={`border rounded-lg p-3 transition-all flex flex-col gap-2 relative ${
-                            isDark
-                              ? "bg-[#0c101a] border-white/5 hover:border-white/10"
-                              : "bg-white border-slate-200 hover:border-slate-300"
+                          className={`border rounded-xl p-3 transition-all flex flex-col gap-2 relative ${
+                            isDark ? "bg-white/[0.03] border-white/[0.07] hover:border-white/15" : "bg-white border-slate-200 hover:border-slate-300 shadow-[0_2px_8px_rgba(20,16,31,0.04)]"
                           } ${
                             act.status === "approved"
-                              ? (isDark ? "border-emerald-500/30 bg-emerald-950/15 shadow-sm shadow-emerald-500/5" : "border-emerald-500/30 bg-emerald-50/15 shadow-sm shadow-emerald-500/5")
-                              : act.status === "dismissed"
-                              ? "opacity-35"
-                              : ""
+                              ? "border-emerald-500/40"
+                              : act.status === "dismissed" ? "opacity-40" : ""
                           }`}
                         >
-                          <div className="flex justify-between items-start select-none">
-                            <span className={`text-[8.5px] font-mono px-1.5 py-0.5 border rounded uppercase ${
-                              act.kind === "draft-email" ? "text-purple-600 border-purple-500/20 bg-purple-500/5" : "text-violet-600 border-violet-500/20 bg-violet-500/5"
-                            }`}>
-                              {act.kind}
+                          <div className="flex justify-between items-center select-none">
+                            <span className={`inline-flex items-center gap-1.5 text-[8.5px] font-mono font-bold px-2 py-0.5 border rounded-full uppercase tracking-wide ${tone.text} ${tone.chip}`}>
+                              <MetaIcon className="w-2.5 h-2.5" /> {meta.label}
                             </span>
-                            
                             {act.status === "approved" && (
-                              <span className="text-[8.5px] font-mono bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-400 px-1.5 py-0.5 border border-emerald-900/30 rounded flex items-center gap-1 select-none font-bold">
-                                <Check className="w-2.5 h-2.5" /> Approved
+                              <span className="text-[8.5px] font-mono text-emerald-600 dark:text-emerald-300 flex items-center gap-1 font-bold">
+                                <Check className="w-2.5 h-2.5" /> taken
                               </span>
                             )}
                           </div>
 
-                          <h4 className="text-[11px] sm:text-[11.5px] font-bold text-slate-900 dark:text-white leading-snug">
+                          <h4 className="text-[11.5px] font-bold text-slate-900 dark:text-white leading-snug font-display">
                             {act.title}
                           </h4>
-                          
-                          <p className={`text-[9.5px] italic ${t.textMute}`}>
-                            "{act.rationale}"
+
+                          <p className={`text-[10px] leading-relaxed ${isDark ? "text-white/55" : "text-slate-500"}`}>
+                            {act.rationale}
                           </p>
 
-                          {/* document / email preview */}
-                          <div className={`border rounded-lg overflow-hidden ${isDark ? "bg-black/40 border-white/5" : "bg-slate-50 border-slate-200/60"}`}>
-                            {act.kind === "draft-email" && (act.payload.to || act.payload.subject) && (
-                              <div className={`px-2 py-1.5 border-b text-[9px] font-mono flex flex-col gap-0.5 ${isDark ? "border-white/5 bg-white/[0.03] text-gray-400" : "border-slate-200/60 bg-white text-slate-500"}`}>
-                                {act.payload.to && <span><span className="opacity-60">To:</span> <span className={t.textTitle}>{act.payload.to}</span></span>}
-                                {act.payload.subject && <span><span className="opacity-60">Subject:</span> <span className={t.textTitle}>{act.payload.subject}</span></span>}
+                          {/* type-specific preview */}
+                          <div className={`border rounded-lg overflow-hidden ${isDark ? "bg-black/30 border-white/[0.06]" : "bg-slate-50 border-slate-200/70"}`}>
+                            {isMail && (act.payload.to || act.payload.subject) && (
+                              <div className={`px-2 py-1.5 border-b text-[9px] font-mono flex flex-col gap-0.5 ${isDark ? "border-white/[0.06] text-white/45" : "border-slate-200/70 text-slate-500"}`}>
+                                {act.payload.to && <span><span className="opacity-60">To:</span> <span className="text-slate-900 dark:text-white">{act.payload.to}</span></span>}
+                                {act.payload.subject && <span><span className="opacity-60">Subject:</span> <span className="text-slate-900 dark:text-white">{act.payload.subject}</span></span>}
                               </div>
                             )}
-                            <div className={`p-2 text-[10px] font-mono leading-normal h-20 overflow-y-auto whitespace-pre-wrap ${isDark ? "text-gray-300" : "text-slate-700"}`}>
+                            {k === "monitor" && act.payload.target && (
+                              <div className={`px-2 py-1.5 border-b text-[9px] font-mono flex items-center gap-1.5 ${isDark ? "border-white/[0.06] text-emerald-300" : "border-slate-200/70 text-emerald-600"}`}>
+                                <Radio className="w-2.5 h-2.5" /> Watching: <span className="text-slate-900 dark:text-white truncate">{act.payload.target}</span>
+                              </div>
+                            )}
+                            {k === "deep-dive" && act.payload.seed && (
+                              <div className={`px-2 py-1.5 border-b text-[9px] font-mono flex items-start gap-1.5 ${isDark ? "border-white/[0.06] text-cyan-300" : "border-slate-200/70 text-cyan-600"}`}>
+                                <Crosshair className="w-2.5 h-2.5 mt-0.5 flex-shrink-0" /> Spawns: <span className="text-slate-900 dark:text-white">{act.payload.seed}</span>
+                              </div>
+                            )}
+                            <div className={`p-2 text-[10px] font-mono leading-normal max-h-20 overflow-y-auto whitespace-pre-wrap ${isDark ? "text-white/70" : "text-slate-700"}`}>
                               {act.payload.body}
                             </div>
                           </div>
 
-                          {/* action provenance: which signals earned this draft */}
+                          {/* provenance: which findings earned this move */}
                           {act.provenance && act.provenance.length > 0 && (
                             <div className="flex flex-wrap items-center gap-1 select-none no-pan">
-                              <span className={`text-[8px] font-mono uppercase ${t.textMute}`}>Based on {act.provenance.length} signal{act.provenance.length > 1 ? "s" : ""}:</span>
+                              <span className={`text-[8px] font-mono uppercase ${isDark ? "text-white/40" : "text-slate-400"}`}>From {act.provenance.length} finding{act.provenance.length > 1 ? "s" : ""}:</span>
                               {act.provenance.slice(0, 3).map(pid => {
                                 const pn = nodes.find(n => n.id === pid);
                                 if (!pn) return null;
@@ -3057,22 +3161,18 @@ export default function App() {
                           )}
 
                           {act.status === "proposed" && (
-                            <div className="flex gap-2 mt-1 select-none no-pan">
+                            <div className="flex gap-2 mt-0.5 select-none no-pan">
                               <button
-                                onClick={() => {
-                                  try { navigator.clipboard.writeText(act.payload.body); } catch (e) { console.error(e); }
-                                  handleApproveAction(act.id);
-                                }}
-                                className="flex-1 bg-indigo-600 text-white hover:bg-indigo-500 text-[10px] font-bold py-1.5 px-2 rounded-md transition-all flex items-center justify-center gap-1 shadow-sm press"
-                                title="Approve this draft and copy its content to the clipboard"
+                                onClick={primary.run}
+                                className={`flex-1 ${tone.solid} text-white text-[10px] font-bold py-1.5 px-2 rounded-lg transition-all flex items-center justify-center gap-1.5 shadow-sm press`}
+                                title={primary.label}
                               >
-                                <Check className="w-3.5 h-3.5" />
-                                Approve & Copy
+                                <PrimaryIcon className="w-3.5 h-3.5" /> {primary.label}
                               </button>
                               <button
                                 onClick={() => handleDismissAction(act.id)}
-                                className="bg-slate-100 border border-slate-200 text-slate-500 hover:text-rose-500 hover:bg-rose-50/50 p-1 px-2 rounded-md text-[10px] dark:bg-white/5 dark:border-white/5 dark:text-gray-400 dark:hover:border-rose-900/20 transition-all flex items-center press"
-                                title="Dismiss to archive (kept, never deleted)"
+                                className={`p-1 px-2 rounded-lg text-[10px] transition-all flex items-center press border ${isDark ? "border-white/10 text-white/50 hover:text-rose-400 hover:border-rose-500/30" : "border-slate-200 text-slate-400 hover:text-rose-500 hover:bg-rose-50"}`}
+                                title="Dismiss (archived, never deleted)"
                               >
                                 <X className="w-3.5 h-3.5" />
                               </button>
@@ -3081,34 +3181,23 @@ export default function App() {
 
                           {act.status === "approved" && (
                             <div className="flex flex-wrap gap-2 no-pan">
-                              {/* Executable handoff: open a prefilled draft (never auto-sends) */}
-                              {act.payload.to && (
-                                <a
-                                  href={`mailto:${act.payload.to}?subject=${encodeURIComponent(act.payload.subject || act.title)}&body=${encodeURIComponent(act.payload.body || "")}`}
-                                  className="flex-1 bg-violet-600 hover:bg-violet-500 text-white text-[10px] font-bold py-1 px-2 rounded-md transition-all flex items-center justify-center gap-1 shadow-sm"
-                                >
-                                  <Mail className="w-3.5 h-3.5" /> Open in Mail
-                                </a>
-                              )}
-                              {act.payload.deadline && (
-                                <a
-                                  href={`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(act.title)}&details=${encodeURIComponent(act.payload.body || "")}&dates=${String(act.payload.deadline).replace(/-/g, "")}/${String(act.payload.deadline).replace(/-/g, "")}`}
-                                  target="_blank" rel="noreferrer"
-                                  className="flex-1 bg-amber-600 hover:bg-amber-500 text-white text-[10px] font-bold py-1 px-2 rounded-md transition-all flex items-center justify-center gap-1 shadow-sm"
-                                >
-                                  <Clock className="w-3.5 h-3.5" /> Add to Calendar
-                                </a>
-                              )}
                               <button
-                                onClick={() => { try { navigator.clipboard.writeText(act.payload.body); } catch (e) { console.error(e); } }}
-                                className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold py-1 px-2 rounded-md transition-all flex items-center justify-center gap-1 shadow-sm"
+                                onClick={primary.run}
+                                className={`flex-1 ${tone.solid} text-white text-[10px] font-bold py-1 px-2 rounded-lg transition-all flex items-center justify-center gap-1.5 shadow-sm`}
+                              >
+                                <PrimaryIcon className="w-3.5 h-3.5" /> {primary.label} again
+                              </button>
+                              <button
+                                onClick={() => copy(act.payload.body)}
+                                className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 border ${isDark ? "border-white/10 text-white/70 hover:border-white/25" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}
                               >
                                 <FileText className="w-3.5 h-3.5" /> Copy
                               </button>
                             </div>
                           )}
                         </div>
-                      ))}
+                      );
+                      })}
                     </div>
                   )}
                 </div>

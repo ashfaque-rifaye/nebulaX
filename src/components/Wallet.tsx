@@ -5,7 +5,7 @@ import { PledgeDef } from "./GreenCredits.tsx";
 import {
   X, Leaf, Coins, TrendingUp, LogOut, ArrowDownRight, ArrowUpRight, Loader2, Check, Gauge,
   Rocket, RotateCcw, Wand2, Bot, MessageSquare, Clock, Image as ImageIcon, Clapperboard, Sparkles, Zap,
-  Bike, Salad, Thermometer, Lightbulb, Recycle,
+  Bike, Salad, Thermometer, Lightbulb, Recycle, KeyRound,
 } from "lucide-react";
 
 const SRC_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -41,6 +41,28 @@ export const Wallet: React.FC<Props> = ({ isDark, profile, pledges, minReserve, 
   const [ledger, setLedger] = useState<LedgerEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"activity" | "earn">("activity");
+  // change-passphrase
+  const [secOpen, setSecOpen] = useState(false);
+  const [curPass, setCurPass] = useState("");
+  const [newPass, setNewPass] = useState("");
+  const [secBusy, setSecBusy] = useState(false);
+  const [secMsg, setSecMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const changePassphrase = async () => {
+    setSecMsg(null);
+    if (newPass.length < 6) { setSecMsg({ ok: false, text: "New passphrase must be 6+ characters." }); return; }
+    setSecBusy(true);
+    try {
+      const res = await fetch("/api/auth/change-passphrase", {
+        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
+        body: JSON.stringify({ currentPassphrase: curPass, newPassphrase: newPass }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok) { setSecMsg({ ok: true, text: "Passphrase updated." }); setCurPass(""); setNewPass(""); setTimeout(() => setSecOpen(false), 1200); }
+      else setSecMsg({ ok: false, text: d.error || "Couldn't update passphrase." });
+    } catch { setSecMsg({ ok: false, text: "Network error." }); }
+    finally { setSecBusy(false); }
+  };
 
   const loadLedger = async () => {
     if (!profile) return;
@@ -86,6 +108,9 @@ export const Wallet: React.FC<Props> = ({ isDark, profile, pledges, minReserve, 
               </div>
             </div>
             <div className="flex items-center gap-1.5">
+              <button onClick={() => { setSecOpen(s => !s); setSecMsg(null); }} title="Change passphrase" className={`p-1.5 rounded-lg transition-colors ${secOpen ? "text-violet-400 bg-violet-500/10" : isDark ? "hover:bg-white/10 text-white/55" : "hover:bg-slate-100 text-slate-500"}`}>
+                <KeyRound className="w-4 h-4" />
+              </button>
               <button onClick={onSignOut} title="Sign out" className={`p-1.5 rounded-lg transition-colors ${isDark ? "hover:bg-white/10 text-white/55" : "hover:bg-slate-100 text-slate-500"}`}>
                 <LogOut className="w-4 h-4" />
               </button>
@@ -94,6 +119,30 @@ export const Wallet: React.FC<Props> = ({ isDark, profile, pledges, minReserve, 
               </button>
             </div>
           </div>
+
+          {/* change-passphrase inline form */}
+          {secOpen && (
+            <div className={`relative mt-3 rounded-2xl border p-3 flex flex-col gap-2 ${isDark ? "bg-black/30 border-white/10" : "bg-white border-violet-500/15"}`}>
+              <span className={`text-[10px] font-mono uppercase tracking-widest ${subtle}`}>Change passphrase</span>
+              <input
+                type="password" value={curPass} onChange={e => setCurPass(e.target.value)}
+                placeholder="current passphrase"
+                className={`w-full bg-transparent border rounded-lg px-2.5 py-1.5 text-[12px] focus:outline-none focus:border-violet-500 ${isDark ? "border-white/10 text-white placeholder-white/30" : "border-violet-500/15 text-slate-800 placeholder-slate-400"}`}
+              />
+              <div className="flex items-center gap-2">
+                <input
+                  type="password" value={newPass} onChange={e => setNewPass(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") changePassphrase(); }}
+                  placeholder="new passphrase (6+)"
+                  className={`flex-1 bg-transparent border rounded-lg px-2.5 py-1.5 text-[12px] focus:outline-none focus:border-violet-500 ${isDark ? "border-white/10 text-white placeholder-white/30" : "border-violet-500/15 text-slate-800 placeholder-slate-400"}`}
+                />
+                <button onClick={changePassphrase} disabled={secBusy || !curPass || !newPass} className="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-luna-gradient text-white disabled:opacity-40 flex items-center gap-1">
+                  {secBusy ? <Loader2 className="w-3 h-3 animate-spin" /> : null} Save
+                </button>
+              </div>
+              {secMsg && <span className={`text-[10.5px] ${secMsg.ok ? "text-emerald-400" : "text-rose-400"}`}>{secMsg.text}</span>}
+            </div>
+          )}
 
           <div className="relative mt-4 flex items-end gap-2">
             <Coins className="w-7 h-7 text-emerald-400 mb-1" />

@@ -3314,6 +3314,20 @@ export default function App() {
                           </a>
                         </div>
                       )}
+
+                      {/* Visualize this finding in the Media Studio */}
+                      <button
+                        onClick={() => {
+                          setStudioSeed(`${selectedNode.title} — ${selectedNode.content.slice(0, 180)}`);
+                          setStudioOpen(true);
+                        }}
+                        className={`mt-2 w-full flex items-center justify-center gap-1.5 text-[10px] font-bold py-2 rounded-lg border transition-all press no-pan ${
+                          isDark ? "text-violet-200 bg-violet-500/10 border-violet-500/25 hover:border-violet-500/50" : "text-violet-700 bg-violet-500/5 border-violet-500/20 hover:border-violet-500/40"
+                        }`}
+                        title="Generate an image or video from this finding"
+                      >
+                        <ImageIcon className="w-3 h-3" /> Visualize this finding
+                      </button>
                     </div>
 
                     {/* CITATION AND PROVENANCE LISTS */}

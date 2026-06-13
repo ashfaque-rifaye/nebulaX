@@ -132,6 +132,24 @@ async function startServer() {
     res.json(db.publicProfile(db.getOrCreateProfile(req.handle)));
   });
 
+  // Change passphrase: verify the current one, then re-hash the new one.
+  app.post("/api/auth/change-passphrase", requireAuth, (req, res) => {
+    try {
+      const handle = req.handle as string;
+      const stored = db.getCredential(handle);
+      const current = String(req.body?.currentPassphrase ?? "");
+      if (!stored || !verifyPassphrase(current, stored)) {
+        return res.status(401).json({ error: "Current passphrase is incorrect." });
+      }
+      const pw = validatePassphrase(req.body?.newPassphrase);
+      if ("error" in pw) return res.status(400).json({ error: pw.error });
+      db.setCredential(handle, hashPassphrase(pw.pass));
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || "Failed to change passphrase" });
+    }
+  });
+
   // Healthcheck & smoke test
   app.get("/api/health", (req, res) => {
     res.json({

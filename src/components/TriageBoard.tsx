@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { WeaveNode } from "../types.ts";
-import { ShieldAlert, ShieldCheck, FileText, Undo, GripVertical } from "lucide-react";
+import { GitCompareArrows, ShieldCheck, AlertTriangle, Undo, GripVertical } from "lucide-react";
 
 interface TriageBoardProps {
   nodes: WeaveNode[];
@@ -9,26 +9,26 @@ interface TriageBoardProps {
   onRequestCorrection: (node: WeaveNode) => void;
 }
 
-type LaneKey = "unverified" | "verified" | "drift" | "corrected";
+type LaneKey = "review" | "verified" | "conflict" | "resolved";
 
 const LANES: { key: LaneKey; title: string; hint: string; accent: string; icon: React.ReactNode }[] = [
-  { key: "unverified", title: "Unverified", hint: "awaiting credibility check", accent: "slate", icon: <FileText className="w-3.5 h-3.5" /> },
-  { key: "verified", title: "Verified", hint: "high confidence ≥ 80%", accent: "emerald", icon: <ShieldCheck className="w-3.5 h-3.5" /> },
-  { key: "drift", title: "Drift ⚠", hint: "Sentinel flagged conflict", accent: "red", icon: <ShieldAlert className="w-3.5 h-3.5" /> },
-  { key: "corrected", title: "Corrected ✓", hint: "human veto applied", accent: "blue", icon: <Undo className="w-3.5 h-3.5" /> },
+  { key: "verified", title: "Verified", hint: "cross-checked across sources", accent: "emerald", icon: <ShieldCheck className="w-3.5 h-3.5" /> },
+  { key: "review", title: "Needs review", hint: "single or unconfirmed source", accent: "amber", icon: <AlertTriangle className="w-3.5 h-3.5" /> },
+  { key: "conflict", title: "Conflict", hint: "sources disagree", accent: "rose", icon: <GitCompareArrows className="w-3.5 h-3.5" /> },
+  { key: "resolved", title: "Resolved", hint: "fixed with a correction", accent: "blue", icon: <Undo className="w-3.5 h-3.5" /> },
 ];
 
 function defaultLane(n: WeaveNode): LaneKey {
-  if (n.type === "correction") return "corrected";
-  if (n.flagged_by === "sentinel") return "drift";
-  if (n.confidence >= 0.8) return "verified";
-  return "unverified";
+  if (n.type === "correction") return "resolved";
+  if (n.conflict || n.flagged_by === "sentinel") return "conflict";
+  if (n.verified === false) return "review";
+  return "verified";
 }
 
 const accentClasses: Record<string, { head: string; ring: string; dot: string }> = {
-  slate: { head: "text-slate-500", ring: "border-slate-300/40", dot: "bg-slate-400" },
+  amber: { head: "text-amber-500", ring: "border-amber-400/40", dot: "bg-amber-400" },
   emerald: { head: "text-emerald-500", ring: "border-emerald-500/40", dot: "bg-emerald-500" },
-  red: { head: "text-red-500", ring: "border-red-500/40", dot: "bg-red-500" },
+  rose: { head: "text-rose-500", ring: "border-rose-500/40", dot: "bg-rose-500" },
   blue: { head: "text-violet-500", ring: "border-violet-500/40", dot: "bg-violet-500" },
 };
 
@@ -41,7 +41,7 @@ export const TriageBoard: React.FC<TriageBoardProps> = ({ nodes, isDark, onSelec
   const laneOf = (n: WeaveNode): LaneKey => overrides[n.id] ?? defaultLane(n);
 
   const grouped = useMemo(() => {
-    const g: Record<LaneKey, WeaveNode[]> = { unverified: [], verified: [], drift: [], corrected: [] };
+    const g: Record<LaneKey, WeaveNode[]> = { review: [], verified: [], conflict: [], resolved: [] };
     nodes.forEach((n) => g[laneOf(n)].push(n));
     return g;
   }, [nodes, overrides]);
@@ -52,8 +52,8 @@ export const TriageBoard: React.FC<TriageBoardProps> = ({ nodes, isDark, onSelec
     setOverLane(null);
     setDragId(null);
     if (!node) return;
-    // Dropping a correctable node into "Corrected" opens the human-veto flow.
-    if (lane === "corrected" && (node.type === "web-signal" || node.type === "synthesis")) {
+    // Dropping a correctable finding into "Resolved" opens the correction flow.
+    if (lane === "resolved" && (node.type === "web-signal" || node.type === "synthesis")) {
       onRequestCorrection(node);
       return;
     }
@@ -68,7 +68,7 @@ export const TriageBoard: React.FC<TriageBoardProps> = ({ nodes, isDark, onSelec
           Agent Triage Board
         </h2>
         <p className={`text-[11px] ${isDark ? "text-gray-400" : "text-slate-500"}`}>
-          Drag signals between lanes to re-triage. Drop a card on <span className="font-semibold">Corrected ✓</span> to file a human-veto override.
+          Drag findings between lanes to re-triage. Drop a card on <span className="font-semibold">Resolved</span> to file a one-line correction.
         </p>
       </div>
 
@@ -121,12 +121,8 @@ export const TriageBoard: React.FC<TriageBoardProps> = ({ nodes, isDark, onSelec
                         <span className={`text-[7.5px] font-mono uppercase tracking-wider ${isDark ? "text-gray-500" : "text-slate-400"}`}>
                           {n.type}
                         </span>
-                        <span
-                          className={`text-[8px] font-mono font-bold px-1 rounded ${
-                            n.confidence >= 0.8 ? "text-emerald-500" : n.confidence >= 0.5 ? "text-amber-500" : "text-red-500"
-                          }`}
-                        >
-                          {Math.round(n.confidence * 100)}%
+                        <span className="text-[8px] font-mono font-bold px-1 rounded text-slate-400">
+                          {Math.max(1, n.corroboration || 1)} src
                         </span>
                       </div>
                       <h4 className={`text-[11px] font-bold leading-snug mt-1 line-clamp-2 ${isDark ? "text-gray-100" : "text-slate-800"}`}>

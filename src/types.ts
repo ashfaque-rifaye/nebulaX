@@ -146,7 +146,9 @@ export interface WeaveNode {
   manual?: boolean;              // manually added by the user
   grounded?: boolean;            // true = extracted from a real fetched page; false = LLM-inferred
   corroboration?: number;        // # of independent sources supporting this signal
-  render_kind?: "text" | "metrics" | "comparison" | "list" | "quote"; // how the canvas should render it
+  verified?: boolean;            // binary trust badge — true = cross-checked across sources, false = needs a second look
+  conflict?: boolean;            // an open conflict the swarm surfaced for the user to resolve
+  render_kind?: "text" | "metrics" | "comparison" | "matrix" | "list" | "quote"; // how the canvas should render it
   data?: any;                    // structured payload for the chosen render_kind
   // ── temporal (EchoForge) ──
   time_horizon?: "past" | "present" | "future"; // where on the timeline this sits
@@ -223,6 +225,59 @@ export interface ResearchBrief {
   summary: string;
   sentences: TraceableSentence[];
   recommendations: string[];
+}
+
+// ── Build flow (Analyze → Prototype → Build → Connect) ──
+// After the swarm finishes an analysis, the user can turn findings into a real
+// build plan: gaps to close, a prototype to stand up, tasks to ship, and the
+// org tools the work should land in.
+
+// A tool the organization already uses, that NebulaX can pull context from.
+export interface Connector {
+  id: string;              // "github" | "azure" | "jira" | "figma" | "slack"
+  name: string;
+  category: string;        // "Code" | "Cloud" | "Tracking" | "Design" | "Comms"
+  icon: string;            // lucide icon name
+  status: "available" | "connected";
+  summary: string;         // what connecting it pulls in
+  detected?: string[];     // context surfaced once connected (simulated for the demo)
+}
+
+// A gap or improvement the analysis surfaced in the org's product / tech.
+export interface BuildGap {
+  id: string;
+  title: string;
+  detail: string;
+  severity: "high" | "medium" | "low";
+  area: string;            // "Pricing" | "Reliability" | "Security" | "DX" …
+}
+
+// A prototype the team could stand up next, derived from the findings.
+export interface PrototypeSpec {
+  name: string;
+  summary: string;
+  stack: string[];
+  screens: { name: string; purpose: string }[];
+}
+
+// A concrete, shippable task — optionally routed to a connected tool.
+export interface BuildTask {
+  id: string;
+  title: string;
+  detail: string;
+  effort: "S" | "M" | "L";
+  connector?: string;      // connector id this task would be filed into
+}
+
+// The full, out-of-the-box build plan for a mission.
+export interface BuildPlan {
+  mission_id: string;
+  headline: string;        // one-line "here's what to build"
+  rationale: string;       // why, grounded in the findings
+  gaps: BuildGap[];
+  prototype: PrototypeSpec;
+  tasks: BuildTask[];
+  connectors: Connector[];
 }
 
 // A proposed strategic interpretation of a generic mission prompt. The user

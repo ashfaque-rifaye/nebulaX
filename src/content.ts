@@ -9,75 +9,102 @@ export interface AgentInfo {
   detail: string;     // a sentence more, plain language
   icon: string;       // lucide icon name
   color: string;      // tailwind text color class
+  sources?: string[]; // the knowledge sources this agent draws on to do its job
 }
 
-// The swarm, explained like a team of people. Order = pipeline order.
+// The swarm, explained like a team of people who actually do the work. Order =
+// pipeline order: sense → verify → compare → recommend → build.
 export const AGENTS: AgentInfo[] = [
   {
-    id: "conductor", codename: "Conductor", role: "Mission Planner",
-    blurb: "Breaks your goal into a research plan.",
-    detail: "Reads your plain-language mission and decides what to look for, in what order, and which specialists to dispatch.",
+    id: "conductor", codename: "Planner", role: "Research Planner",
+    blurb: "Turns your goal into a concrete research plan.",
+    detail: "Reads your plain-language goal, decides exactly what to look for and which sources to hit, then dispatches the right specialists.",
     icon: "Compass", color: "text-violet-500",
+    sources: ["Your goal & persona", "Past missions on file"],
   },
   {
-    id: "pathfinder", codename: "Pathfinder", role: "Web Scout",
-    blurb: "Actually browses the live web for you.",
-    detail: "Searches the open web, opens real pages (pricing pages, news, careers, filings) and pulls back the raw facts — surfacing blocks instead of guessing.",
+    id: "pathfinder", codename: "Scout", role: "Web Researcher",
+    blurb: "Browses the live web and opens the real pages.",
+    detail: "Searches the open web and reads actual pricing pages, filings, docs and news — pulling back raw facts instead of guessing.",
     icon: "Search", color: "text-cyan-500",
+    sources: ["Open web search", "Company sites & docs", "Filings & news"],
   },
   {
-    id: "analyst", codename: "Signal Analysts", role: "Analysts",
-    blurb: "Read the pages and pull out what matters.",
-    detail: "Domain specialists (pricing, hiring, news) that turn messy page text into clean, specific findings with numbers and dates.",
-    icon: "FileText", color: "text-purple-500",
+    id: "analyst", codename: "Analyst", role: "Data Analyst",
+    blurb: "Pulls the real numbers out of every page.",
+    detail: "Turns messy page text into clean, comparable data — prices, specs, dates — ready to chart and compare side by side.",
+    icon: "BarChart3", color: "text-purple-500",
+    sources: ["Fetched page text", "Pricing & spec tables"],
   },
   {
-    id: "veritas", codename: "Veritas", role: "Fact-Checker",
-    blurb: "Cross-checks every claim across sources.",
-    detail: "Scores how trustworthy each finding is based on how many independent sources confirm it, and flags single-source or stale claims.",
+    id: "veritas", codename: "Fact-checker", role: "Verifier",
+    blurb: "Cross-checks every finding across sources.",
+    detail: "Confirms each finding against independent sources and marks it Verified or Needs review — a plain badge, not a vague score.",
     icon: "ShieldCheck", color: "text-emerald-500",
+    sources: ["Independent sources", "Source freshness & count"],
   },
   {
-    id: "cartographer", codename: "Cartographer", role: "Memory Weaver",
-    blurb: "Connects findings into one living map.",
-    detail: "Links related findings together so you see the whole picture, not scattered snippets — and keeps the map as your memory over time.",
+    id: "cartographer", codename: "Mapper", role: "Knowledge Mapper",
+    blurb: "Links findings into one connected map.",
+    detail: "Connects related findings so you see the whole picture, and keeps the map as living memory across every run.",
     icon: "Network", color: "text-violet-400",
+    sources: ["The mission fabric", "Prior runs"],
   },
   {
-    id: "sentinel", codename: "Sentinel", role: "Watchdog",
-    blurb: "Catches contradictions and drift.",
-    detail: "Continuously watches for findings that conflict with each other or change over time, and lowers confidence until they're resolved.",
-    icon: "ShieldAlert", color: "text-red-500",
+    id: "sentinel", codename: "Reviewer", role: "Conflict Reviewer",
+    blurb: "Catches when sources disagree.",
+    detail: "Spots findings that conflict — a public claim against the fine print — and surfaces the conflict for you to resolve. No jargon, no hidden scores.",
+    icon: "GitCompareArrows", color: "text-rose-500",
+    sources: ["Cross-source comparison"],
   },
   {
-    id: "oracle", codename: "Oracle", role: "Strategist",
-    blurb: "Tells you what it all means.",
-    detail: "Turns verified findings into a clear so-what: the strategic takeaway and what's likely to happen next.",
+    id: "oracle", codename: "Synthesist", role: "Synthesist",
+    blurb: "Builds the side-by-side and the so-what.",
+    detail: "Turns verified findings into a real comparison and a clear read: who wins where, and what it means for your decision.",
     icon: "Sparkles", color: "text-amber-500",
+    sources: ["Verified findings"],
   },
   {
-    id: "scribe", codename: "Scribe", role: "Reporter",
+    id: "scribe", codename: "Reporter", role: "Briefing Writer",
     blurb: "Writes the brief — every line cited.",
-    detail: "Produces a readable summary where every sentence links back to the exact source node it came from, so nothing is unverifiable.",
+    detail: "Produces a readable summary where each sentence links back to the exact finding it came from, so nothing is unverifiable.",
     icon: "BookOpen", color: "text-indigo-500",
+    sources: ["Verified findings", "Provenance chain"],
   },
   {
-    id: "actor", codename: "Actor", role: "Assistant",
-    blurb: "Drafts your next steps (you approve).",
-    detail: "Prepares executable actions — an outreach email, a calendar reminder, a brief — ready for one-click approval. Never sends anything on its own.",
+    id: "actor", codename: "Assistant", role: "Action Drafter",
+    blurb: "Drafts your next moves (you approve).",
+    detail: "Prepares ready-to-run outreach, watches, deep-dives and reminders — one click to act, nothing sent on its own.",
     icon: "Mail", color: "text-fuchsia-500",
+    sources: ["Verified findings", "Your persona"],
+  },
+  {
+    id: "architect", codename: "Architect", role: "Solution Architect",
+    blurb: "Finds the gaps and what to build.",
+    detail: "Reads the analysis and your connected tools to surface what's missing or risky in your product and tech, ranked by impact.",
+    icon: "Boxes", color: "text-sky-500",
+    sources: ["Verified findings", "Connected tools (GitHub, Azure, Jira…)"],
+  },
+  {
+    id: "builder", codename: "Builder", role: "Prototype Builder",
+    blurb: "Turns gaps into a prototype and a build list.",
+    detail: "Drafts a prototype spec and a ranked set of shippable tasks, routed into the tools your team already uses.",
+    icon: "Hammer", color: "text-emerald-400",
+    sources: ["Architect's gaps", "Connected tools"],
   },
   {
     id: "visualizer", codename: "Visualizer", role: "Image Maker",
     blurb: "Turns a finding into an on-brand image.",
     detail: "On request, renders a still from any finding or prompt using FLUX, SDXL, Stability or GPT-Image — bring your own key, or get an instant on-brand preview.",
     icon: "Image", color: "text-violet-400",
+    sources: ["Any finding or prompt"],
   },
   {
     id: "cinematographer", codename: "Cinematographer", role: "Video Maker",
     blurb: "Generates short clips from a prompt.",
     detail: "Animates a scene from a finding or prompt via Higgsfield, Kling, Runway, Luma, Hunyuan and more — swarmed on demand and metered per second.",
     icon: "Clapperboard", color: "text-fuchsia-400",
+    sources: ["Any finding or prompt"],
   },
 ];
 
@@ -136,16 +163,18 @@ export const USE_CASES: UseCase[] = [
   },
 ];
 
-// The pipeline, explained in 5 plain steps (How It Works page).
+// The pipeline, explained in 6 plain steps (How It Works page).
 export const PIPELINE_STEPS = [
   { n: 1, title: "Sense", icon: "Search", color: "text-cyan-500",
-    text: "You state a goal in plain language. The Web Scout searches and reads real pages across the open web." },
+    text: "You state a goal in plain language. The Scout searches and reads real pages across the open web." },
   { n: 2, title: "Verify", icon: "ShieldCheck", color: "text-emerald-500",
-    text: "The Fact-Checker cross-references each finding across sources and scores how much to trust it." },
-  { n: 3, title: "Weave", icon: "Network", color: "text-violet-500",
-    text: "The Memory Weaver connects findings into one living map; the Watchdog flags any contradictions." },
-  { n: 4, title: "Recommend", icon: "Sparkles", color: "text-amber-500",
-    text: "The Strategist explains what it means and what's next; the Reporter writes a fully-cited brief." },
+    text: "The Fact-checker cross-references each finding across sources and marks it Verified or Needs review." },
+  { n: 3, title: "Compare", icon: "Network", color: "text-violet-500",
+    text: "The Mapper links findings into one map; the Reviewer surfaces any conflicts between sources." },
+  { n: 4, title: "Read", icon: "Sparkles", color: "text-amber-500",
+    text: "The Synthesist builds the side-by-side comparison and the so-what; the Reporter writes a fully-cited brief." },
   { n: 5, title: "Act", icon: "Mail", color: "text-fuchsia-500",
-    text: "The Assistant drafts your next steps — emails, reminders, briefs — ready for one-click approval." },
+    text: "The Assistant drafts your next steps — outreach, watches, reminders — ready for one-click approval." },
+  { n: 6, title: "Build", icon: "Hammer", color: "text-sky-500",
+    text: "The Architect and Builder turn the analysis into gaps, a prototype and ranked tasks — routed to the tools you already use." },
 ];

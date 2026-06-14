@@ -367,6 +367,36 @@ async function startServer() {
     }
   });
 
+  // ─── Build flow: plan + connectors (Analyze → Prototype → Build → Connect) ───
+  app.get("/api/missions/:id/build", (req, res) => {
+    try {
+      res.json(db.getBuildPlan(req.params.id));
+    } catch (err) {
+      res.status(500).json({ error: "Failed to build plan" });
+    }
+  });
+
+  app.get("/api/connectors", (_req, res) => {
+    try {
+      res.json(db.getConnectors());
+    } catch (err) {
+      res.status(500).json({ error: "Failed to fetch connectors" });
+    }
+  });
+
+  // Toggle a connector connected/disconnected (simulated for the demo).
+  app.post("/api/connectors/:id/toggle", (req, res) => {
+    try {
+      const current = db.getConnectors().find(c => c.id === req.params.id);
+      if (!current) return res.status(404).json({ error: "Unknown connector" });
+      const next = current.status === "connected" ? "available" : "connected";
+      const updated = db.setConnectorStatus(req.params.id, next);
+      res.json(updated);
+    } catch (err) {
+      res.status(500).json({ error: "Failed to toggle connector" });
+    }
+  });
+
   // Get activities feed for log events
   app.get("/api/missions/:id/events", (req, res) => {
     try {

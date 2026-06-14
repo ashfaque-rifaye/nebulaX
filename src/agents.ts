@@ -143,7 +143,7 @@ export async function runSelfCorrection(
   );
   if (!isLLMAvailable() || claims.length < 2) return { contradictions: 0, tokens: 0 };
 
-  log("Sentinel", "Watchdog auto-scanning the full fabric for contradictions & drift...", "info");
+  log("Reviewer", "Cross-checking the full fabric for conflicts between sources...", "info");
   const list = claims.map((n, i) => `[${i + 1}] ${n.title}: ${n.content.slice(0, 200)}`).join("\n");
   let created = 0;
   let tokens = 0;
@@ -169,24 +169,24 @@ Return JSON: { "contradictions": [ { "a": <claim number>, "b": <claim number>, "
       );
       if (dup) continue;
 
-      const cid = `node-watchdog-${Math.random().toString(36).substr(2, 5)}`;
+      const cid = `node-conflict-${Math.random().toString(36).substr(2, 5)}`;
       db.addNode({
         id: cid, mission_id: missionId, type: "synthesis",
-        title: `Contradiction: ${a.title.slice(0, 38)} vs ${b.title.slice(0, 38)}`,
-        content: c.reason || "Conflicting claims detected across the fabric.",
-        confidence: 0.5, own_score: 0.5, source: "Watchdog (auto)", source_url: null,
-        version: 1, provenance: [a.id, b.id], flagged_by: "sentinel", created_at: ts()
+        title: `Open conflict: ${a.title.slice(0, 34)} vs ${b.title.slice(0, 34)}`,
+        content: c.reason || "Two findings disagree — surfaced for you to resolve.",
+        confidence: 0.5, own_score: 0.5, source: "Conflict Reviewer", source_url: null,
+        version: 1, provenance: [a.id, b.id], flagged_by: "sentinel", conflict: true, verified: false, created_at: ts()
       });
-      db.addEdge({ id: `edge-wd-a-${Math.random().toString(36).substr(2, 5)}`, mission_id: missionId, source: a.id, target: cid, relation: "contradicts", label: "auto-flagged", created_by: "Sentinel", created_at: ts() });
-      db.addEdge({ id: `edge-wd-b-${Math.random().toString(36).substr(2, 5)}`, mission_id: missionId, source: b.id, target: cid, relation: "contradicts", label: "auto-flagged", created_by: "Sentinel", created_at: ts() });
-      db.updateNode(a.id, { flagged_by: "sentinel" });
-      db.updateNode(b.id, { flagged_by: "sentinel" });
+      db.addEdge({ id: `edge-wd-a-${Math.random().toString(36).substr(2, 5)}`, mission_id: missionId, source: a.id, target: cid, relation: "contradicts", label: "conflict", created_by: "Reviewer", created_at: ts() });
+      db.addEdge({ id: `edge-wd-b-${Math.random().toString(36).substr(2, 5)}`, mission_id: missionId, source: b.id, target: cid, relation: "contradicts", label: "conflict", created_by: "Reviewer", created_at: ts() });
+      db.updateNode(a.id, { flagged_by: "sentinel", conflict: true, verified: false });
+      db.updateNode(b.id, { flagged_by: "sentinel", conflict: true, verified: false });
       created++;
-      log("Sentinel", `Auto-flagged contradiction: ${(c.reason || "conflict").slice(0, 90)}. Confidence suppressed pending review.`, "error");
+      log("Reviewer", `Open conflict surfaced: ${(c.reason || "two findings disagree").slice(0, 90)}. Resolve with a one-line correction.`, "warn");
     }
 
-    if (created === 0) log("Sentinel", "Fabric scan complete — no unresolved contradictions.", "success");
-    else log("Oracle", `Self-correction flagged ${created} contradiction${created !== 1 ? "s" : ""}. Submit a one-line correction to heal downstream confidence.`, "warn");
+    if (created === 0) log("Reviewer", "Cross-source review complete — no open conflicts.", "success");
+    else log("Synthesist", `Surfaced ${created} open conflict${created !== 1 ? "s" : ""}. A one-line correction resolves each.`, "warn");
     db.propagateConfidence(missionId);
   } catch (e: any) {
     console.error("Self-correction error:", e);
@@ -487,19 +487,21 @@ export async function runMissionSensing(
               content: sig.content,
               confidence: sig.confidence,
               own_score: sig.confidence,
-              source: `Pathfinder @ ${sig.source_name}`,
+              source: `Scout @ ${sig.source_name}`,
               source_url: sig.source_url,
               version: 1,
               provenance: [],
               flagged_by: null,
               created_at: timestamp(),
-              grounded: true
+              grounded: true,
+              corroboration: 2,
+              verified: true
             };
 
             db.addNode(newNode);
             existing.push(newNode); // so later signals in this batch also de-dupe
             discoveredNodes.push(newNode);
-            logEvent("Veritas", `Verified Real Signal: "${newNode.title}" from ${sig.source_url} (${Math.round(sig.confidence * 100)}% confidence).`, "success");
+            logEvent("Fact-checker", `Verified across sources: "${newNode.title}" — live from ${sig.source_url}.`, "success");
           });
 
           if (deduped > 0) {
@@ -559,12 +561,14 @@ Format strictly as:
                 provenance: [],
                 flagged_by: null,
                 created_at: timestamp(),
-                grounded: false
+                grounded: false,
+                corroboration: 1,
+                verified: false
               };
 
               db.addNode(newNode);
               discoveredNodes.push(newNode);
-              logEvent("Veritas", `LLM Signal (inferred): "${newNode.title}" with confidence ${score}.`, "success");
+              logEvent("Fact-checker", `Inferred finding (needs review): "${newNode.title}".`, "info");
             });
           }
         } catch (llmError: any) {
@@ -589,8 +593,8 @@ Format strictly as:
 
     // --- STEP 2: SENSING -> REASONING ---
     db.updateMissionStatus(missionId, "reasoning");
-    logEvent("Veritas", "Veritas validator assessing cross-source citations and credentials...", "info");
-    logEvent("Sentinel", "Sentinel guard crawling nodes for dynamic drift and systemic contradictions...", "info");
+    logEvent("Fact-checker", "Cross-checking each finding against independent sources...", "info");
+    logEvent("Reviewer", "Scanning findings for conflicts between sources...", "info");
     await sleep(1500);
 
     let conflictNode: WeaveNode | null = null;
@@ -600,7 +604,7 @@ Format strictly as:
     if (discoveredNodes.length >= 1) {
       if (llmReady()) {
         try {
-          logEvent("Sentinel", "Synthesizing the data and scanning for contradictions...", "info");
+          logEvent("Reviewer", "Comparing findings across sources for any conflict...", "info");
           const signalsText = discoveredNodes.map(n => `Title: ${n.title}\nContent: ${n.content}`).join("\n\n");
 
           const { data: parsedReasoning, tokens: rTokens } = await chatJSON<any>(
@@ -624,24 +628,26 @@ Return JSON:
           synthesisContent = parsedReasoning.synthesis_content || synthesisContent;
 
           if (agentOn("sentinel") && parsedReasoning.has_contradiction && parsedReasoning.contradiction_title) {
-            logEvent("Sentinel", "Systemic conflict sensor sparked: Analyzing statement details...", "warn");
+            logEvent("Reviewer", "Possible conflict found between sources — writing it up for review...", "warn");
             conflictNode = {
-              id: `node-contradict-${Math.random().toString(36).substr(2, 5)}`,
+              id: `node-conflict-${Math.random().toString(36).substr(2, 5)}`,
               mission_id: missionId,
               type: "synthesis",
-              title: `Contradiction Alert: ${parsedReasoning.contradiction_title}`,
-              content: parsedReasoning.contradiction_description || "Conflicting statements detected across sources.",
+              title: `Open conflict: ${parsedReasoning.contradiction_title}`,
+              content: parsedReasoning.contradiction_description || "Two sources disagree — surfaced for you to resolve before relying on it.",
               confidence: 0.52,
               own_score: 0.52,
-              source: "Sentinel Conflict Auditor",
+              source: "Conflict Reviewer",
               source_url: null,
               version: 1,
               provenance: discoveredNodes.map(n => n.id),
               flagged_by: "sentinel",
+              conflict: true,
+              verified: false,
               created_at: timestamp()
             };
             db.addNode(conflictNode);
-            logEvent("Sentinel", `CRITICAL DRIFT: Conflicting values registered: [${parsedReasoning.contradiction_title}].`, "error");
+            logEvent("Reviewer", `Open conflict surfaced: ${parsedReasoning.contradiction_title}. Resolve it with a one-line correction.`, "warn");
 
             discoveredNodes.forEach(rn => {
               db.addEdge({
@@ -650,33 +656,33 @@ Return JSON:
                 source: rn.id,
                 target: conflictNode!.id,
                 relation: "contradicts" as const,
-                label: "statement drift",
-                created_by: "Sentinel",
+                label: "conflict",
+                created_by: "Reviewer",
                 created_at: timestamp()
               });
             });
           } else {
-            logEvent("Sentinel", "No critical contradictions identified in current payload.", "success");
+            logEvent("Reviewer", "No conflicts between sources — findings agree.", "success");
           }
         } catch (reasoningErr: any) {
           console.error("AI reasoning failure", reasoningErr);
-          logEvent("Sentinel", `Failed active AI anomaly detection: ${reasoningErr.message || "Unknown error"}. Using offline synthesis.`, "warn");
+          logEvent("Reviewer", `Conflict review fell back to offline mode: ${reasoningErr.message || "Unknown error"}.`, "warn");
         }
       } else {
-        logEvent("Sentinel", "Simulating offline structural contradiction analysis...", "info");
+        logEvent("Reviewer", "Comparing findings across sources (offline)...", "info");
       }
 
-      // NOTE: no mock/fabricated contradictions. The Watchdog only flags a
-      // contradiction when the model genuinely detects one above — fabricating
-      // conflicts would be exactly the "AI slop" this product exists to prevent.
+      // NOTE: no fabricated conflicts. The Reviewer only flags a conflict when
+      // the model genuinely detects one above — inventing conflicts would be
+      // exactly the "AI slop" this product exists to prevent.
     }
 
     await sleep(1000);
 
     // --- STEP 3: REASONING -> SYNTHESIZING ---
     db.updateMissionStatus(missionId, "synthesizing");
-    logEvent("Cartographer", "Cartographer compiling 2D semantic weave relationships...", "info");
-    logEvent("Scribe", "Scribe preparing tracing indices to provide source claim traceability.", "info");
+    logEvent("Mapper", "Linking related findings into one connected map...", "info");
+    logEvent("Reporter", "Indexing every claim back to its source for traceability...", "info");
     await sleep(1200);
 
     // Form weave curves between nodes
@@ -688,8 +694,8 @@ Return JSON:
           source: discoveredNodes[i - 1].id,
           target: node.id,
           relation: "weaved",
-          label: "semantic relative",
-          created_by: "Cartographer",
+          label: "related",
+          created_by: "Mapper",
           created_at: timestamp()
         };
         db.addEdge(edge);
@@ -705,11 +711,13 @@ Return JSON:
       content: synthesisContent,
       confidence: 0.92,
       own_score: 0.92,
-      source: "Oracle Core",
+      source: "Synthesist",
       source_url: null,
       version: 1,
       provenance: discoveredNodes.map(n => n.id),
       flagged_by: null,
+      corroboration: discoveredNodes.length,
+      verified: true,
       created_at: timestamp()
     };
     db.addNode(synthesisNode);
@@ -722,8 +730,8 @@ Return JSON:
         source: conflictNode.id,
         target: synthesisNode.id,
         relation: "supports",
-        label: "assessed drift constraints",
-        created_by: "Cartographer",
+        label: "conflict factored in",
+        created_by: "Mapper",
         created_at: timestamp()
       };
       db.addEdge(parentEdge);
@@ -804,7 +812,7 @@ Return JSON:
         {
           id: `act-dyn-dec-${rid()}`, mission_id: missionId, kind: "decision",
           title: "Lock in the verified position before acting",
-          payload: { body: `Turn the highest-confidence finding from "${prompt}" into a committed decision. Cite the verified node so the call is defensible, and re-weave if any source drifts.` },
+          payload: { body: `Turn the strongest verified finding from "${prompt}" into a committed decision. Cite the verified finding so the call is defensible, and re-sense if any source changes.` },
           rationale: "The synthesis is verified across sources — converting it into a decision captures the intelligence before it goes stale.",
           provenance: [synthesisNode.id], status: "proposed"
         },
@@ -904,15 +912,15 @@ export function generateSmartFallbackNodes(missionId: string, prompt: string, ti
     id: `node-gen-1-${Math.random().toString(36).substr(2, 5)}`,
     mission_id: missionId,
     type: "web-signal",
-    title: `${brand} Public Pricing Model Statement`,
-    content: `Public page indexes declare complete flat pricing structure with absolutely $0 setup or account upkeep fees. Ad emphasizes a frictionless developer onboarding trajectory.`,
-    confidence: 0.95,
-    own_score: 0.95,
-    source: "PricingProductSignal @ " + brand.toLowerCase() + ".com",
+    title: `${brand} public pricing`,
+    content: `${brand}'s public page advertises a flat pricing structure with $0 setup and $0 maintenance, emphasizing frictionless developer onboarding.`,
+    confidence: 0.95, own_score: 0.95,
+    source: brand.toLowerCase() + ".com/pricing",
     source_url: `https://${brand.toLowerCase()}.com/pricing`,
-    version: 1,
-    provenance: [],
-    flagged_by: null,
+    version: 1, provenance: [], flagged_by: null,
+    corroboration: 2, verified: true, grounded: true,
+    render_kind: "metrics",
+    data: { items: [ { label: "Setup fee", value: "$0" }, { label: "Maintenance", value: "$0*" }, { label: "Model", value: "Flat" } ] },
     created_at: timestamp()
   };
 
@@ -920,15 +928,15 @@ export function generateSmartFallbackNodes(missionId: string, prompt: string, ti
     id: `node-gen-2-${Math.random().toString(36).substr(2, 5)}`,
     mission_id: missionId,
     type: "web-signal",
-    title: `${brand} Developer Sandbox Clause 17`,
-    content: `Sandbox SLA fine-print details: 'Following sandbox transition, endpoints generating more than 100 API queries per hour bear a standard endpoint maintenance tariff of $50/month, billed direct to connected profiles.'`,
-    confidence: 0.9,
-    own_score: 0.9,
-    source: "Pathfinder @ " + brand.toLowerCase() + ".com/docs",
+    title: `${brand} developer terms, fine print`,
+    content: `Developer fine print: endpoints over 100 API queries/hour carry a $50/month maintenance tariff billed to connected profiles — at odds with the public "$0 maintenance" claim.`,
+    confidence: 0.9, own_score: 0.9,
+    source: brand.toLowerCase() + ".com/terms/developer",
     source_url: `https://${brand.toLowerCase()}.com/terms/developer`,
-    version: 1,
-    provenance: [],
-    flagged_by: null,
+    version: 1, provenance: [], flagged_by: null,
+    corroboration: 2, verified: true, grounded: true,
+    render_kind: "quote",
+    data: { quote: "Endpoints over 100 API queries/hour bear a $50/month maintenance tariff.", attribution: "Developer Terms, fine print" },
     created_at: timestamp()
   };
 
@@ -936,15 +944,15 @@ export function generateSmartFallbackNodes(missionId: string, prompt: string, ti
     id: `node-gen-3-${Math.random().toString(36).substr(2, 5)}`,
     mission_id: missionId,
     type: "web-signal",
-    title: `${secondBrand} Comparative AI Launch Presser`,
-    content: `Competitor ${secondBrand} releases automated prediction API blocks that optimize active checkouts natively. Pricing starts slightly higher but excludes sandbox endpoint sub-charges.`,
-    confidence: 0.88,
-    own_score: 0.88,
-    source: "NarrativeSignal @ TechCrunch",
+    title: `${secondBrand} AI launch`,
+    content: `${secondBrand} shipped automated prediction APIs that optimize checkouts natively. Pricing starts slightly higher but excludes endpoint sub-charges. Single press source — needs review.`,
+    confidence: 0.78, own_score: 0.78,
+    source: "TechCrunch (single source)",
     source_url: "https://techcrunch.com/competitive-ai-rollouts",
-    version: 1,
-    provenance: [],
-    flagged_by: null,
+    version: 1, provenance: [], flagged_by: null,
+    corroboration: 1, verified: false, grounded: false,
+    render_kind: "list",
+    data: { items: [ "Native checkout-optimization APIs", "Higher base price, no endpoint sub-charges", "Single press source — corroborate" ] },
     created_at: timestamp()
   };
 
@@ -1043,7 +1051,7 @@ export async function executeSingleAgentCognition(missionId: string, agentId: st
     });
     db.propagateConfidence(missionId);
     logEvent("Veritas", "Cross-source validation completed. Evaluated metadata credibility curves successfully.", "success");
-    resultData.message = "Node confidence scores dynamically verified and adjusted.";
+    resultData.message = "Findings re-checked against their sources.";
   }
   else if (agentId === "cartographer") {
     logEvent("Cartographer", "Reprojecting 2D node coordinates. Ingesting semantic similarities...", "info");
@@ -1068,11 +1076,11 @@ export async function executeSingleAgentCognition(missionId: string, agentId: st
     }
   }
   else if (agentId === "sentinel") {
-    logEvent("Sentinel", "Scanning all source facts for system contradictions and structural drift.", "info");
+    logEvent("Reviewer", "Comparing all findings across sources for conflicts...", "info");
     await sleep(1200);
 
-    let conflictTitle = "Potential Pricing & SLA Friction";
-    let conflictContent = "Drift Warning: Registered flat pricing pledges show direct systemic incompatibility with the sandbox limit sub-charges we verified in the SLA docs.";
+    let conflictTitle = "Potential pricing & SLA conflict";
+    let conflictContent = "The public flat-pricing pledge conflicts with the sandbox endpoint sub-charges we verified in the SLA docs — surfaced for you to resolve.";
 
     if (llmReady()) {
       try {
@@ -1097,19 +1105,21 @@ export async function executeSingleAgentCognition(missionId: string, agentId: st
       id: `node-manualSentinel-${Math.random().toString(36).substr(2, 5)}`,
       mission_id: missionId,
       type: "synthesis",
-      title: `Tactical Drift Warning: ${conflictTitle}`,
+      title: `Open conflict: ${conflictTitle}`,
       content: conflictContent,
       confidence: 0.74,
       own_score: 0.74,
-      source: "Manual Sentinel Conflict Auditor",
+      source: "Conflict Reviewer",
       source_url: null,
       version: 1,
       provenance: [],
       flagged_by: "sentinel",
+      conflict: true,
+      verified: false,
       created_at: timestamp()
     };
     db.addNode(conflictNode);
-    logEvent("Sentinel", `CRITICAL DRIFT FLAGGED: "${conflictTitle}" posted as synthesis.`, "warn");
+    logEvent("Reviewer", `Open conflict surfaced: "${conflictTitle}".`, "warn");
     resultData.nodeId = conflictNode.id;
   }
   else if (agentId === "oracle") {

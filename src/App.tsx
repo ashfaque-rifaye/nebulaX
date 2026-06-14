@@ -92,11 +92,12 @@ import { OnboardingTour, TourStep } from "./components/OnboardingTour.tsx";
 import { AuthModal } from "./components/AuthModal.tsx";
 import { Wallet } from "./components/Wallet.tsx";
 import { MediaStudio } from "./components/MediaStudio.tsx";
+import { ConflictResolver } from "./components/ConflictResolver.tsx";
+import { RefineFinding } from "./components/RefineFinding.tsx";
 
-// Workspace lens definitions: one fabric, five complementary views.
+// Workspace lens definitions: one fabric, complementary views.
 const WORKSPACE_VIEWS = [
-  { key: "canvas", label: "Board", desc: "Evidence Board — see how findings connect and inspect any one", Icon: Network },
-  { key: "fabric2d", label: "Flow", desc: "Flow Map — the sensing → comparison pipeline, auto-laid", Icon: GitBranch },
+  { key: "fabric2d", label: "Flow", desc: "Flow Map — findings mapped and connected by category", Icon: GitBranch },
   { key: "build", label: "Build", desc: "Build — gaps, a prototype and ranked tasks from the analysis", Icon: Hammer },
   { key: "vista", label: "Futures", desc: "Temporal Vista — forecast branching scenarios", Icon: Clock },
   { key: "triage", label: "Triage", desc: "Triage lanes — verified / needs review / resolved", Icon: Columns3 },
@@ -142,7 +143,7 @@ export default function App() {
     setFocusedAgent(null);
     setCurrentView("workspace");
   };
-  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("canvas");
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("fabric2d");
   const [isMaximized, setIsMaximized] = useState(false);
   const workspaceContainerRef = useRef<HTMLDivElement>(null);
 
@@ -386,8 +387,9 @@ export default function App() {
 
   const PERSONAS = [
     "Founder / Product Executive",
-    "VC / Battery Investor",
-    "Job Seeker / Engineering Lead",
+    "Competitive Strategist",
+    "Engineering Lead / CTO",
+    "VC / Investor",
     "Market Research Analyst"
   ];
 
@@ -671,7 +673,7 @@ export default function App() {
   };
 
   // Open a mission into the live workspace (used by deploy, mission cards, selector).
-  const launchMission = (missionId: string, mode: WorkspaceMode = "canvas") => {
+  const launchMission = (missionId: string, mode: WorkspaceMode = "fabric2d") => {
     setSelectedMissionId(missionId);
     setSelectedNodeId(null);
     setFocusedAgent(null);
@@ -765,7 +767,7 @@ export default function App() {
         setShowPlanner(false);
         setPlanVariants([]);
         setPlanDeployingId(null);
-        launchMission(createdMission.id, "canvas");
+        launchMission(createdMission.id, "fabric2d");
       } else if (res.status === 401) {
         setPlanDeployingId(null);
         setShowPlanner(false);
@@ -975,7 +977,7 @@ export default function App() {
         await fetchMissions();
         if (handle) { fetchProfile(handle); setTimeout(() => fetchProfile(handle), 9000); }
         setChatOpen(false);
-        launchMission(child.id, "canvas");
+        launchMission(child.id, "fabric2d");
       } else if (res.status === 401) {
         requireAuth("Your session expired — sign in to deep-dive.", "login");
       } else if (res.status === 402) {
@@ -1560,9 +1562,9 @@ export default function App() {
                   transition={{ duration: 0.7, delay: 0.3, ease: [0.16, 1, 0.3, 1] }}
                   className={`text-sm md:text-base leading-relaxed max-w-xl ${isDark ? "text-white/70" : "text-slate-600"}`}
                 >
-                  State a goal in plain language. An autonomous agent swarm senses the open web, weaves every
-                  finding into a verified memory graph, flags contradictions, and proposes your next move —
-                  with <span className={`font-semibold ${isDark ? "text-luna-lavender" : "text-violet-700"}`}>every claim traceable to its source.</span>
+                  State a goal in plain language. An autonomous agent swarm senses the open web, maps each
+                  finding into category lanes, reconciles conflicting sources, and turns the analysis into a
+                  prototype and a build plan — with <span className={`font-semibold ${isDark ? "text-luna-lavender" : "text-violet-700"}`}>every claim traceable to its source.</span>
                 </motion.p>
 
                 {/* CTAs */}
@@ -1584,7 +1586,7 @@ export default function App() {
                   {missions[0] && (
                     <button
                       type="button"
-                      onClick={() => launchMission(missions[0].id, "canvas")}
+                      onClick={() => launchMission(missions[0].id, "fabric2d")}
                       className={`text-sm font-semibold px-6 py-3.5 rounded-full border transition-all duration-300 flex items-center gap-2 ${
                         isDark ? "border-white/20 text-white hover:bg-white/10 hover:border-white/30" : "border-violet-500/25 text-slate-700 hover:bg-violet-500/5 hover:border-violet-500/40"
                       }`}
@@ -1855,7 +1857,7 @@ export default function App() {
                     className={`scroll-reveal p-6 rounded-[2rem] border flex flex-col justify-between gap-4 select-none card-hover cursor-pointer noise relative overflow-hidden ${
                       isDark ? "bg-white/[0.03] border-white/[0.07]" : "bg-white border-violet-500/10 shadow-lg shadow-violet-500/5"
                     } ${selectedMissionId === mission.id ? "ring-2 ring-violet-500" : ""}`}
-                    onClick={() => launchMission(mission.id, "canvas")}
+                    onClick={() => launchMission(mission.id, "fabric2d")}
                   >
                     <div className="relative z-10 flex flex-col gap-1.5">
                       <div className="flex justify-between items-center text-[10px] font-mono leading-none">
@@ -1957,7 +1959,7 @@ export default function App() {
       {currentView === "how" && <HowItWorksPage isDark={isDark} onLaunch={goLaunch} />}
       {currentView === "agents" && <AgentsPage isDark={isDark} onLaunch={goLaunch} />}
       {currentView === "usecases" && <UseCasesPage isDark={isDark} onLaunch={goLaunch} />}
-      {currentView === "log" && <MissionLog isDark={isDark} missions={missions} onOpen={(id) => launchMission(id, "canvas")} />}
+      {currentView === "log" && <MissionLog isDark={isDark} missions={missions} onOpen={(id) => launchMission(id, "fabric2d")} />}
 
       {/* --- VIEW 2A: WORKSPACE COMMAND CENTER (shown until a mission is opened) --- */}
       {currentView === "workspace" && !launched && (
@@ -1985,9 +1987,9 @@ export default function App() {
               setPersona={setSelectedPersona}
               personas={PERSONAS}
               suggestions={[
-                "Track how Razorpay, Cashfree and PayU shift enterprise pricing and AI features",
-                "Monitor solid-state battery startups for hiring surges and breakthrough claims",
-                "Watch OpenAI and Anthropic enterprise pricing and model release strategy"
+                "Compare Razorpay, Cashfree and PayU on pricing, settlement and contract terms",
+                "Map a rival's moves across finance, product, marketing and hiring",
+                "Audit our checkout's tech stack — surface gaps and what to build next"
               ]}
             />
 
@@ -2004,7 +2006,7 @@ export default function App() {
                   {missions.slice(0, 6).map(m => (
                     <button
                       key={m.id}
-                      onClick={() => launchMission(m.id, "canvas")}
+                      onClick={() => launchMission(m.id, "fabric2d")}
                       className={`text-left p-4 rounded-2xl border transition-all duration-300 group hover:-translate-y-0.5 glass ${
                         isDark ? "border-white/[0.07] hover:border-violet-500/40" : "border-violet-500/10 hover:border-violet-400 shadow-sm"
                       }`}
@@ -2428,348 +2430,6 @@ export default function App() {
                       className="absolute inset-0 flex flex-col"
                     >
 
-            {/* --- COGNITIVE WEAVE INFINITY CANVAS VIEWPORT --- */}
-            {workspaceMode === "canvas" && (
-            <div className="flex-1 relative overflow-hidden flex flex-col">
-
-              {/* maximize control */}
-              <div className={`absolute top-4 right-4 z-30 flex items-center gap-1 p-1 rounded-xl glass border shadow-lg no-pan ${isDark ? "border-white/10" : "border-slate-200"}`}>
-                <button
-                  type="button"
-                  onClick={toggleMaximize}
-                  className={`p-1.5 rounded-lg transition-all ${isDark ? "text-gray-300 hover:bg-white/10" : "text-slate-600 hover:bg-slate-100"}`}
-                  title={isMaximized ? "Restore layout" : "Maximize board"}
-                >
-                  {isMaximized ? <Minimize className="w-3.5 h-3.5" /> : <Maximize className="w-3.5 h-3.5" />}
-                </button>
-              </div>
-
-            <div
-              ref={attachCanvasStage}
-              onMouseDown={handleCanvasMouseDown}
-              className="flex-1 relative overflow-hidden flex items-center justify-center cursor-grab active:cursor-grabbing p-4"
-              style={{ cursor: isPanning ? 'grabbing' : 'grab' }}
-            >
-              
-              {/* CANVAS MANUAL HUD */}
-              <div className={`group absolute top-4 left-4 z-30 flex flex-col rounded-xl border backdrop-blur font-mono text-[9.5px] shadow-xl w-10 h-10 hover:w-[320px] hover:h-auto overflow-hidden transition-all duration-300 no-pan ${
-                isDark ? "bg-[#0b0e1c]/90 border-white/5 text-gray-400 hover:bg-[#0b0e1c]" : "bg-white/95 border-slate-200 text-slate-500 hover:bg-white"
-              }`}>
-                <div className="absolute inset-0 flex items-center justify-center cursor-help group-hover:opacity-0 transition-opacity duration-300 pointer-events-none">
-                  <Info className="w-5 h-5 text-violet-500" />
-                </div>
-                <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col gap-1.5 p-3.5 w-full">
-                  <span className={`font-extrabold mb-1.5 border-b pb-1 flex items-center gap-1.5 select-none text-[10px] ${
-                    isDark ? "text-gray-200 border-white/5" : "text-slate-800 border-slate-200/80"
-                  }`}>
-                    <Info className="w-3.5 h-3.5 text-violet-500" />
-                    HOW TO READ THE BOARD
-                  </span>
-                  <div className="flex items-center gap-1.5 bg-emerald-500/5 px-2 py-0.5 rounded text-emerald-600 dark:text-emerald-400">
-                    <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></div>
-                    <span>Verified — cross-checked across sources</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 bg-amber-500/5 px-2 py-0.5 rounded text-amber-600 dark:text-amber-400">
-                    <div className="w-1.5 h-1.5 bg-amber-500 rounded-full"></div>
-                    <span>Needs review — single or unconfirmed source</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 bg-rose-500/5 px-2 py-0.5 rounded text-rose-600 dark:text-rose-400">
-                    <div className="w-1.5 h-1.5 bg-rose-500 rounded-full"></div>
-                    <span>Conflict — sources disagree, resolve it</span>
-                  </div>
-                  <div className="mt-1.5 border-t border-slate-200 dark:border-white/5 pt-1.5 text-violet-600 dark:text-violet-300 font-semibold leading-normal">
-                    💡 Drag backgrounds to Pan. Click to select. Drag individual node cards to organize! Use scroll/HUD to Zoom!
-                  </div>
-                </div>
-              </div>
-
-              {/* EMPTY WORKSPACE STATE */}
-              {nodes.length === 0 && (
-                <div className="text-center p-6 z-10 select-none max-w-md">
-                  <div className="w-16 h-16 rounded-2xl holo-ring bg-indigo-500/10 border border-indigo-500/25 flex items-center justify-center mx-auto mb-4 float-y">
-                    <Network className="w-8 h-8 text-indigo-400" />
-                  </div>
-                  <h3 className={`text-lg font-bold font-display mb-1.5 ${t.textTitle}`}>
-                    Your intelligence fabric starts here
-                  </h3>
-                  <p className={`text-xs max-w-sm mx-auto leading-relaxed mb-4 ${t.textMute}`}>
-                    {selectedMission && selectedMission.status !== "ready"
-                      ? "The swarm is deploying — first signals usually land within seconds and weave themselves into this board."
-                      : "Deploy a mission and every finding appears here as a draggable, correctable evidence card."}
-                  </p>
-                  {(!selectedMission || selectedMission.status === "ready") && (
-                    <button
-                      onClick={() => {
-                        setNewPrompt("Track how OpenAI and Anthropic are competing on enterprise pricing");
-                        setLaunched(false);
-                      }}
-                      className="no-pan inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-lg shadow-indigo-600/25 press"
-                    >
-                      <Rocket className="w-3.5 h-3.5" />
-                      Try: “Track how OpenAI and Anthropic compete on pricing”
-                    </button>
-                  )}
-                </div>
-              )}
-
-              {/* TRANSLATED AND ZOOMABLE BOARD WRAPPER */}
-              {nodes.length > 0 && (
-                <div 
-                  className="absolute inset-0 select-none"
-                  style={{
-                    transform: `translate(${canvasPan.x}px, ${canvasPan.y}px) scale(${canvasZoom})`,
-                    transformOrigin: "center center",
-                    transition: isPanning || draggingNodeId ? "none" : "transform 0.15s ease-out"
-                  }}
-                >
-                  
-                  {/* CENTRAL VIRTUAL BOARD AREAL */}
-                  <div className="w-[1320px] h-[800px] absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-
-                    {/* SVG EDGE RENDERING LAYER */}
-                    <svg className="absolute inset-0 w-full h-full pointer-events-none z-0" style={{ overflow: "visible" }}>
-                      <defs>
-                        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
-                          <path d="M 0 1 L 9 5 L 0 9 z" fill={isDark ? "#3a4467" : "#b9b3d6"} />
-                        </marker>
-                        <marker id="arrow-active" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
-                          <path d="M 0 1 L 9 5 L 0 9 z" fill="#9d85ff" />
-                        </marker>
-                        <marker id="arrow-contradict" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
-                          <path d="M 0 1 L 9 5 L 0 9 z" fill="#fb7185" />
-                        </marker>
-                        <marker id="arrow-correct" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
-                          <path d="M 0 1 L 9 5 L 0 9 z" fill="#34d399" />
-                        </marker>
-                        <filter id="edge-glow" x="-30%" y="-30%" width="160%" height="160%">
-                          <feGaussianBlur stdDeviation="3.5" result="b" />
-                          <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
-                        </filter>
-                      </defs>
-
-                      {/* Provenance edges: boundary-anchored cubic curves that flow
-                          forward through the layered fabric. Idle edges are a calm
-                          baseline; the focused thread (selected / hovered node or
-                          brief sentence) brightens, glows and reveals its label. */}
-                      {edges.map(edge => {
-                        const srcNode = nodes.find(n => n.id === edge.source);
-                        const tgtNode = nodes.find(n => n.id === edge.target);
-                        if (!srcNode || !tgtNode) return null;
-
-                        const srcIndex = nodes.findIndex(n => n.id === edge.source);
-                        const tgtIndex = nodes.findIndex(n => n.id === edge.target);
-                        const p1 = getActualNodePosition(srcNode, srcIndex);
-                        const p2 = getActualNodePosition(tgtNode, tgtIndex);
-
-                        // Anchor at the vertical centre of each card; exit/enter on the
-                        // side that faces the other card so the curve never crosses a card.
-                        const HALF_W = 106, MID_Y = 46;
-                        const fwd = p2.x >= p1.x;
-                        const sx = p1.x + (fwd ? HALF_W : -HALF_W), sy = p1.y + MID_Y;
-                        const tx = p2.x + (fwd ? -HALF_W : HALF_W), ty = p2.y + MID_Y;
-                        const dx = (fwd ? 1 : -1) * Math.max(40, Math.abs(tx - sx) * 0.45);
-                        const path = `M ${sx} ${sy} C ${sx + dx} ${sy}, ${tx - dx} ${ty}, ${tx} ${ty}`;
-                        const lx = (sx + tx) / 2, ly = (sy + ty) / 2;
-
-                        const isConContradict = edge.relation === "contradicts";
-                        const isConCorrect = edge.relation === "correction-applied";
-
-                        const threading = isThreadPullingActive();
-                        const sentence = hoveredSentenceId ? brief?.sentences.find(s => s.id === hoveredSentenceId) : null;
-                        const touchesFocus =
-                          (selectedNodeId === edge.source || selectedNodeId === edge.target) ||
-                          (hoveredNodeId === edge.source || hoveredNodeId === edge.target) ||
-                          (!!sentence && sentence.provenance.includes(edge.source) && sentence.provenance.includes(edge.target));
-                        const focused = threading && touchesFocus;
-
-                        // Idle baseline keeps the whole fabric readable without shouting.
-                        const idleStroke = isConContradict ? "#fb7185" : isConCorrect ? "#34d399" : (isDark ? "#2b3357" : "#cfc9e4");
-                        const activeStroke = isConContradict ? "#fb7185" : isConCorrect ? "#34d399" : "#9d85ff";
-                        const stroke = focused ? activeStroke : idleStroke;
-                        const dimmed = threading && !touchesFocus;
-                        const marker = focused
-                          ? (isConContradict ? "arrow-contradict" : isConCorrect ? "arrow-correct" : "arrow-active")
-                          : (isConContradict ? "arrow-contradict" : isConCorrect ? "arrow-correct" : "arrow");
-
-                        return (
-                          <g key={edge.id} style={{ opacity: dimmed ? 0.12 : 1, transition: "opacity 0.25s ease" }}>
-                            {focused && (
-                              <path d={path} fill="none" stroke={activeStroke} strokeWidth={6} strokeLinecap="round"
-                                    opacity={0.22} filter="url(#edge-glow)" />
-                            )}
-                            <path
-                              d={path}
-                              fill="none"
-                              stroke={stroke}
-                              strokeWidth={focused ? 2.4 : 1.5}
-                              strokeLinecap="round"
-                              strokeDasharray={isConContradict ? "1 6" : undefined}
-                              style={{ transition: "stroke 0.25s ease, stroke-width 0.25s ease" }}
-                              markerEnd={`url(#${marker})`}
-                            />
-                            {focused && (
-                              <g>
-                                <rect x={lx - edge.label.length * 3.1 - 5} y={ly - 17} width={edge.label.length * 6.2 + 10} height={13}
-                                      rx={6.5} fill={isDark ? "#0c101f" : "#ffffff"} stroke={activeStroke} strokeOpacity={0.4} strokeWidth={0.75} />
-                                <text x={lx} y={ly - 7.5} fill={activeStroke} textAnchor="middle"
-                                      className="text-[8px] font-mono uppercase font-bold tracking-wide select-none">
-                                  {edge.label}
-                                </text>
-                              </g>
-                            )}
-                          </g>
-                        );
-                      })}
-                    </svg>
-
-                    {/* DYNAMIC ABSOLUTE CARDS LAYER */}
-                    {nodes.map((node, index) => {
-                      const pos = getActualNodePosition(node, index);
-                      const status = nodeStatus(node);
-                      const isSynth = node.type === "synthesis";
-                      const isCorr = node.type === "correction";
-                      
-                      const isFocused = isNodeFocused(node.id);
-                      const isHighlighted = isNodeHighlightedInThread(node.id);
-                      const isSelected = selectedNodeId === node.id;
-
-                      return (
-                        <div
-                          key={node.id}
-                          ref={el => { if (el) nodeRefMap.current.set(node.id, el); }}
-                          style={{
-                            position: "absolute",
-                            left: `${pos.x}px`,
-                            top: `${pos.y}px`,
-                            transform: "translate(-50%, -15px)",
-                            width: "212px",
-                            transition: draggingNodeId === node.id ? "none" : "all 0.15s ease-out"
-                          }}
-                          onMouseEnter={() => setHoveredNodeId(node.id)}
-                          onMouseLeave={() => setHoveredNodeId(null)}
-                          onMouseDown={(e) => {
-                            setSelectedNodeId(node.id);
-                            if (node.type === "web-signal" || node.type === "synthesis") {
-                              setCorrectionContent(node.content);
-                            } else {
-                              setCorrectionContent("");
-                            }
-                            handleNodeDragStart(e, node.id);
-                          }}
-                          className={`animate-nodePop rounded-2xl border p-3.5 select-none flex flex-col gap-2 no-pan cursor-grab active:cursor-grabbing transition-all z-10 ${
-                            newestRunId && node.run_id === newestRunId ? "new-signal" : ""
-                          } ${
-                            isHighlighted
-                              ? "ring-2 ring-indigo-500 ring-offset-2 scale-[1.03] dark:ring-offset-[#080b16] shadow-xl"
-                              : isSelected
-                              ? "ring-1 ring-indigo-500 scale-[1.02] shadow-xl"
-                              : "shadow-md hover:shadow-lg hover:-translate-y-0.5"
-                          } ${isFocused ? "opacity-100" : "opacity-40 scale-[0.98]"} ${
-                            isDark ? "bg-[#0c101f]/95 border-white/10 text-slate-200 hover:border-indigo-400/50" : "bg-white border-slate-200 text-slate-800 hover:border-indigo-400/60"
-                          }`}
-                        >
-                          {/* CARD HEADER */}
-                          <div className="flex items-center justify-between gap-2 text-[8.5px] leading-none">
-                            <div className="flex items-center gap-1.5 overflow-hidden">
-                              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${status.tone === "emerald" ? "bg-emerald-500" : status.tone === "amber" ? "bg-amber-500" : "bg-rose-500"}`} />
-                              {isSynth ? (
-                                <Cpu className="w-3 h-3 text-indigo-400 flex-shrink-0" />
-                              ) : isCorr ? (
-                                <Undo className="w-3 h-3 text-emerald-500 flex-shrink-0" />
-                              ) : (
-                                <FileText className="w-3 h-3 text-violet-400 flex-shrink-0" />
-                              )}
-                              <span className="font-mono uppercase tracking-wider text-slate-400 select-none truncate">
-                                {node.type.replace("-", " ")}
-                              </span>
-                              {node.pinned && <Pin className="w-2.5 h-2.5 text-indigo-400 fill-indigo-400 flex-shrink-0" />}
-                            </div>
-
-                            <div className="flex items-center gap-1 flex-shrink-0">
-                              {newestRunId && node.run_id === newestRunId && (
-                                <span className="font-mono font-bold px-1 py-0.5 rounded leading-none text-[7px] bg-emerald-500 text-white animate-pulse">NEW</span>
-                              )}
-                              <span className={`flex items-center gap-1 font-mono font-bold px-1.5 py-0.5 rounded-md border leading-none text-[8px] ${toneChip(status.tone)}`} title={node.grounded === false ? "Inferred — no live source fetched" : "Cross-checked against sources"}>
-                                <status.Icon className="w-2.5 h-2.5" />
-                                {status.label}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* BODY: dynamic component (metrics / comparison / matrix / list / quote / text) */}
-                          <div>
-                            <h4 className="text-[11.5px] font-bold tracking-tight leading-snug mb-1.5 line-clamp-2 text-slate-900 dark:text-white">
-                              {node.title}
-                            </h4>
-                            <DynamicNodeBody node={node} isDark={isDark} compact />
-                          </div>
-
-                          {/* OPEN-CONFLICT ADVISORY */}
-                          {(node.conflict || node.flagged_by === "sentinel") && node.type !== "correction" && (
-                            <div className="flex items-center gap-1 bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400 text-[7.5px] font-mono px-1.5 py-0.5 border border-rose-500/20 rounded mt-0.5 select-none leading-none">
-                              <GitCompareArrows className="w-2.5 h-2.5 flex-shrink-0" />
-                              <span>Sources disagree — resolve</span>
-                            </div>
-                          )}
-
-                          {/* CARD FOOTER */}
-                          <div className="flex items-center justify-between text-[7px] text-slate-400 dark:text-gray-500 font-mono mt-1 pt-1 border-t border-slate-200/50 dark:border-white/5 select-none">
-                            <span className="truncate max-w-[110px]">{node.source}</span>
-                            <span className="flex-shrink-0">{sourceCount(node)} {sourceCount(node) === 1 ? "source" : "sources"}</span>
-                          </div>
-                        </div>
-                      );
-                    })}
-
-                  </div>
-                </div>
-              )}
-
-              {/* FLOATING ZOOM & HUD NAVIGATION AREA (BOTTOM RIGHT) */}
-              <div className={`absolute bottom-4 right-4 z-20 flex items-center gap-1.5 p-2 rounded-xl border shadow-2xl select-none no-pan ${
-                isDark ? "bg-[#0b0e1c]/95 border-white/5" : "bg-white/95 border-slate-200"
-              }`}>
-                <button
-                  type="button"
-                  onClick={() => setCanvasZoom(z => Math.max(z - 0.15, 0.45))}
-                  className={`p-1 px-2.5 text-xs font-bold rounded-md transition-all border cursor-pointer ${
-                    isDark ? "text-gray-400 hover:bg-white/10 border-white/5" : "text-slate-600 hover:bg-slate-100 border-slate-200"
-                  }`}
-                  title="Zoom Out"
-                >
-                  -
-                </button>
-                <span className={`text-[10px] font-mono font-bold min-w-[40px] text-center ${isDark ? "text-gray-300" : "text-slate-700"}`}>
-                  {Math.round(canvasZoom * 100)}%
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setCanvasZoom(z => Math.min(z + 0.15, 2.25))}
-                  className={`p-1 px-2.5 text-xs font-bold rounded-md transition-all border cursor-pointer ${
-                    isDark ? "text-gray-400 hover:bg-white/10 border-white/5" : "text-slate-600 hover:bg-slate-100 border-slate-200"
-                  }`}
-                  title="Zoom In"
-                >
-                  +
-                </button>
-                <div className={`w-[1px] h-4 mx-1 ${isDark ? "bg-white/10" : "bg-slate-200"}`}></div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCanvasPan({ x: 0, y: 0 });
-                    setCanvasZoom(0.8);
-                    setNodeOffsets({});
-                  }}
-                  className="p-1.5 px-3 text-[9.5px] font-mono text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/10 rounded-md transition-all font-bold border border-violet-500/20 cursor-pointer"
-                  title="Recenter Board Coordinates"
-                >
-                  Reset Layout
-                </button>
-              </div>
-
-            </div>
-            </div>
-            )}
 
             {/* --- 2D REACT FLOW FABRIC VIEWPORT --- */}
             {workspaceMode === "fabric2d" && (
@@ -2821,7 +2481,7 @@ export default function App() {
               <BuildStudio
                 missionId={selectedMission.id}
                 isDark={isDark}
-                onOpenFinding={(id) => { setSelectedNodeId(id); setWorkspaceMode("canvas"); const n = nodes.find(x => x.id === id); if (n && (n.type === "web-signal" || n.type === "synthesis")) setCorrectionContent(n.content); }}
+                onOpenFinding={(id) => { setSelectedNodeId(id); setWorkspaceMode("fabric2d"); const n = nodes.find(x => x.id === id); if (n && (n.type === "web-signal" || n.type === "synthesis")) setCorrectionContent(n.content); }}
               />
             )}
                     </motion.div>
@@ -3344,6 +3004,9 @@ export default function App() {
                         <div className="mt-2.5">
                           <DynamicNodeBody node={selectedNode} isDark={isDark} />
                         </div>
+                        {(selectedNode.type === "web-signal" || selectedNode.type === "synthesis") && !selectedNode.conflict && selectedMission && (
+                          <RefineFinding node={selectedNode} missionId={selectedMission.id} isDark={isDark} onSaved={() => fetchMissionData(selectedMission.id)} />
+                        )}
                       </div>
 
                       {/* EVIDENCE: sources + freshness (no opaque score) */}
@@ -3358,18 +3021,17 @@ export default function App() {
                         </div>
                       </div>
 
-                      {/* OPEN CONFLICT (plain language) */}
-                      {(selectedNode.conflict || selectedNode.flagged_by === "sentinel") && selectedNode.type !== "correction" && (
-                        <div className="bg-rose-50 text-rose-700 border border-rose-200/80 dark:bg-rose-950/40 dark:border-rose-900/30 rounded-lg p-3 flex flex-col gap-1 text-[10px] leading-snug">
-                          <span className="font-bold font-mono tracking-wider flex items-center gap-1.5 uppercase leading-none">
-                            <GitCompareArrows className="w-3.5 h-3.5 text-rose-500 flex-shrink-0" />
-                            Sources disagree
-                          </span>
-                          <span>
-                            Two sources make conflicting claims here. Resolve it with a one-line correction below, or treat the finding as unconfirmed until you do.
-                          </span>
-                        </div>
-                      )}
+                      {/* RECONCILE — structured conflict resolution that writes to memory */}
+                      {((selectedNode.conflict || selectedNode.flagged_by === "sentinel") && selectedNode.type !== "correction") || (selectedNode.data && (selectedNode.data as any).resolution) ? (
+                        selectedMission ? (
+                          <ConflictResolver
+                            node={selectedNode}
+                            missionId={selectedMission.id}
+                            isDark={isDark}
+                            onResolved={() => { fetchMissionData(selectedMission.id); }}
+                          />
+                        ) : null
+                      ) : null}
 
                       {/* EXTERNAL DIRECT CITATION LINK */}
                       {selectedNode.grounded !== undefined && (

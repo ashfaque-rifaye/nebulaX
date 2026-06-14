@@ -5,7 +5,7 @@ import { createServer as createViteServer } from "vite";
 import { db } from "./src/db.ts";
 import { runMissionSensing, executeSingleAgentCognition, planMissionVariants, answerFabricQuestion, runSelfCorrection, enrichMissionNodes, runCustomAgent, generateFutures } from "./src/agents.ts";
 import { WeaveNode } from "./src/types.ts";
-import { isLLMAvailable, getProviderNames, chat, getLLMConfigSummary, updateLLMConfig, testProvider } from "./src/llm.ts";
+import { isLLMAvailable, getProviderNames, chat, chatJSON, getLLMConfigSummary, updateLLMConfig, testProvider } from "./src/llm.ts";
 import { PLEDGES, DEPLOY_COST, MANUAL_AGENT_COST, MIN_RUN_RESERVE, creditsForTokens, creditsForImage, creditsForVideo } from "./src/footprint.ts";
 import { generateMedia, getMediaConfigSummary, updateMediaConfig } from "./src/media.ts";
 import { ChatTurn } from "./src/types.ts";
@@ -482,6 +482,51 @@ async function startServer() {
       res.status(201).json(correctionNode);
     } catch (err) {
       res.status(500).json({ error: "Failed to post corrective node" });
+    }
+  });
+
+  // Reconcile a conflict: record the chosen canonical value back into memory.
+  // choice: "accept" (agent recommendation) | "a" | "b" | "custom" (+ value).
+  app.post("/api/missions/:id/conflicts/:nodeId/resolve", (req, res) => {
+    try {
+      const { choice, value } = req.body || {};
+      const by = (req as any).handle || "human";
+      const result = db.resolveConflict(req.params.nodeId, choice || "accept", value, by);
+      if (!result.conflict) return res.status(404).json({ error: "No open conflict to resolve here" });
+      const v = (result.conflict.data as any)?.resolution?.value || value || "";
+      db.addEvent({
+        id: `ev-rec-${Math.random().toString(36).substr(2, 6)}`,
+        mission_id: req.params.id, timestamp: new Date().toISOString(),
+        sender: "Reviewer",
+        message: `Conflict reconciled and written to memory: ${String(v).slice(0, 120)}`,
+        level: "success",
+      });
+      res.json({ ok: true, conflict: result.conflict, correction: result.correction });
+    } catch (err) {
+      res.status(500).json({ error: "Failed to reconcile conflict" });
+    }
+  });
+
+  // Inline "Refine" — suggest a cleaner/updated version of a finding's text.
+  // The user can then save it as a correction (writing it back to memory).
+  app.post("/api/nodes/:id/refine", async (req, res) => {
+    try {
+      const node = db.getNode(req.params.id);
+      if (!node) return res.status(404).json({ error: "Finding not found" });
+      const instruction = (req.body?.instruction || "").toString().slice(0, 300);
+      if (!isLLMAvailable()) {
+        return res.json({ suggestion: node.content, note: "No LLM configured — returned the original text." });
+      }
+      const { data, tokens } = await chatJSON<{ text: string }>(
+        `Rewrite this finding's text to be clearer, tighter and decision-ready, keeping every fact and number exactly. ${instruction ? `Extra instruction: ${instruction}.` : ""}
+TITLE: ${node.title}
+TEXT: ${node.content}
+Return JSON: { "text": "the improved version (1-3 sentences, no invented facts)" }`,
+        "Improve wording only. Never add facts or change numbers."
+      );
+      res.json({ suggestion: data?.text || node.content, tokens });
+    } catch (err) {
+      res.status(500).json({ error: "Failed to refine finding" });
     }
   });
 

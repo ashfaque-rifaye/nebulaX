@@ -66,6 +66,44 @@ export const DynamicNodeBody: React.FC<Props> = ({ node, isDark, compact }) => {
       );
     }
 
+    // ── matrix: an N-way comparison table (metrics × entities) ──
+    if (kind === "matrix" && asArray(d.columns).length && asArray(d.rows).length) {
+      const cols: string[] = asArray(d.columns).map(str);
+      const rows = asArray(d.rows).slice(0, compact ? 4 : 8);
+      const hi = typeof d.highlight === "number" ? d.highlight : -1;
+      const cell = compact ? "text-[8.5px] px-1 py-0.5" : "text-[11px] px-2 py-1";
+      return (
+        <div className="overflow-hidden">
+          <div className="flex items-center gap-1 mb-1 text-[8px] font-mono uppercase tracking-wider text-violet-500"><ArrowLeftRight className="w-2.5 h-2.5" /> comparison</div>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr>
+                  <th className={`${cell} text-left ${sub} font-mono uppercase tracking-wide`} />
+                  {cols.map((c, i) => (
+                    <th key={i} className={`${cell} text-left font-bold ${i === hi ? "text-emerald-500" : (isDark ? "text-white" : "text-slate-900")}`}>
+                      {c}{i === hi && " ✓"}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r: any, ri: number) => (
+                  <tr key={ri} className={`border-t ${isDark ? "border-white/8" : "border-slate-200/70"}`}>
+                    <td className={`${cell} ${sub} font-mono whitespace-nowrap`}>{str(r?.label)}</td>
+                    {asArray(r?.values).slice(0, cols.length).map((v: any, vi: number) => (
+                      <td key={vi} className={`${cell} font-semibold ${vi === hi ? "text-emerald-600 dark:text-emerald-400" : muted}`}>{str(v)}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {!compact && d.note && <div className={`text-[9px] font-mono mt-1.5 ${sub}`}>{str(d.note)}</div>}
+        </div>
+      );
+    }
+
     // ── comparison ──
     if (kind === "comparison" && d.left && d.right) {
       const col = (side: any, color: string) => (

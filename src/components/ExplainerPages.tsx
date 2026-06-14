@@ -1,13 +1,15 @@
 import React from "react";
 import {
   Compass, Search, FileText, ShieldCheck, Network, ShieldAlert, Sparkles, BookOpen, Mail,
-  Rocket, TrendingUp, User, Gauge, ArrowRight, CheckCircle2, AlertTriangle, Eye, GitBranch
+  Rocket, TrendingUp, User, Gauge, ArrowRight, CheckCircle2, AlertTriangle, Eye, GitBranch,
+  BarChart3, GitCompareArrows, Boxes, Hammer, Clapperboard, Image as ImageIcon
 } from "lucide-react";
 import { AGENTS, USE_CASES, PIPELINE_STEPS } from "../content.ts";
 
 const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   Compass, Search, FileText, ShieldCheck, Network, ShieldAlert, Sparkles, BookOpen, Mail,
   Rocket, TrendingUp, User, Gauge,
+  BarChart3, GitCompareArrows, Boxes, Hammer, Clapperboard, Image: ImageIcon,
 };
 const Icon = ({ name, className }: { name: string; className?: string }) => {
   const C = ICONS[name] || Sparkles;
@@ -64,7 +66,7 @@ export const HowItWorksPage: React.FC<PageProps> = ({ isDark, onLaunch }) => (
     <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
       {[
         { icon: <Eye className="w-5 h-5 text-violet-500" />, h: "Total traceability", t: "Every sentence in the brief links to the exact source it came from. No unverifiable AI 'slop'." },
-        { icon: <ShieldAlert className="w-5 h-5 text-red-500" />, h: "Self-correcting", t: "The Watchdog flags contradictions and drift; a one-line human correction heals confidence across the whole map." },
+        { icon: <ShieldAlert className="w-5 h-5 text-red-500" />, h: "Self-correcting", t: "When two sources disagree, the Reviewer surfaces the conflict instead of hiding it; a one-line correction resolves it across the whole map." },
         { icon: <Network className="w-5 h-5 text-emerald-500" />, h: "Truly agentic web", t: "Agents open and read real pages — pricing, news, careers, filings — not a model guessing from memory." },
       ].map((b, i) => (
         <div key={i} className={`group rounded-[2rem] border p-6 flex flex-col gap-2 transition-all duration-500 scroll-reveal ${card(isDark)}`}>
@@ -109,13 +111,23 @@ export const AgentsPage: React.FC<PageProps> = ({ isDark, onLaunch }) => (
           </div>
           <p className={`text-[13px] font-semibold ${a.color}`}>{a.blurb}</p>
           <p className={`text-xs leading-relaxed ${muted(isDark)}`}>{a.detail}</p>
+          {a.sources && a.sources.length > 0 && (
+            <div className="mt-auto pt-1">
+              <span className="text-[9px] font-mono uppercase tracking-wide text-slate-400">Knowledge sources</span>
+              <div className="flex flex-wrap gap-1 mt-1">
+                {a.sources.map((s, i) => (
+                  <span key={i} className={`text-[9.5px] px-1.5 py-0.5 rounded-md border ${isDark ? "border-white/10 text-gray-400 bg-white/[0.02]" : "border-slate-200 text-slate-500 bg-slate-50"}`}>{s}</span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       ))}
     </div>
 
     <div className={`rounded-[2rem] border p-6 flex flex-col sm:flex-row items-center justify-between gap-4 scroll-reveal bg-gradient-to-br from-violet-500/[0.08] to-transparent ${card(isDark)}`}>
       <p className={`text-xs ${muted(isDark)}`}>
-        <span className={`font-bold ${title(isDark)}`}>How they work together:</span> Mission Planner → Web Scout → Analysts → Fact-Checker → Memory Weaver → Watchdog → Strategist → Reporter → Assistant.
+        <span className={`font-bold ${title(isDark)}`}>How they work together:</span> Planner → Scout → Analyst → Fact-checker → Mapper → Reviewer → Synthesist → Reporter → Assistant → Architect → Builder.
       </p>
       <button onClick={() => onLaunch()} className={`${ctaPill} flex-shrink-0 px-6 py-3`}>
         See them work <ArrowRight className="w-4 h-4" />

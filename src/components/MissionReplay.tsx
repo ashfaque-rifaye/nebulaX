@@ -114,11 +114,13 @@ export const MissionReplay: React.FC<MissionReplayProps> = ({ nodes, events, isD
                     <p className={`text-[10.5px] mt-0.5 line-clamp-2 ${isDark ? "text-gray-400" : "text-slate-500"}`}>{n.content}</p>
                   </div>
                   <div
-                    className={`self-center text-[10px] font-mono font-bold ${
-                      n.confidence >= 0.8 ? "text-emerald-500" : n.confidence >= 0.5 ? "text-amber-500" : "text-red-500"
+                    className={`self-center text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border ${
+                      n.type === "correction" ? "text-emerald-500 border-emerald-500/30" :
+                      (n.conflict || n.flagged_by === "sentinel") ? "text-rose-500 border-rose-500/30" :
+                      n.verified === false ? "text-amber-500 border-amber-500/30" : "text-emerald-500 border-emerald-500/30"
                     }`}
                   >
-                    {Math.round(n.confidence * 100)}%
+                    {n.type === "correction" ? "Resolved" : (n.conflict || n.flagged_by === "sentinel") ? "Conflict" : n.verified === false ? "Review" : "Verified"}
                   </div>
                 </div>
               );

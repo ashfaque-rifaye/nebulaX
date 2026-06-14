@@ -38,7 +38,8 @@ export const TemporalVista: React.FC<TemporalVistaProps> = ({ nodes, isDark, sel
 
   const title = isDark ? "text-white" : "text-slate-900";
   const muted = isDark ? "text-gray-400" : "text-slate-500";
-  const conf = (c: number) => (c >= 0.8 ? "#22c55e" : c >= 0.5 ? "#f59e0b" : "#ef4444");
+  const dotColor = (n: WeaveNode) =>
+    (n.conflict || n.flagged_by === "sentinel") ? "#fb7185" : n.verified === false ? "#f59e0b" : "#22c55e";
 
   // Recompute provenance thread geometry (present node → future it influences).
   const recompute = useCallback(() => {
@@ -148,7 +149,7 @@ export const TemporalVista: React.FC<TemporalVistaProps> = ({ nodes, isDark, sel
                 className={`text-left rounded-lg border p-2.5 transition-all ${selectedNodeId === n.id ? "ring-1 ring-violet-500" : ""} ${lit ? "ring-1 ring-emerald-500 scale-[1.01]" : ""} ${active && !lit && hoverPresent !== n.id ? "opacity-50" : "opacity-100"} ${isDark ? "bg-[#0b0e1c]/60 border-white/5 hover:border-white/15" : "bg-white border-slate-200 hover:border-slate-300 shadow-sm"}`}
               >
                 <div className="flex items-center gap-1.5 mb-0.5">
-                  <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: conf(n.confidence) }} />
+                  <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: dotColor(n) }} />
                   <span className={`text-[11px] font-bold truncate ${title}`}>{n.title}</span>
                 </div>
                 <p className={`text-[10px] line-clamp-2 ${muted}`}>{n.content}</p>

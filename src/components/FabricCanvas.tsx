@@ -34,14 +34,16 @@ interface FabricCanvasProps {
 
 const getNodeBorder = (node: WeaveNode, isSelected: boolean, isDark: boolean) => {
   if (isSelected) return 'ring-2 ring-violet-500 shadow-violet-500/50 shadow-lg scale-[1.02]';
-  if (node.flagged_by === 'sentinel') return 'ring-2 ring-red-500 animate-pulse shadow-red-500/30 shadow-md';
+  if (node.conflict || node.flagged_by === 'sentinel') return 'ring-2 ring-rose-500 shadow-rose-500/30 shadow-md';
   return isDark ? 'border border-white/10 shadow-sm' : 'border border-slate-200 shadow-sm';
 };
 
-const getConfidenceColor = (conf: number) => {
-  if (conf >= 0.8) return 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20';
-  if (conf >= 0.5) return 'text-amber-500 bg-amber-500/10 border-amber-500/20';
-  return 'text-red-500 bg-red-500/10 border-red-500/20';
+// Binary verification status (no opaque score), matching the rest of the app.
+const getStatus = (node: WeaveNode): { label: string; cls: string } => {
+  if (node.type === 'correction') return { label: 'Resolved', cls: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20' };
+  if (node.conflict || node.flagged_by === 'sentinel') return { label: 'Conflict', cls: 'text-rose-500 bg-rose-500/10 border-rose-500/20' };
+  if (node.verified === false) return { label: 'Needs review', cls: 'text-amber-500 bg-amber-500/10 border-amber-500/20' };
+  return { label: 'Verified', cls: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20' };
 };
 
 const BaseNode = ({ data, selected, typeLabel, icon: Icon }: any) => {
@@ -58,19 +60,19 @@ const BaseNode = ({ data, selected, typeLabel, icon: Icon }: any) => {
           <Icon className="w-3.5 h-3.5 text-violet-500" />
           {typeLabel}
         </span>
-        <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border ${getConfidenceColor(node.confidence)}`}>
-          {Math.round(node.confidence * 100)}% CF
+        <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border ${getStatus(node).cls}`}>
+          {getStatus(node).label}
         </span>
       </div>
-      
+
       <h3 className="text-[13px] font-bold mb-1.5 leading-snug">{node.title}</h3>
       <p className="text-[10.5px] opacity-75 line-clamp-4 leading-relaxed mb-3 font-medium">{node.content}</p>
-      
+
       <div className="flex justify-between items-center text-[9px] font-mono opacity-60 mt-2 bg-slate-500/5 -mx-1.5 -mb-1.5 p-2 rounded-b-lg border-t border-slate-500/10">
-        <span className="truncate max-w-[150px]">Agent: {node.source}</span>
-        {node.flagged_by === 'sentinel' && (
-          <span className="text-red-500 flex items-center gap-1 font-bold">
-            <ShieldAlert className="w-3 h-3" /> DRIFT
+        <span className="truncate max-w-[150px]">{node.source}</span>
+        {(node.conflict || node.flagged_by === 'sentinel') && node.type !== 'correction' && (
+          <span className="text-rose-500 flex items-center gap-1 font-bold">
+            <ShieldAlert className="w-3 h-3" /> Conflict
           </span>
         )}
       </div>
@@ -201,11 +203,11 @@ const FabricFlow = ({ nodes: rawNodes, edges: rawEdges, isDark, selectedNodeId, 
   }, [selectedNodeId, rfNodes, fitView]);
 
   const confColor = (n: any) => {
-    const conf = (n.data?.node as WeaveNode)?.confidence ?? 0;
-    if ((n.data?.node as WeaveNode)?.flagged_by === 'sentinel') return '#fb7185';
-    if (conf >= 0.8) return '#34d399';
-    if (conf >= 0.5) return '#fbbf24';
-    return '#fb7185';
+    const node = n.data?.node as WeaveNode;
+    if (node?.type === 'correction') return '#34d399';
+    if (node?.conflict || node?.flagged_by === 'sentinel') return '#fb7185';
+    if (node?.verified === false) return '#fbbf24';
+    return '#34d399';
   };
 
   return (
@@ -239,12 +241,12 @@ const FabricFlow = ({ nodes: rawNodes, edges: rawEdges, isDark, selectedNodeId, 
           <Cpu className="w-4 h-4" />
           Intelligence Flow Map
         </h3>
-        <p className="opacity-80">Sensing → reasoning → synthesis, left to right.</p>
+        <p className="opacity-80">Sensing → comparison → read, left to right.</p>
         <p className="opacity-80 mt-0.5">Scroll to zoom · Drag to pan · Click to inspect</p>
         <div className="flex items-center gap-2.5 mt-2 pt-2 border-t border-current/10">
-          <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />≥80%</span>
-          <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-amber-400" />50–79%</span>
-          <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-rose-400" />&lt;50% / drift</span>
+          <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />Verified</span>
+          <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-amber-400" />Needs review</span>
+          <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-rose-400" />Conflict</span>
         </div>
       </Panel>
     </ReactFlow>

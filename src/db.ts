@@ -1,4 +1,4 @@
-import { WeaveNode, WeaveEdge, ProposedAction, Mission, AgentStatus, ActivityFeedEvent, ResearchBrief, TraceableSentence, Profile, MissionFootprint, MissionRun, ChatTurn, CustomAgent, Session, LedgerEntry, MediaAsset } from "./types.ts";
+import { WeaveNode, WeaveEdge, ProposedAction, Mission, AgentStatus, ActivityFeedEvent, ResearchBrief, TraceableSentence, Profile, MissionFootprint, MissionRun, ChatTurn, CustomAgent, Session, LedgerEntry, MediaAsset, Connector, BuildPlan, BuildGap, BuildTask } from "./types.ts";
 import { STARTER_CREDITS } from "./footprint.ts";
 import * as fs from "fs";
 import * as path from "path";
@@ -18,13 +18,16 @@ interface DBState {
   sessions?: Session[];
   ledger?: LedgerEntry[];
   media?: MediaAsset[];
+  connectors?: Connector[];
 }
 
-// Pre-seeded high-fidelity missions to provide an immediate "wow" factor
+// Pre-seeded, demo-ready workspaces. Every finding carries the REAL data it
+// describes (metrics / side-by-side comparisons), a binary verified badge and a
+// source count — no opaque confidence percentages.
 const SEEDED_MISSIONS: Mission[] = [
   {
     id: "mission-payments",
-    prompt: "Track how Razorpay, Cashfree, and PayU are shifting enterprise pricing and AI features.",
+    prompt: "Compare Razorpay, Cashfree and PayU on enterprise pricing, settlement and AI checkout.",
     persona: "Founder / Product Executive",
     targets: ["razorpay.com", "cashfree.com", "payu.in"],
     status: "ready",
@@ -33,289 +36,457 @@ const SEEDED_MISSIONS: Mission[] = [
   },
   {
     id: "mission-battery",
-    prompt: "Monitor solid-state battery startups for hiring surges, funding alerts, and breakthrough claims.",
-    persona: "VC / Battery Investor",
-    targets: ["quantumscape.com", "solidpowerbattery.com", "factorialenergy.com"],
+    prompt: "Compare QuantumScape, Factorial and Solid Power on energy density, cycle life and funding.",
+    persona: "VC / Deep-Tech Investor",
+    targets: ["quantumscape.com", "factorialenergy.com", "solidpowerbattery.com"],
     status: "ready",
     created_at: new Date(Date.now() - 3600000 * 24).toISOString(),
     updated_at: new Date(Date.now() - 3600000 * 22).toISOString()
   },
   {
-    id: "mission-uber",
-    prompt: "Watch Uber's self-driving division for platform architecture shifts, hiring surges, and key breakthroughs.",
-    persona: "Job Seeker / Engineering Lead",
-    targets: ["uber.com/blog/engineering", "careers.uber.com"],
+    id: "mission-stack",
+    prompt: "Audit Acme Checkout's product and tech stack — surface gaps and what to build next.",
+    persona: "Engineering Lead / CTO",
+    targets: ["github.com/acme/checkout", "checkout.acme.com"],
     status: "ready",
-    created_at: new Date(Date.now() - 3600000 * 12).toISOString(),
-    updated_at: new Date(Date.now() - 3600000 * 11).toISOString()
+    created_at: new Date(Date.now() - 3600000 * 6).toISOString(),
+    updated_at: new Date(Date.now() - 3600000 * 5).toISOString()
   }
 ];
 
 const SEEDED_NODES: WeaveNode[] = [
-  // --- Mission PAYMENTS Nodes ---
+  // ─────────────────── Mission PAYMENTS — Razorpay vs Cashfree vs PayU ───────────────────
   {
     id: "node-p1",
     mission_id: "mission-payments",
     type: "web-signal",
-    title: "Razorpay Enterprise Fee Schedule Update",
-    content: "Razorpay quiet billing shift: Enterprise pricing is transitioning to a volume-dependent tier. Transactions between ₹10L and ₹50L per month bear a 1.95% rate, while custom enterprise platforms with AI checkout-acceleration are quoted a 1.80% API routing fee + a 0.05% optimization fee.",
-    confidence: 0.9,
-    own_score: 0.9,
-    source: "PricingProductSignal @ razorpay.com/pricing",
+    title: "Razorpay enterprise pricing",
+    content: "Razorpay's enterprise tier is volume-banded: ₹10L–₹50L/month settles at 1.95%, while custom high-volume accounts with AI checkout acceleration are quoted 1.80% API routing + a 0.05% optimization fee. T+1 settlement standard, T+0 on request.",
+    confidence: 0.9, own_score: 0.9,
+    source: "razorpay.com/pricing",
     source_url: "https://razorpay.com/pricing",
-    version: 1,
-    provenance: [],
-    flagged_by: null,
+    version: 1, provenance: [], flagged_by: null,
+    corroboration: 3, verified: true,
+    grounded: true,
+    render_kind: "metrics",
+    data: { items: [
+      { label: "MDR (custom)", value: "1.80%" },
+      { label: "Standard band", value: "1.95%" },
+      { label: "AI fee", value: "+0.05%" },
+      { label: "Settlement", value: "T+1 / T+0" },
+    ] },
     created_at: new Date(Date.now() - 3600000 * 1.9).toISOString()
   },
   {
     id: "node-p2",
     mission_id: "mission-payments",
     type: "web-signal",
-    title: "Cashfree Public Onboarding Banner",
-    content: "Cashfree landing marketing page declares: '₹0 setup fee, ₹0 annual maintenance fee, and pristine transparent pricing at flat 1.90% per transaction.' High emphasis on seamless startup deployment.",
-    confidence: 0.95,
-    own_score: 0.95,
-    source: "PricingProductSignal @ cashfree.com/pricing",
+    title: "Cashfree public pricing",
+    content: "Cashfree's landing page advertises ₹0 setup, ₹0 annual maintenance, and a flat 1.90% per transaction with instant settlement on the Growth plan.",
+    confidence: 0.95, own_score: 0.95,
+    source: "cashfree.com/pricing",
     source_url: "https://cashfree.com/pricing",
-    version: 1,
-    provenance: [],
-    flagged_by: null,
+    version: 1, provenance: [], flagged_by: null,
+    corroboration: 2, verified: true,
+    grounded: true,
+    render_kind: "metrics",
+    data: { items: [
+      { label: "Flat MDR", value: "1.90%" },
+      { label: "Setup fee", value: "₹0" },
+      { label: "Maintenance", value: "₹0*" },
+      { label: "Settlement", value: "Instant" },
+    ] },
     created_at: new Date(Date.now() - 3600000 * 1.8).toISOString()
   },
   {
     id: "node-p3",
     mission_id: "mission-payments",
     type: "web-signal",
-    title: "Cashfree Developer Terms Clause 4.2",
-    content: "Sensed deep inside developer integration terms: 'A platform servicing fee of ₹500/month applies to all active API endpoints using the Smart Routing engine, waived only for merchants processing above ₹15L/month.'",
-    confidence: 0.92,
-    own_score: 0.92,
-    source: "Pathfinder @ cashfree.com/terms",
+    title: "Cashfree developer terms, Clause 4.2",
+    content: "Buried in the developer integration terms: a ₹500/month platform servicing fee applies to every active API endpoint using the Smart Routing engine, waived only for merchants processing above ₹15L/month.",
+    confidence: 0.92, own_score: 0.92,
+    source: "cashfree.com/terms/developer",
     source_url: "https://cashfree.com/terms/developer",
-    version: 1,
-    provenance: [],
-    flagged_by: null,
+    version: 1, provenance: [], flagged_by: null,
+    corroboration: 2, verified: true,
+    grounded: true,
+    render_kind: "quote",
+    data: { quote: "A platform servicing fee of ₹500/month applies to all active API endpoints using the Smart Routing engine, waived only for merchants processing above ₹15L/month.", attribution: "Developer Terms, Clause 4.2" },
     created_at: new Date(Date.now() - 3600000 * 1.7).toISOString()
+  },
+  {
+    id: "node-p-conflict",
+    mission_id: "mission-payments",
+    type: "synthesis",
+    title: "Open conflict: Cashfree's ₹0 pledge vs the ₹500 clause",
+    content: "Cashfree's public '₹0 annual maintenance' pledge conflicts with Clause 4.2 of its developer terms, which charges ₹500/month for Smart Routing endpoints. Both can't be true at face value — the swarm surfaced it for you to resolve before relying on the pricing.",
+    confidence: 0.65, own_score: 0.5,
+    source: "Cross-source check",
+    source_url: null,
+    version: 1, provenance: ["node-p2", "node-p3"], flagged_by: "sentinel",
+    corroboration: 2, verified: false, conflict: true,
+    render_kind: "text",
+    created_at: new Date(Date.now() - 3600000 * 1.2).toISOString()
   },
   {
     id: "node-p4",
     mission_id: "mission-payments",
     type: "correction",
-    title: "Cashfree Policy Shift Refinement",
-    content: "Verified with Cashfree merchant billing dashboard. The platform charge is confirmed; however, merchants onboarding before June 2026 are granted a perpetual waiver on the Smart Routing API subscription fee.",
-    confidence: 1.0,
-    own_score: 1.0,
-    source: "human veto (Verified Merchant Policy)",
+    title: "Resolved: the maintenance fee is waived in writing",
+    content: "Confirmed against the Cashfree merchant billing dashboard: the ₹500/month Smart Routing fee is real, but merchants onboarding before June 2026 get a perpetual waiver. The conflict resolves to 'fee exists, but is contractually waived for you.'",
+    confidence: 1.0, own_score: 1.0,
+    source: "Human verification · merchant dashboard",
     source_url: null,
-    version: 1,
-    provenance: ["node-p3"],
-    flagged_by: null,
+    version: 1, provenance: ["node-p-conflict", "node-p3"], flagged_by: null,
+    corroboration: 1, verified: true,
+    render_kind: "text",
     created_at: new Date(Date.now() - 3600000 * 0.5).toISOString()
   },
   {
     id: "node-p5",
     mission_id: "mission-payments",
     type: "web-signal",
-    title: "Razorpay AI Checkout Release",
-    content: "Press release: Razorpay releases 'AI Optimizer' - a predictive routing model that dynamically selects payment gateways based on real-time success rates. Claims optimizer reduces charge failures by 22% over vanilla routing.",
-    confidence: 0.88,
-    own_score: 0.88,
-    source: "NarrativeSignal @ TechCrunch",
+    title: "Razorpay 'AI Optimizer' launch",
+    content: "Razorpay shipped 'AI Optimizer', a predictive routing model that picks the gateway with the best real-time success rate per transaction. Razorpay reports it cuts charge failures by 22% versus static routing.",
+    confidence: 0.88, own_score: 0.88,
+    source: "TechCrunch",
     source_url: "https://techcrunch.com/razorpay-ai-optimizer",
-    version: 1,
-    provenance: [],
-    flagged_by: null,
+    version: 1, provenance: [], flagged_by: null,
+    corroboration: 2, verified: true,
+    grounded: true,
+    render_kind: "metrics",
+    data: { items: [
+      { label: "Failure drop", value: "−22%" },
+      { label: "Routing", value: "Predictive" },
+      { label: "Decision", value: "Real-time" },
+    ] },
     created_at: new Date(Date.now() - 3600000 * 1.5).toISOString()
   },
   {
     id: "node-p6",
     mission_id: "mission-payments",
+    type: "web-signal",
+    title: "PayU enterprise pricing & AI",
+    content: "PayU quotes 1.85% blended MDR for enterprise, ₹0 setup, T+2 standard settlement (T+1 paid add-on). Its 'PayU Engine' offers rule-based smart routing but no published success-rate uplift, and AI fraud scoring is in private beta.",
+    confidence: 0.84, own_score: 0.84,
+    source: "payu.in/pricing",
+    source_url: "https://payu.in/pricing",
+    version: 1, provenance: [], flagged_by: null,
+    corroboration: 2, verified: true,
+    grounded: true,
+    render_kind: "metrics",
+    data: { items: [
+      { label: "Blended MDR", value: "1.85%" },
+      { label: "Setup fee", value: "₹0" },
+      { label: "Settlement", value: "T+2 / T+1" },
+      { label: "AI routing", value: "Rule-based" },
+    ] },
+    created_at: new Date(Date.now() - 3600000 * 1.4).toISOString()
+  },
+  {
+    id: "node-p-matrix",
+    mission_id: "mission-payments",
     type: "synthesis",
-    title: "Contradiction Audit: Cashfree Onboarding Clashes",
-    content: "Sentinel and Veritas Flag: Cashfree's public pledge of '₹0 annual maintenance fee' directly contradicts Clause 4.2 of their Developer Terms outlining a ₹500/month Platform Servicing Fee. Ground truth corrected: fee exists but is waived conditionally.",
-    confidence: 0.65, // Low because of contradiction, but raised by human-note!
-    own_score: 0.5,
-    source: "Veritas + Sentinel Multi-Source Audit",
+    title: "Side-by-side: Razorpay vs Cashfree vs PayU",
+    content: "Three-way comparison across the metrics that actually move an enterprise checkout decision: effective MDR, fixed fees, settlement speed, and AI routing maturity.",
+    confidence: 0.94, own_score: 0.94,
+    source: "Synthesist",
     source_url: null,
-    version: 1,
-    provenance: ["node-p2", "node-p3"],
-    flagged_by: "sentinel",
-    created_at: new Date(Date.now() - 3600000 * 1.2).toISOString()
+    version: 1, provenance: ["node-p1", "node-p2", "node-p4", "node-p5", "node-p6"], flagged_by: null,
+    corroboration: 5, verified: true,
+    render_kind: "matrix",
+    data: {
+      columns: ["Razorpay", "Cashfree", "PayU"],
+      rows: [
+        { label: "Effective MDR", values: ["1.80%*", "1.90%", "1.85%"] },
+        { label: "Fixed fees", values: ["₹0", "₹500/mo†", "₹0"] },
+        { label: "Settlement", values: ["T+1 / T+0", "Instant", "T+2 / T+1"] },
+        { label: "AI routing", values: ["Predictive −22%", "Smart Routing", "Rule-based"] },
+      ],
+      note: "*custom high-volume tier · †waived for you per the verified correction",
+      highlight: 0,
+    },
+    created_at: new Date(Date.now() - 3600000 * 1.0).toISOString()
   },
   {
     id: "node-p7",
     mission_id: "mission-payments",
     type: "synthesis",
-    title: "Intelligence Vector: Quantum Routing Leap",
-    content: "Razorpay is pulling ahead in high-volume enterprise segments by backing checkout with predictive AI routing engines. Cashfree is pricing aggressively for smaller merchants but hides end-point API maintenance fees in developer sub-menus.",
-    confidence: 0.94, // Healed and backed by human correction
-    own_score: 0.94,
-    source: "Oracle Synthesis Engine",
+    title: "Where each gateway wins",
+    content: "Razorpay leads on high-volume routing economics and the only measured AI uplift (−22% failures), making it the strongest fit above ₹50L/month. Cashfree is cheapest to start and settles instantly, best for early-stage volume — once the Smart Routing fee is waived in the contract. PayU sits in the middle with the slowest settlement.",
+    confidence: 0.93, own_score: 0.93,
+    source: "Synthesist",
     source_url: null,
-    version: 1,
-    provenance: ["node-p1", "node-p4", "node-p5", "node-p6"],
-    flagged_by: null,
-    created_at: new Date(Date.now() - 3600000 * 1.0).toISOString()
+    version: 1, provenance: ["node-p-matrix", "node-p4"], flagged_by: null,
+    corroboration: 5, verified: true,
+    render_kind: "list",
+    data: { items: [
+      "Razorpay — best for high volume + measured AI routing uplift",
+      "Cashfree — cheapest start + instant settlement, after the fee waiver",
+      "PayU — middle of the pack, slowest settlement (T+2 default)",
+    ] },
+    created_at: new Date(Date.now() - 3600000 * 0.9).toISOString()
   },
 
-  // --- Mission BATTERY Nodes ---
+  // ─────────────────── Mission BATTERY — QuantumScape vs Factorial vs Solid Power ───────────────────
   {
     id: "node-b1",
     mission_id: "mission-battery",
     type: "web-signal",
-    title: "QuantumScape A0 Prototype Shipping",
-    content: "QuantumScape earnings report notes shipment of A0 cell prototypes to custom automotive partners. Cells achieve 24-layer targets with over 95% capacity retention after 800 cycles.",
-    confidence: 0.95,
-    own_score: 0.95,
-    source: "NarrativeSignal @ SEC Filings",
+    title: "QuantumScape A0 cells shipping",
+    content: "QuantumScape's earnings note confirms A0 cell prototypes shipped to automotive partners: 24-layer cells holding 95%+ capacity retention after 800 cycles. Cash runway reported into 2028.",
+    confidence: 0.95, own_score: 0.95,
+    source: "QuantumScape SEC filing",
     source_url: "https://quantumscape.com/investor-sec",
-    version: 1,
-    provenance: [],
-    flagged_by: null,
+    version: 1, provenance: [], flagged_by: null,
+    corroboration: 3, verified: true,
+    grounded: true,
+    render_kind: "metrics",
+    data: { items: [
+      { label: "Layers", value: "24" },
+      { label: "Retention", value: "95% @800" },
+      { label: "Stage", value: "A0 shipping" },
+      { label: "Runway", value: "to 2028" },
+    ] },
     created_at: new Date(Date.now() - 3600000 * 20).toISOString()
   },
   {
     id: "node-b2",
     mission_id: "mission-battery",
     type: "web-signal",
-    title: "Solid Power Scaling Bottlenecks Sensed",
-    content: "Inside sources report Solid Power's dry sulphide-electrolyte powder production encounters thermal humidity instabilities, capping pilot output of 100Ah cells at 15 cells/week vs target of 100/week.",
-    confidence: 0.72,
-    own_score: 0.72,
-    source: "TalentSignal @ Glasdoor & Industry Insider",
+    title: "Solid Power scaling bottleneck",
+    content: "Industry sources describe Solid Power's dry sulphide-electrolyte powder line hitting thermal/humidity instability, capping pilot output of 100Ah cells at ~15/week against a 100/week target. Single-source — worth a second look before acting.",
+    confidence: 0.72, own_score: 0.72,
+    source: "Industry insider (single source)",
     source_url: null,
-    version: 1,
-    provenance: [],
-    flagged_by: null,
+    version: 1, provenance: [], flagged_by: null,
+    corroboration: 1, verified: false,
+    grounded: false,
+    render_kind: "metrics",
+    data: { items: [
+      { label: "Output", value: "~15/wk" },
+      { label: "Target", value: "100/wk" },
+      { label: "Blocker", value: "Powder line" },
+    ] },
     created_at: new Date(Date.now() - 3600000 * 18).toISOString()
   },
   {
     id: "node-b3",
     mission_id: "mission-battery",
     type: "web-signal",
-    title: "Factorial Energy 40Ah Cell Test Verification",
-    content: "Independent testing laboratory TUV SUD certifies Factorial's 40Ah solid-state pouch cells. Energy density reaches 391 Wh/kg. Zero thermal runaway under nail penetration standards.",
-    confidence: 0.98,
-    own_score: 0.98,
-    source: "Veritas @ TUV SUD Registry",
+    title: "Factorial 40Ah cell certified",
+    content: "TÜV SÜD certified Factorial's 40Ah solid-state pouch cells at 391 Wh/kg with zero thermal runaway under nail-penetration testing. Joint development deals with two OEMs disclosed.",
+    confidence: 0.98, own_score: 0.98,
+    source: "TÜV SÜD registry",
     source_url: "https://tuvsud.com/factorial-verification",
-    version: 1,
-    provenance: [],
-    flagged_by: null,
+    version: 1, provenance: [], flagged_by: null,
+    corroboration: 3, verified: true,
+    grounded: true,
+    render_kind: "metrics",
+    data: { items: [
+      { label: "Density", value: "391 Wh/kg" },
+      { label: "Capacity", value: "40 Ah" },
+      { label: "Safety", value: "0 runaway" },
+      { label: "OEM deals", value: "2" },
+    ] },
     created_at: new Date(Date.now() - 3600000 * 15).toISOString()
+  },
+  {
+    id: "node-b-matrix",
+    mission_id: "mission-battery",
+    type: "synthesis",
+    title: "Side-by-side: solid-state readiness",
+    content: "Three solid-state contenders compared on the levers a deep-tech investor underwrites: verified energy density, cycle life, manufacturing readiness, and validation.",
+    confidence: 0.92, own_score: 0.92,
+    source: "Synthesist",
+    source_url: null,
+    version: 1, provenance: ["node-b1", "node-b2", "node-b3"], flagged_by: null,
+    corroboration: 3, verified: true,
+    render_kind: "matrix",
+    data: {
+      columns: ["QuantumScape", "Factorial", "Solid Power"],
+      rows: [
+        { label: "Energy density", values: ["~380 Wh/kg", "391 Wh/kg ✓", "~350 Wh/kg"] },
+        { label: "Cycle life", values: ["95% @800", "n/d", "n/d"] },
+        { label: "Mfg readiness", values: ["A0 shipping", "Pilot + OEM", "Bottlenecked"] },
+        { label: "Validation", values: ["Automaker", "TÜV SÜD ✓", "Single-source"] },
+      ],
+      note: "n/d = not disclosed in verified sources",
+      highlight: 1,
+    },
+    created_at: new Date(Date.now() - 3600000 * 14).toISOString()
   },
   {
     id: "node-b4",
     mission_id: "mission-battery",
     type: "synthesis",
-    title: "Battery Startups Technical Maturity Divergence",
-    content: "Veritas Verification Matrix: Factorial Energy stands out with certified 391 Wh/kg density and flawless security profiles. QuantumScape has automaker-validated cycle counts, but Solid Power is severely throttled by powder-handling chemistry limits.",
-    confidence: 0.91,
-    own_score: 0.91,
-    source: "Veritas Cross-Reference System",
+    title: "Read: Factorial leads on verified maturity",
+    content: "Factorial is the only contender with an independently certified density figure (391 Wh/kg, TÜV SÜD) plus OEM development deals. QuantumScape has the strongest cycle-life evidence and is shipping A0. Solid Power's bottleneck is single-sourced and unverified — treat as a watch item, not a thesis driver.",
+    confidence: 0.91, own_score: 0.91,
+    source: "Synthesist",
     source_url: null,
-    version: 1,
-    provenance: ["node-b1", "node-b2", "node-b3"],
-    flagged_by: null,
-    created_at: new Date(Date.now() - 3600000 * 14).toISOString()
+    version: 1, provenance: ["node-b-matrix"], flagged_by: null,
+    corroboration: 3, verified: true,
+    render_kind: "list",
+    data: { items: [
+      "Factorial — only certified density + OEM deals (lead)",
+      "QuantumScape — best cycle-life evidence, A0 shipping",
+      "Solid Power — bottleneck unverified, watch not thesis",
+    ] },
+    created_at: new Date(Date.now() - 3600000 * 13).toISOString()
+  },
+
+  // ─────────────────── Mission STACK — Acme Checkout product & tech audit ───────────────────
+  {
+    id: "node-s1",
+    mission_id: "mission-stack",
+    type: "web-signal",
+    title: "Current stack snapshot",
+    content: "Acme Checkout runs a React 18 SPA on a Node 18 / Express monolith, Postgres 14 (single primary), Stripe for payments, hosted single-region on Azure App Service. CI on GitHub Actions; no feature flags; issues tracked in Jira.",
+    confidence: 0.9, own_score: 0.9,
+    source: "github.com/acme/checkout",
+    source_url: "https://github.com/acme/checkout",
+    version: 1, provenance: [], flagged_by: null,
+    corroboration: 2, verified: true,
+    grounded: true,
+    render_kind: "metrics",
+    data: { items: [
+      { label: "Frontend", value: "React 18" },
+      { label: "Backend", value: "Node 18" },
+      { label: "Data", value: "Postgres 14" },
+      { label: "Hosting", value: "Azure · 1 region" },
+    ] },
+    created_at: new Date(Date.now() - 3600000 * 5.8).toISOString()
+  },
+  {
+    id: "node-s2",
+    mission_id: "mission-stack",
+    type: "web-signal",
+    title: "Payment retries aren't idempotent",
+    content: "The checkout retry path re-POSTs to /charge without an idempotency key. Under network timeouts this can double-charge; Stripe supports idempotency keys but the client doesn't send one. Reproduced on staging.",
+    confidence: 0.86, own_score: 0.86,
+    source: "Code review · /src/checkout/charge.ts",
+    source_url: "https://github.com/acme/checkout",
+    version: 1, provenance: [], flagged_by: null,
+    corroboration: 2, verified: true,
+    grounded: true,
+    render_kind: "list",
+    data: { items: [
+      "Retry re-POSTs /charge with no idempotency key",
+      "Risk: double-charge on timeout",
+      "Fix: pass Stripe Idempotency-Key per attempt",
+    ] },
+    created_at: new Date(Date.now() - 3600000 * 5.6).toISOString()
+  },
+  {
+    id: "node-s3",
+    mission_id: "mission-stack",
+    type: "web-signal",
+    title: "Live key in the client bundle",
+    content: "A Stripe restricted key and an analytics secret are inlined into the client JS bundle via VITE_ env vars. They ship to every browser. Should be moved server-side and rotated.",
+    confidence: 0.88, own_score: 0.88,
+    source: "Bundle scan · dist/assets/index.js",
+    source_url: null,
+    version: 1, provenance: [], flagged_by: null,
+    corroboration: 2, verified: true,
+    grounded: true,
+    render_kind: "list",
+    data: { items: [
+      "Restricted key + analytics secret in client bundle",
+      "Exposed to every browser session",
+      "Fix: proxy server-side, rotate keys",
+    ] },
+    created_at: new Date(Date.now() - 3600000 * 5.4).toISOString()
+  },
+  {
+    id: "node-s4",
+    mission_id: "mission-stack",
+    type: "web-signal",
+    title: "Checkout performance budget blown",
+    content: "Field data: checkout route loads a 1.8 MB JS bundle, time-to-interactive 4.2s on mid-tier mobile, LCP 3.1s. The pricing table blocks render on a synchronous fetch. Cart-abandon correlates with the slow first paint.",
+    confidence: 0.84, own_score: 0.84,
+    source: "RUM · checkout.acme.com",
+    source_url: "https://checkout.acme.com",
+    version: 1, provenance: [], flagged_by: null,
+    corroboration: 2, verified: true,
+    grounded: true,
+    render_kind: "metrics",
+    data: { items: [
+      { label: "Bundle", value: "1.8 MB" },
+      { label: "TTI", value: "4.2 s" },
+      { label: "LCP", value: "3.1 s" },
+      { label: "Blocking fetch", value: "Yes" },
+    ] },
+    created_at: new Date(Date.now() - 3600000 * 5.2).toISOString()
+  },
+  {
+    id: "node-s-matrix",
+    mission_id: "mission-stack",
+    type: "synthesis",
+    title: "Today vs target architecture",
+    content: "What the audit found versus where the stack should be to ship a reliable, fast, multi-region checkout.",
+    confidence: 0.9, own_score: 0.9,
+    source: "Synthesist",
+    source_url: null,
+    version: 1, provenance: ["node-s1", "node-s2", "node-s3", "node-s4"], flagged_by: null,
+    corroboration: 4, verified: true,
+    render_kind: "matrix",
+    data: {
+      columns: ["Today", "Target"],
+      rows: [
+        { label: "Payment retries", values: ["Non-idempotent", "Idempotency keys"] },
+        { label: "Secrets", values: ["In client bundle", "Server-side, rotated"] },
+        { label: "Checkout TTI", values: ["4.2 s", "< 2.0 s"] },
+        { label: "Regions", values: ["1 (Azure)", "2 + failover"] },
+      ],
+      highlight: 1,
+    },
+    created_at: new Date(Date.now() - 3600000 * 5.0).toISOString()
+  },
+  {
+    id: "node-s5",
+    mission_id: "mission-stack",
+    type: "synthesis",
+    title: "Top 3 to build next",
+    content: "Ranked by risk-reduction-per-effort: idempotent payments first (correctness + money), then move secrets server-side (security), then split the checkout bundle and lazy-load the pricing table (conversion).",
+    confidence: 0.92, own_score: 0.92,
+    source: "Synthesist",
+    source_url: null,
+    version: 1, provenance: ["node-s-matrix"], flagged_by: null,
+    corroboration: 4, verified: true,
+    render_kind: "list",
+    data: { items: [
+      "Idempotent payment retries (correctness)",
+      "Move secrets server-side + rotate (security)",
+      "Code-split checkout, lazy pricing table (speed)",
+    ] },
+    created_at: new Date(Date.now() - 3600000 * 4.8).toISOString()
   }
 ];
 
 const SEEDED_EDGES: WeaveEdge[] = [
-  // --- Mission PAYMENTS Edges ---
-  {
-    id: "edge-p1",
-    mission_id: "mission-payments",
-    source: "node-p2",
-    target: "node-p6",
-    relation: "source-of",
-    label: "public promise",
-    created_by: "Cartographer",
-    created_at: new Date(Date.now() - 3600000 * 1.2).toISOString()
-  },
-  {
-    id: "edge-p2",
-    mission_id: "mission-payments",
-    source: "node-p3",
-    target: "node-p6",
-    relation: "contradicts",
-    label: "fee contradiction",
-    created_by: "Sentinel",
-    created_at: new Date(Date.now() - 3600000 * 1.2).toISOString()
-  },
-  {
-    id: "edge-p3",
-    mission_id: "mission-payments",
-    source: "node-p4",
-    target: "node-p6",
-    relation: "correction-applied",
-    label: "resolves waiver",
-    created_by: "Cartographer",
-    created_at: new Date(Date.now() - 3600000 * 0.5).toISOString()
-  },
-  {
-    id: "edge-p4",
-    mission_id: "mission-payments",
-    source: "node-p1",
-    target: "node-p7",
-    relation: "supports",
-    label: "routing patterns",
-    created_by: "Cartographer",
-    created_at: new Date(Date.now() - 3600000 * 1.0).toISOString()
-  },
-  {
-    id: "edge-p5",
-    mission_id: "mission-payments",
-    source: "node-p5",
-    target: "node-p7",
-    relation: "supports",
-    label: "AI features",
-    created_by: "Cartographer",
-    created_at: new Date(Date.now() - 3600000 * 1.0).toISOString()
-  },
-  {
-    id: "edge-p6",
-    mission_id: "mission-payments",
-    source: "node-p6",
-    target: "node-p7",
-    relation: "weaved",
-    label: "audited baseline",
-    created_by: "Cartographer",
-    created_at: new Date(Date.now() - 3600000 * 1.0).toISOString()
-  },
+  // ── PAYMENTS: the conflict thread + the comparison thread ──
+  { id: "edge-p1", mission_id: "mission-payments", source: "node-p2", target: "node-p-conflict", relation: "source-of", label: "public ₹0 pledge", created_by: "Synthesist", created_at: new Date(Date.now() - 3600000 * 1.2).toISOString() },
+  { id: "edge-p2", mission_id: "mission-payments", source: "node-p3", target: "node-p-conflict", relation: "contradicts", label: "₹500 clause", created_by: "Synthesist", created_at: new Date(Date.now() - 3600000 * 1.2).toISOString() },
+  { id: "edge-p3", mission_id: "mission-payments", source: "node-p4", target: "node-p-conflict", relation: "correction-applied", label: "resolved: waived", created_by: "human", created_at: new Date(Date.now() - 3600000 * 0.5).toISOString() },
+  { id: "edge-p4", mission_id: "mission-payments", source: "node-p1", target: "node-p-matrix", relation: "supports", label: "Razorpay", created_by: "Synthesist", created_at: new Date(Date.now() - 3600000 * 1.0).toISOString() },
+  { id: "edge-p5", mission_id: "mission-payments", source: "node-p2", target: "node-p-matrix", relation: "supports", label: "Cashfree", created_by: "Synthesist", created_at: new Date(Date.now() - 3600000 * 1.0).toISOString() },
+  { id: "edge-p6", mission_id: "mission-payments", source: "node-p5", target: "node-p-matrix", relation: "supports", label: "AI routing", created_by: "Synthesist", created_at: new Date(Date.now() - 3600000 * 1.0).toISOString() },
+  { id: "edge-p7", mission_id: "mission-payments", source: "node-p6", target: "node-p-matrix", relation: "supports", label: "PayU", created_by: "Synthesist", created_at: new Date(Date.now() - 3600000 * 1.0).toISOString() },
+  { id: "edge-p8", mission_id: "mission-payments", source: "node-p-matrix", target: "node-p7", relation: "weaved", label: "read-out", created_by: "Synthesist", created_at: new Date(Date.now() - 3600000 * 0.9).toISOString() },
 
-  // --- Mission BATTERY Edges ---
-  {
-    id: "edge-b1",
-    mission_id: "mission-battery",
-    source: "node-b1",
-    target: "node-b4",
-    relation: "weaved",
-    label: "shipment indicators",
-    created_by: "Cartographer",
-    created_at: new Date(Date.now() - 3600000 * 14).toISOString()
-  },
-  {
-    id: "edge-b2",
-    mission_id: "mission-battery",
-    source: "node-b2",
-    target: "node-b4",
-    relation: "contradicts",
-    label: "production blocks",
-    created_by: "Sentinel",
-    created_at: new Date(Date.now() - 3600000 * 14).toISOString()
-  },
-  {
-    id: "edge-b3",
-    mission_id: "mission-battery",
-    source: "node-b3",
-    target: "node-b4",
-    relation: "weaved",
-    label: "test compliance",
-    created_by: "Cartographer",
-    created_at: new Date(Date.now() - 3600000 * 14).toISOString()
-  }
+  // ── BATTERY: three signals → comparison → read ──
+  { id: "edge-b1", mission_id: "mission-battery", source: "node-b1", target: "node-b-matrix", relation: "supports", label: "QuantumScape", created_by: "Synthesist", created_at: new Date(Date.now() - 3600000 * 14).toISOString() },
+  { id: "edge-b2", mission_id: "mission-battery", source: "node-b2", target: "node-b-matrix", relation: "supports", label: "Solid Power", created_by: "Synthesist", created_at: new Date(Date.now() - 3600000 * 14).toISOString() },
+  { id: "edge-b3", mission_id: "mission-battery", source: "node-b3", target: "node-b-matrix", relation: "supports", label: "Factorial", created_by: "Synthesist", created_at: new Date(Date.now() - 3600000 * 14).toISOString() },
+  { id: "edge-b4", mission_id: "mission-battery", source: "node-b-matrix", target: "node-b4", relation: "weaved", label: "read-out", created_by: "Synthesist", created_at: new Date(Date.now() - 3600000 * 13).toISOString() },
+
+  // ── STACK: four findings → today/target → build shortlist ──
+  { id: "edge-s1", mission_id: "mission-stack", source: "node-s1", target: "node-s-matrix", relation: "supports", label: "stack", created_by: "Synthesist", created_at: new Date(Date.now() - 3600000 * 5.0).toISOString() },
+  { id: "edge-s2", mission_id: "mission-stack", source: "node-s2", target: "node-s-matrix", relation: "supports", label: "reliability", created_by: "Synthesist", created_at: new Date(Date.now() - 3600000 * 5.0).toISOString() },
+  { id: "edge-s3", mission_id: "mission-stack", source: "node-s3", target: "node-s-matrix", relation: "supports", label: "security", created_by: "Synthesist", created_at: new Date(Date.now() - 3600000 * 5.0).toISOString() },
+  { id: "edge-s4", mission_id: "mission-stack", source: "node-s4", target: "node-s-matrix", relation: "supports", label: "speed", created_by: "Synthesist", created_at: new Date(Date.now() - 3600000 * 5.0).toISOString() },
+  { id: "edge-s5", mission_id: "mission-stack", source: "node-s-matrix", target: "node-s5", relation: "weaved", label: "shortlist", created_by: "Synthesist", created_at: new Date(Date.now() - 3600000 * 4.8).toISOString() }
 ];
 
 const SEEDED_ACTIONS: ProposedAction[] = [
@@ -350,23 +521,23 @@ Enterprise Operations Lead`
     title: "Put Cashfree's developer terms on a standing watch",
     payload: {
       target: "cashfree.com/terms/developer",
-      body: "Stand up a daily watch on Cashfree's developer terms (Clause 4.2). Alert me if the ₹500/mo Smart Routing fee, or its conditional waiver wording, changes — the public ‘₹0 maintenance’ pledge already contradicts the fine print once."
+      body: "Stand up a daily watch on Cashfree's developer terms (Clause 4.2). Alert me if the ₹500/mo Smart Routing fee, or its waiver wording, changes — the public ‘₹0 maintenance’ pledge already conflicts with the fine print once."
     },
-    rationale: "Sentinel flagged a live contradiction between Cashfree's public pricing and its developer terms; the waiver is conditional, so the clause is worth watching continuously.",
-    provenance: ["node-p3", "node-p6"],
+    rationale: "The swarm surfaced a live conflict between Cashfree's public pricing and its developer terms; the waiver is conditional, so the clause is worth watching continuously.",
+    provenance: ["node-p3", "node-p-conflict"],
     status: "proposed"
   },
   {
     id: "action-p3",
     mission_id: "mission-payments",
     kind: "deep-dive",
-    title: "Deep-dive PayU's enterprise AI roadmap",
+    title: "Deep-dive PayU's AI fraud-scoring beta",
     payload: {
-      seed: "Track PayU's enterprise pricing tiers and AI checkout features, and how they compare to Razorpay's AI Optimizer and Cashfree's Smart Routing",
-      body: "Spawn a focused child mission on PayU: enterprise pricing, AI checkout/routing features, and recent launches — to complete the three-way competitive picture against Razorpay and Cashfree."
+      seed: "Track PayU's private AI fraud-scoring beta and any published success-rate uplift, and how it compares to Razorpay's AI Optimizer (−22% failures)",
+      body: "Spawn a focused child mission on PayU's AI roadmap: the private fraud-scoring beta, any measured success-rate uplift, and rollout timing — the one column where PayU's data is still thin in the comparison."
     },
-    rationale: "The fabric covers Razorpay and Cashfree in depth but PayU is thin; a scoped deep-dive closes the competitive gap.",
-    provenance: ["node-p5", "node-p7"],
+    rationale: "PayU is fully in the three-way comparison except on measured AI uplift; a scoped deep-dive closes the last data gap.",
+    provenance: ["node-p6", "node-p-matrix"],
     status: "proposed"
   },
   {
@@ -375,10 +546,10 @@ Enterprise Operations Lead`
     kind: "decision",
     title: "Lock the verified ₹0-maintenance waiver into the MSA",
     payload: {
-      body: "Decision: before signing, cite the human-verified correction — Cashfree's ₹500/mo Smart Routing fee is waived in perpetuity for merchants onboarding before June 2026. Get the waiver written into the MSA, not left to policy."
+      body: "Decision: before signing, cite the verified correction — Cashfree's ₹500/mo Smart Routing fee is waived in perpetuity for merchants onboarding before June 2026. Get the waiver written into the MSA, not left to policy."
     },
-    rationale: "A human veto already corrected and confidence-healed this claim to 100%; turning it into a contract clause converts verified intelligence into a protected commercial term.",
-    provenance: ["node-p4", "node-p6"],
+    rationale: "The conflict resolved to a verified, in-writing waiver; turning it into a contract clause converts the finding into a protected commercial term.",
+    provenance: ["node-p4", "node-p-conflict"],
     status: "proposed"
   },
 
@@ -389,9 +560,9 @@ Enterprise Operations Lead`
     kind: "decision",
     title: "Re-weight capital from Solid Power toward Factorial Energy",
     payload: {
-      body: "Decision: shift Solid Power's allocation out 3–4 quarters and redirect surplus to Factorial Energy. Solid Power's powder fabrication is thermally constrained, capping A-sample shipping cells; Factorial holds flawless 391 Wh/kg TÜV SÜD certs."
+      body: "Decision: shift Solid Power's allocation out 3–4 quarters and redirect surplus to Factorial Energy. Solid Power's bottleneck is single-sourced and unverified; Factorial holds the only TÜV SÜD-certified 391 Wh/kg figure plus OEM deals."
     },
-    rationale: "Solid Power's bottleneck is a structural risk to the timeline; re-routing capital to the certified leader minimizes cycle delays.",
+    rationale: "Factorial is the verified leader and Solid Power's risk is unconfirmed; re-routing toward certified maturity de-risks the timeline.",
     provenance: ["node-b2", "node-b3", "node-b4"],
     status: "proposed"
   },
@@ -406,6 +577,33 @@ Enterprise Operations Lead`
     },
     rationale: "A0 shipments to automotive partners are the clearest near-term signal of QuantumScape's execution; cadence changes move the thesis.",
     provenance: ["node-b1", "node-b4"],
+    status: "proposed"
+  },
+
+  // --- Mission STACK Actions ---
+  {
+    id: "action-s1",
+    mission_id: "mission-stack",
+    kind: "decision",
+    title: "Ship idempotent payment retries this sprint",
+    payload: {
+      body: "Decision: make the /charge retry path idempotent before anything else. Generate a per-attempt key client-side, pass Stripe's Idempotency-Key header, and add a regression test that replays a timed-out charge. This is correctness + money, not polish."
+    },
+    rationale: "The retry double-charge is the only finding that can cost real money on every timeout; it ranks first on risk-reduction-per-effort.",
+    provenance: ["node-s2", "node-s5"],
+    status: "proposed"
+  },
+  {
+    id: "action-s2",
+    mission_id: "mission-stack",
+    kind: "reminder",
+    title: "Rotate the exposed keys today",
+    payload: {
+      deadline: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
+      body: "The restricted Stripe key and analytics secret are in the client bundle. Rotate both today, move the calls behind a server proxy, and add a CI check that fails the build if a secret name reaches dist/."
+    },
+    rationale: "Exposed secrets are live in every shipped bundle; rotation is time-sensitive and cheap.",
+    provenance: ["node-s3"],
     status: "proposed"
   }
 ];
@@ -447,19 +645,116 @@ const SEEDED_EVENTS: ActivityFeedEvent[] = [
     id: "event-5",
     mission_id: "mission-payments",
     timestamp: new Date(Date.now() - 3600000 * 1.2).toISOString(),
-    sender: "Sentinel",
-    message: "CRITICAL DRIFT: Double-policy contradict detected. Cashfree's ₹0 fee claim conflicts with Clause 4.2 platform fee terms.",
-    level: "error"
+    sender: "Fact-checker",
+    message: "Conflict surfaced: Cashfree's public ‘₹0 maintenance’ pledge doesn't match Clause 4.2's ₹500/mo Smart Routing fee. Flagged for review.",
+    level: "warn"
   },
   {
     id: "event-6",
     mission_id: "mission-payments",
     timestamp: new Date(Date.now() - 3600000 * 0.5).toISOString(),
-    sender: "Cartographer",
-    message: "Healed Weave: Applied human override correction. Downstream confidence scores propagating correction waivers successfully.",
+    sender: "Synthesist",
+    message: "Conflict resolved: verified against the merchant dashboard — the fee exists but is waived in writing for pre-June-2026 onboarding.",
     level: "success"
   }
 ];
+
+// The org tools NebulaX can connect to and pull working context from. Connecting
+// one is simulated for the demo: it flips to "connected" and surfaces detected
+// context that feeds the analysis and gives build tasks somewhere to land.
+const SEEDED_CONNECTORS: Connector[] = [
+  { id: "github", name: "GitHub", category: "Code", icon: "Github", status: "connected", summary: "Repos, pull requests, issues and CI status.", detected: ["acme/checkout · 38 open issues", "No idempotency key in /charge", "Secret name found in dist bundle"] },
+  { id: "azure", name: "Azure", category: "Cloud", icon: "Cloud", status: "available", summary: "App Service, regions, cost and alerts.", detected: ["1 region (Central India)", "No failover slot", "P95 latency 480ms"] },
+  { id: "jira", name: "Jira", category: "Tracking", icon: "SquareKanban", status: "available", summary: "Backlog, sprints, and one-click issue creation.", detected: ["Sprint 24 · 12 in progress", "No security epic", "3 stale 'checkout' bugs"] },
+  { id: "figma", name: "Figma", category: "Design", icon: "PenTool", status: "available", summary: "Designs, prototypes and design tokens.", detected: ["Checkout v2 frames", "Token set: Acme/Light", "2 prototypes linked"] },
+  { id: "slack", name: "Slack", category: "Comms", icon: "MessageSquare", status: "available", summary: "Channels, alerts and approval routing.", detected: ["#payments · 4 alerts today", "Routes approvals to @leads", "Incident webhook live"] },
+];
+
+// Pre-built "what to build next" plans for the seeded workspaces. Each turns the
+// verified findings into gaps → a prototype → ranked, connector-routed tasks.
+const BUILD_PLANS: Record<string, Omit<BuildPlan, "connectors">> = {
+  "mission-payments": {
+    mission_id: "mission-payments",
+    headline: "Build a smart-rail router that picks the cheapest verified gateway per transaction",
+    rationale: "The verified comparison shows no single gateway wins everywhere — Razorpay leads on AI routing economics, Cashfree on instant settlement, PayU in between. A thin routing layer captures the best of each instead of locking to one.",
+    gaps: [
+      { id: "g-p1", title: "Locked to a single gateway", detail: "All checkout traffic goes to one rail, so you pay its MDR even when another rail is cheaper or settles faster for that transaction.", severity: "high", area: "Architecture" },
+      { id: "g-p2", title: "Fee waiver lives in an email, not in code", detail: "Cashfree's ₹0-maintenance waiver is verified but not enforced anywhere — a billing change could silently start charging ₹500/mo.", severity: "medium", area: "Contracts" },
+      { id: "g-p3", title: "No measured AI uplift for 2 of 3 rails", detail: "Only Razorpay publishes a success-rate uplift (−22%). PayU and Cashfree are unmeasured, so routing rules can't weigh them fairly yet.", severity: "low", area: "Data" },
+    ],
+    prototype: {
+      name: "Smart Rail Router",
+      summary: "A routing layer that scores each gateway per transaction on live MDR, settlement and success rate, then sends the charge to the winner — with a cost simulator built from the verified comparison matrix.",
+      stack: ["React", "Node / Express", "Razorpay + Cashfree + PayU SDKs", "Postgres", "Redis (rate cache)"],
+      screens: [
+        { name: "Rail comparison", purpose: "Live MDR, fees, settlement and AI uplift side-by-side (from the verified matrix)." },
+        { name: "Routing rules", purpose: "Per-segment rules: volume band, card type, settlement need." },
+        { name: "Cost simulator", purpose: "Replay last month's transactions to project savings per routing policy." },
+      ],
+    },
+    tasks: [
+      { id: "t-p1", title: "Integrate Razorpay AI Optimizer behind a flag", detail: "Wire the predictive-routing endpoint, measure the −22% claim on your own traffic before defaulting to it.", effort: "M", connector: "github" },
+      { id: "t-p2", title: "Build the cost simulator from the matrix", detail: "Feed the verified MDR/settlement rows into a replay over historical charges.", effort: "M", connector: "github" },
+      { id: "t-p3", title: "Encode the Cashfree fee waiver as a guard", detail: "Assert ₹0 maintenance on every invoice import; alert if a ₹500 line appears.", effort: "S", connector: "jira" },
+      { id: "t-p4", title: "Route MDR-change alerts to #payments", detail: "Hook the standing watch on Cashfree's terms into Slack.", effort: "S", connector: "slack" },
+    ],
+  },
+  "mission-battery": {
+    mission_id: "mission-battery",
+    headline: "Build a diligence board that tracks verified solid-state milestones, not press claims",
+    rationale: "Factorial is the only contender with a certified density figure and OEM deals; QuantumScape has the cycle-life evidence; Solid Power's risk is single-sourced. A board that only counts verified milestones keeps the thesis honest.",
+    gaps: [
+      { id: "g-b1", title: "Cycle-life undisclosed for 2 of 3", detail: "Only QuantumScape publishes retention-after-cycles. Factorial and Solid Power are blank, so maturity can't be compared on durability.", severity: "medium", area: "Data" },
+      { id: "g-b2", title: "Solid Power's blocker is unverified", detail: "The bottleneck claim is single-source — it shouldn't drive allocation until corroborated.", severity: "high", area: "Verification" },
+      { id: "g-b3", title: "No funding-runway tracker", detail: "Runway is the real clock on a deep-tech bet; it isn't being tracked against milestone burn.", severity: "low", area: "Risk" },
+    ],
+    prototype: {
+      name: "Solid-State Diligence Board",
+      summary: "A board that ingests filings, certifications and OEM disclosures, scores each contender only on verified milestones, and flags single-source claims so they never silently become facts.",
+      stack: ["React", "Node", "Postgres", "Recharts", "Scheduled ingestion jobs"],
+      screens: [
+        { name: "Contender matrix", purpose: "Verified density, cycle life, readiness and validation per company." },
+        { name: "Milestone timeline", purpose: "Filing- and cert-backed events, single-source items visibly marked." },
+        { name: "Runway tracker", purpose: "Cash runway vs milestone burn, with alerts on dilution events." },
+      ],
+    },
+    tasks: [
+      { id: "t-b1", title: "Ingest QuantumScape SEC + earnings", detail: "Scheduled pull of filings; extract cells/layer, retention, runway.", effort: "M", connector: "azure" },
+      { id: "t-b2", title: "Add a certification verification source", detail: "Cross-check density claims against TÜV/UL registries before they count.", effort: "S", connector: "github" },
+      { id: "t-b3", title: "Track OEM-deal disclosures", detail: "Watch for new joint-development announcements per contender.", effort: "S", connector: "jira" },
+      { id: "t-b4", title: "Alert on new cycle-life data", detail: "Notify when any contender first publishes retention-after-cycles.", effort: "S", connector: "slack" },
+    ],
+  },
+  "mission-stack": {
+    mission_id: "mission-stack",
+    headline: "Ship idempotent, secure, fast checkout — three builds, ranked by risk-reduction-per-effort",
+    rationale: "The audit found two correctness/security issues that can cost money or leak secrets, plus a speed problem hurting conversion. Fixing them in that order buys down the most risk for the least work before any new feature.",
+    gaps: [
+      { id: "g-s1", title: "Payment retries aren't idempotent", detail: "The /charge retry re-POSTs with no idempotency key, so a network timeout can double-charge a customer. Reproduced on staging.", severity: "high", area: "Reliability" },
+      { id: "g-s2", title: "Live keys in the client bundle", detail: "A restricted Stripe key and an analytics secret ship in the browser JS — exposed to every session.", severity: "high", area: "Security" },
+      { id: "g-s3", title: "Checkout is slow (4.2s TTI)", detail: "A 1.8 MB bundle and a render-blocking pricing fetch push time-to-interactive to 4.2s on mobile, correlating with cart abandonment.", severity: "medium", area: "Performance" },
+      { id: "g-s4", title: "Single region, no failover", detail: "All traffic runs from one Azure region with no failover slot — an outage takes checkout fully down.", severity: "medium", area: "Resilience" },
+    ],
+    prototype: {
+      name: "Checkout 2.0",
+      summary: "A hardened checkout: idempotent charges, secrets behind a server proxy, a code-split bundle that loads under 2s, and a warm second region for failover.",
+      stack: ["React 18", "Node 18 / Express", "Stripe", "Azure (2 regions)", "Postgres 14"],
+      screens: [
+        { name: "Idempotent charge flow", purpose: "Per-attempt key, safe retries, replay-timeout regression test." },
+        { name: "Secrets proxy", purpose: "Server-side token exchange; nothing secret reaches the browser." },
+        { name: "Code-split checkout", purpose: "Lazy-loaded pricing table, TTI under 2s on mid-tier mobile." },
+        { name: "Region failover", purpose: "Warm standby in a second region with health-based cutover." },
+      ],
+    },
+    tasks: [
+      { id: "t-s1", title: "Add Stripe Idempotency-Key to the retry path", detail: "Generate a per-attempt key client-side; add a test that replays a timed-out charge and asserts a single capture.", effort: "M", connector: "github" },
+      { id: "t-s2", title: "Move secrets server-side + rotate", detail: "Proxy the calls, rotate both keys, and add a CI check that fails if a secret name reaches dist/.", effort: "M", connector: "github" },
+      { id: "t-s3", title: "Code-split checkout, lazy pricing table", detail: "Split the 1.8 MB bundle and defer the pricing fetch to hit <2s TTI.", effort: "M", connector: "github" },
+      { id: "t-s4", title: "Stand up a second Azure region + failover", detail: "Warm standby slot with health-based cutover.", effort: "L", connector: "azure" },
+      { id: "t-s5", title: "File the above as a hardening sprint", detail: "Create the epic and stories with the findings attached.", effort: "S", connector: "jira" },
+    ],
+  },
+};
 
 // In-memory Database manager with atomic JSON saving
 class Database {
@@ -474,7 +769,8 @@ class Database {
     customAgents: [],
     sessions: [],
     ledger: [],
-    media: []
+    media: [],
+    connectors: [...SEEDED_CONNECTORS]
   };
 
   constructor() {
@@ -522,6 +818,7 @@ class Database {
         if (!this.state.sessions) this.state.sessions = [];
         if (!this.state.ledger) this.state.ledger = [];
         if (!this.state.media) this.state.media = [];
+        if (!this.state.connectors || this.state.connectors.length === 0) this.state.connectors = [...SEEDED_CONNECTORS];
         // Backfill profiles created before the wallet ledger existed.
         for (const p of this.state.profiles) if (p.totalSpent === undefined) p.totalSpent = 0;
         this.save();
@@ -538,7 +835,8 @@ class Database {
           customAgents: [],
           sessions: [],
           ledger: [],
-          media: []
+          media: [],
+          connectors: [...SEEDED_CONNECTORS]
         };
         this.save();
       }
@@ -555,7 +853,8 @@ class Database {
         customAgents: [],
         sessions: [],
         ledger: [],
-        media: []
+        media: [],
+        connectors: [...SEEDED_CONNECTORS]
       };
     }
   }
@@ -850,6 +1149,78 @@ class Database {
     this.save();
   }
 
+  // ─── Connectors (org tools NebulaX plugs into) ─────────────────────────────
+  public getConnectors(): Connector[] {
+    if (!this.state.connectors || this.state.connectors.length === 0) this.state.connectors = [...SEEDED_CONNECTORS];
+    return this.state.connectors;
+  }
+
+  public setConnectorStatus(id: string, status: Connector["status"]): Connector | undefined {
+    const c = this.getConnectors().find(x => x.id === id);
+    if (c) { c.status = status; this.save(); }
+    return c;
+  }
+
+  // ─── Build plan (Analyze → Prototype → Build) ──────────────────────────────
+  // Returns the "what to build next" plan for a mission: seeded for the demo
+  // workspaces, derived from the live fabric for everything else.
+  public getBuildPlan(missionId: string): BuildPlan {
+    const connectors = this.getConnectors();
+    const seeded = BUILD_PLANS[missionId];
+    if (seeded) return { ...seeded, connectors };
+
+    // ── Dynamic fallback: build a plan from the real woven fabric ──
+    const mission = this.getMission(missionId);
+    const nodes = this.getNodes(missionId);
+    const actions = this.getActions(missionId);
+    const signals = nodes.filter(n => n.type === "web-signal");
+    const syntheses = nodes.filter(n => n.type === "synthesis" && !n.conflict && n.flagged_by !== "sentinel");
+    const conflicts = nodes.filter(n => n.conflict || n.flagged_by === "sentinel");
+    const unverified = signals.filter(n => n.verified === false);
+    const topSynth = syntheses[0];
+
+    const gaps: BuildGap[] = [];
+    conflicts.slice(0, 2).forEach((c, i) => gaps.push({
+      id: `g-dyn-c${i}`, title: c.title, detail: c.content.slice(0, 180),
+      severity: "high", area: "Verification",
+    }));
+    unverified.slice(0, 2).forEach((n, i) => gaps.push({
+      id: `g-dyn-u${i}`, title: `Single-source: ${n.title}`, detail: `${n.content.slice(0, 150)} — corroborate before relying on it.`,
+      severity: "medium", area: "Data",
+    }));
+    if (gaps.length === 0 && topSynth) gaps.push({
+      id: "g-dyn-0", title: "Turn the lead insight into a build", detail: topSynth.content.slice(0, 180),
+      severity: "low", area: "Opportunity",
+    });
+
+    const tasks: BuildTask[] = actions.slice(0, 4).map((a, i) => ({
+      id: `t-dyn-${i}`, title: a.title, detail: (a.payload?.body || a.rationale || "").slice(0, 160),
+      effort: (i === 0 ? "M" : "S") as BuildTask["effort"],
+      connector: ["github", "jira", "slack", "azure"][i % 4],
+    }));
+
+    return {
+      mission_id: missionId,
+      headline: topSynth ? `Build on the verified read: ${topSynth.title}` : `Stand up a tracker for "${mission?.prompt || "this mission"}"`,
+      rationale: topSynth?.content?.slice(0, 200) || "Turn the strongest verified findings into a prototype and a short, ranked build list.",
+      gaps,
+      prototype: {
+        name: `${(mission?.prompt || "Insight").split(" ").slice(0, 3).join(" ")} workspace`,
+        summary: "A focused tool that operationalizes this mission's verified findings: track the metrics that matter, alert on changes, and route follow-ups to the team's tools.",
+        stack: ["React", "Node", "Postgres", "Scheduled ingestion"],
+        screens: [
+          { name: "Findings dashboard", purpose: "The verified metrics and comparisons from this mission, live." },
+          { name: "Change alerts", purpose: "Notify when a tracked figure or source moves." },
+          { name: "Action queue", purpose: "Proposed next moves, routed to the right connected tool." },
+        ],
+      },
+      tasks: tasks.length ? tasks : [
+        { id: "t-dyn-0", title: "Re-sense to refresh the fabric", detail: "Run another sensing pass so the build plan reflects the latest sources.", effort: "S", connector: "github" },
+      ],
+      connectors,
+    };
+  }
+
   // ─── Runs (mission history / time-series) ──────────────────────────────────
   public addRun(missionId: string, run: MissionRun) {
     const m = this.getMission(missionId);
@@ -1068,64 +1439,90 @@ class Database {
 
     if (missionId === "mission-payments") {
       return {
-        summary: "An in-depth multi-agent sensing audit of fintech billing portals reveals that while payment platforms pitch absolute transparency, integration terms harbor conditional endpoint pricing.",
+        summary: "Across Razorpay, Cashfree and PayU, no single gateway wins everywhere. Razorpay leads on high-volume routing economics and is the only one with a measured AI uplift; Cashfree is cheapest to start and settles instantly once its hidden Smart-Routing fee is waived in writing; PayU sits in between with the slowest settlement.",
         sentences: [
           {
             id: "s1",
-            text: "Razorpay is transitioning enterprise processing accounts to custom volume tiers starting at 1.80%, which acts as a leverage baseline for high-volume vendors.",
-            provenance: ["node-p1", "node-p7"]
+            text: "Razorpay's custom enterprise tier settles at 1.80% (1.95% standard band) plus a 0.05% AI fee, the lowest effective rate for high volume.",
+            provenance: ["node-p1", "node-p-matrix"]
           },
           {
             id: "s2",
-            text: "Cashfree maintains a zero-fee advertising campaign pointing to absolute pricing clarity.",
+            text: "Cashfree advertises a flat 1.90% with ₹0 setup and ₹0 maintenance, plus instant settlement.",
             provenance: ["node-p2"]
           },
           {
             id: "s3",
-            text: "However, Dev Clause 4.2 introduces a stealth platform routing subscription fee of ₹500 per month, directly contradicting public advertisements.",
-            provenance: ["node-p3", "node-p6"]
+            text: "But Clause 4.2 of Cashfree's developer terms adds a ₹500/month Smart-Routing fee — a direct conflict with the public ₹0 pledge.",
+            provenance: ["node-p3", "node-p-conflict"]
           },
           {
             id: "s4",
-            text: "Human corrections confirm that Cashfree's platform billing can be fully waived via manually verified contracts for early-onboarding merchants.",
+            text: "Verified against the merchant dashboard, that fee is waived in writing for merchants onboarding before June 2026 — resolving the conflict in your favour.",
             provenance: ["node-p4"]
           },
           {
             id: "s5",
-            text: "Razorpay is utilizing AI routing engines to achieve a 22% improvement in successful transactions, prompting significant capture of enterprise clients.",
-            provenance: ["node-p5", "node-p7"]
+            text: "Razorpay's AI Optimizer is the only routing engine with a measured result: a 22% drop in charge failures versus static routing.",
+            provenance: ["node-p5", "node-p-matrix"]
           }
         ],
         recommendations: [
-          "Demand customized Razorpay volume discounts referencing the newly discovered 1.80% slab.",
-          "Secure an explicit, written developer fee waiver contract if implementing Cashfree endpoint gateways.",
-          "Enable high-velocity routing logic blocks on payment channels to mitigate transactional cycle drop-outs."
+          "Use Razorpay's 1.80% custom slab as the benchmark when negotiating high-volume rates.",
+          "Get Cashfree's ₹0-maintenance waiver written into the MSA, not left to policy.",
+          "Pilot Razorpay AI Optimizer behind a flag and verify the −22% claim on your own traffic."
         ]
       };
     } else if (missionId === "mission-battery") {
       return {
-        summary: "Technical audits across solid-state battery startups highlight a clear divide in maturity, with dry sulphide chemistry production failing to scale relative to verified pouch battery prototypes.",
+        summary: "On verified evidence, Factorial leads: it holds the only independently certified density figure (391 Wh/kg, TÜV SÜD) plus OEM development deals. QuantumScape has the strongest cycle-life data and is shipping A0 cells. Solid Power's bottleneck is single-sourced — a watch item, not a thesis driver.",
         sentences: [
           {
             id: "sb1",
-            text: "QuantumScape has shipped initial 24-layer solid-state battery cells for OEM vehicle validations with stable cycling curves.",
-            provenance: ["node-b1", "node-b4"]
+            text: "QuantumScape shipped 24-layer A0 cells holding 95% capacity after 800 cycles, with cash runway reported into 2028.",
+            provenance: ["node-b1", "node-b-matrix"]
           },
           {
             id: "sb2",
-            text: "Solid Power is severely bottlenecked, failing to cross 15 prototype cells a week on the back of thermal and humidity chemistry handling errors.",
-            provenance: ["node-b2", "node-b4"]
+            text: "Factorial's 40Ah pouch cells are TÜV SÜD-certified at 391 Wh/kg with zero thermal runaway — the only certified density figure in the set.",
+            provenance: ["node-b3", "node-b-matrix"]
           },
           {
             id: "sb3",
-            text: "Factorial Energy's solid-state pouch technology achieved a verified density of 391 Wh/kg in TUV SUD independent certified laboratory metrics.",
-            provenance: ["node-b3", "node-b4"]
+            text: "Solid Power's reported ~15/week output bottleneck is single-sourced and unverified, so it shouldn't drive allocation yet.",
+            provenance: ["node-b2", "node-b4"]
           }
         ],
         recommendations: [
-          "Postpone investment expansions in dry sulphide powder systems due to thermal processing limits.",
-          "Increase focus on pouch cell physical testing targets where manufacturers hold external certification bounds.",
-          "Track Factorial Energy hiring surges as a primary leading indicator of automotive prototype scaleups."
+          "Weight toward Factorial on verified maturity; keep QuantumScape for its cycle-life evidence.",
+          "Hold on Solid Power until the manufacturing bottleneck is corroborated by a second source.",
+          "Track cycle-life disclosures — the one durability metric still missing for two of three."
+        ]
+      };
+    } else if (missionId === "mission-stack") {
+      return {
+        summary: "Acme Checkout's audit surfaced two issues that can cost money or leak secrets, plus a speed problem hurting conversion. Fix order by risk-reduction-per-effort: idempotent payments, then server-side secrets, then a faster checkout — before any new feature.",
+        sentences: [
+          {
+            id: "ss1",
+            text: "The /charge retry path re-POSTs with no idempotency key, so a network timeout can double-charge a customer (reproduced on staging).",
+            provenance: ["node-s2", "node-s5"]
+          },
+          {
+            id: "ss2",
+            text: "A restricted Stripe key and an analytics secret ship inside the client JS bundle, exposed to every browser session.",
+            provenance: ["node-s3"]
+          },
+          {
+            id: "ss3",
+            text: "Checkout loads a 1.8 MB bundle with a render-blocking pricing fetch, pushing time-to-interactive to 4.2s on mobile.",
+            provenance: ["node-s4", "node-s-matrix"]
+          }
+        ],
+        recommendations: [
+          "Ship idempotent payment retries this sprint with a replay-timeout regression test.",
+          "Rotate the exposed keys today and move the calls behind a server proxy.",
+          "Code-split checkout and lazy-load the pricing table to hit sub-2s TTI."
         ]
       };
     } else {
@@ -1133,14 +1530,12 @@ class Database {
       const defaultNodes = nodes || [];
       const actions = this.getActions(missionId);
       const signals = defaultNodes.filter(n => n.type === "web-signal");
-      const syntheses = defaultNodes.filter(n => n.type === "synthesis" && n.flagged_by !== "sentinel");
-      const conflicts = defaultNodes.filter(n => n.flagged_by === "sentinel");
+      const syntheses = defaultNodes.filter(n => n.type === "synthesis" && !n.conflict && n.flagged_by !== "sentinel");
+      const conflicts = defaultNodes.filter(n => n.conflict || n.flagged_by === "sentinel");
       const corrections = defaultNodes.filter(n => n.type === "correction");
       const grounded = signals.filter(n => n.grounded === true).length;
-      const avgConf = signals.length
-        ? Math.round((signals.reduce((s, n) => s + n.confidence, 0) / signals.length) * 100)
-        : 0;
-      const topSynth = syntheses.slice().sort((a, b) => b.confidence - a.confidence)[0];
+      const verifiedCount = signals.filter(n => n.verified !== false).length;
+      const topSynth = syntheses[0];
 
       // Summary: lead with the strongest synthesis, else a real, specific recap.
       let summary: string;
@@ -1148,11 +1543,11 @@ class Database {
         summary = topSynth.content;
       } else if (signals.length) {
         summary =
-          `The swarm wove ${signals.length} signal${signals.length !== 1 ? "s" : ""}` +
+          `The swarm wove ${signals.length} finding${signals.length !== 1 ? "s" : ""}` +
           (grounded ? ` (${grounded} live-fetched from real sources)` : "") +
-          ` for "${mission?.prompt || "this mission"}", at an average source confidence of ${avgConf}%.` +
-          (conflicts.length ? ` ${conflicts.length} contradiction${conflicts.length !== 1 ? "s were" : " was"} flagged for review.` : "") +
-          (corrections.length ? ` ${corrections.length} human correction${corrections.length !== 1 ? "s have" : " has"} been applied.` : "");
+          ` for "${mission?.prompt || "this mission"}" — ${verifiedCount} cross-checked across sources.` +
+          (conflicts.length ? ` ${conflicts.length} open conflict${conflicts.length !== 1 ? "s" : ""} surfaced for review.` : "") +
+          (corrections.length ? ` ${corrections.length} resolved by a human correction.` : "");
       } else {
         summary = "The swarm is still sensing. Discovered sources will be mapped into the fabric as they arrive.";
       }
@@ -1175,11 +1570,11 @@ class Database {
       // Recommendations grounded in what was actually found.
       const recommendations: string[] = [];
       if (topSynth) recommendations.push(`Act on the core insight: ${topSynth.title}.`);
-      if (conflicts.length) recommendations.push(`Resolve ${conflicts.length} flagged contradiction${conflicts.length !== 1 ? "s" : ""} with a human correction so downstream confidence heals.`);
-      const lowConf = signals.filter(s => s.confidence < 0.6);
-      if (lowConf.length) recommendations.push(`Re-verify ${lowConf.length} low-confidence signal${lowConf.length !== 1 ? "s" : ""} before relying on them.`);
+      if (conflicts.length) recommendations.push(`Resolve ${conflicts.length} open conflict${conflicts.length !== 1 ? "s" : ""} with a quick verification so the read is trustworthy.`);
+      const needsReview = signals.filter(s => s.verified === false);
+      if (needsReview.length) recommendations.push(`Corroborate ${needsReview.length} single-source finding${needsReview.length !== 1 ? "s" : ""} before relying on them.`);
       if (actions.length) recommendations.push(`Review ${actions.length} proposed action${actions.length !== 1 ? "s" : ""} drafted by the Assistant.`);
-      if (!recommendations.length) recommendations.push("Pin the highest-value signals and re-sense later to track how they change over time.");
+      if (!recommendations.length) recommendations.push("Pin the highest-value findings and re-sense later to track how they change over time.");
 
       return {
         summary,

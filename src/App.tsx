@@ -66,7 +66,11 @@ import {
   SlidersHorizontal,
   Wallet as WalletIcon,
   Clapperboard,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Hammer,
+  BarChart3,
+  GitCompareArrows,
+  CheckCircle2
 } from "lucide-react";
 import { Mission, WeaveNode, WeaveEdge, ProposedAction, ActivityFeedEvent, ResearchBrief, AgentStatus, MissionPlanVariant, Profile, ChatTurn, MissionRun, CustomAgent } from "./types.ts";
 import { GreenCredits, PledgeDef } from "./components/GreenCredits.tsx";
@@ -80,7 +84,7 @@ import { CommandConsole } from "./components/CommandConsole.tsx";
 import { FabricCanvas } from "./components/FabricCanvas.tsx";
 import { TriageBoard } from "./components/TriageBoard.tsx";
 import { MissionReplay } from "./components/MissionReplay.tsx";
-import { Constellation3D } from "./components/Constellation3D.tsx";
+import { BuildStudio } from "./components/BuildStudio.tsx";
 import { MissionPlanner } from "./components/MissionPlanner.tsx";
 import { MissionSettings, MissionPatch } from "./components/MissionSettings.tsx";
 import { SettingsModal } from "./components/SettingsModal.tsx";
@@ -91,20 +95,21 @@ import { MediaStudio } from "./components/MediaStudio.tsx";
 
 // Workspace lens definitions: one fabric, five complementary views.
 const WORKSPACE_VIEWS = [
-  { key: "canvas", label: "Board", desc: "Evidence Board — cluster & inspect findings in 2D or 3D", Icon: Network },
-  { key: "fabric2d", label: "Flow", desc: "Flow Map — auto-laid sensing → synthesis pipeline", Icon: GitBranch },
+  { key: "canvas", label: "Board", desc: "Evidence Board — see how findings connect and inspect any one", Icon: Network },
+  { key: "fabric2d", label: "Flow", desc: "Flow Map — the sensing → comparison pipeline, auto-laid", Icon: GitBranch },
+  { key: "build", label: "Build", desc: "Build — gaps, a prototype and ranked tasks from the analysis", Icon: Hammer },
   { key: "vista", label: "Futures", desc: "Temporal Vista — forecast branching scenarios", Icon: Clock },
-  { key: "triage", label: "Triage", desc: "Triage lanes — verified / drift / corrected", Icon: Columns3 },
-  { key: "replay", label: "Replay", desc: "Replay — watch the fabric weave itself, run by run", Icon: History },
+  { key: "triage", label: "Triage", desc: "Triage lanes — verified / needs review / resolved", Icon: Columns3 },
+  { key: "replay", label: "Replay", desc: "Replay — watch the fabric build itself, run by run", Icon: History },
 ] as const;
 
 type WorkspaceMode = typeof WORKSPACE_VIEWS[number]["key"];
 
 const TOUR_STEPS: TourStep[] = [
   { target: '[data-tour="rail"]', title: "Watch the swarm work", body: "Eight specialist agents sense, verify, weave and act. Each tile is live: a pulsing ring means that agent is working right now. Click one to open its console." },
-  { target: '[data-tour="views"]', title: "Five lenses, one fabric", body: "Board for evidence (flip it to 3D right on the canvas), Flow for the sensing → synthesis pipeline, Futures for forecasts, Triage for verification, Replay for history. Hover any icon to see what it does." },
-  { target: '[data-tour="stage"]', title: "Explore your intelligence fabric", body: "Every card is a finding with provenance. Drag to pan, scroll to zoom, click any node to inspect its sources and confidence breakdown." },
-  { target: '[data-tour="inspector"]', title: "Inspect, then act", body: "The Inspector shows the selected node's provenance chain and confidence, and tracks overall mission health when nothing is selected." },
+  { target: '[data-tour="views"]', title: "One fabric, several lenses", body: "Board for how findings connect, Flow for the sensing → comparison pipeline, Build to turn the analysis into a prototype and tasks, Futures for forecasts, Triage for verification, Replay for history. Hover any icon to see what it does." },
+  { target: '[data-tour="stage"]', title: "Explore your findings", body: "Every card is a finding with its real data and sources. Drag to pan, scroll to zoom, click any card to inspect where it came from." },
+  { target: '[data-tour="inspector"]', title: "Inspect, then act", body: "The Inspector shows the selected finding's data, sources and provenance, and tracks the overall mission read when nothing is selected." },
   { target: '[data-tour="feed"]', title: "Live agent feed", body: "The ticker streams what agents are doing in real time. Expand it for the full intelligence brief and one-click proposed actions." },
 ];
 
@@ -112,12 +117,15 @@ const TOUR_STEPS: TourStep[] = [
 const AGENT_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   conductor: Compass,
   pathfinder: Search,
+  analyst: BarChart3,
   veritas: ShieldCheck,
   cartographer: Network,
-  sentinel: ShieldAlert,
+  sentinel: GitCompareArrows,
   oracle: Sparkles,
   scribe: BookOpen,
   actor: Mail,
+  architect: Boxes,
+  builder: Hammer,
   visualizer: ImageIcon,
   cinematographer: Clapperboard,
 };
@@ -350,9 +358,8 @@ export default function App() {
   const [reweaving, setReweaving] = useState(false);
 
   // Interactive Live Canvas States (for Panning, Zooming, and Positioning)
-  const [boardMode, setBoardMode] = useState<"2d" | "3d">("2d");
   const [canvasPan, setCanvasPan] = useState({ x: 0, y: 0 });
-  const [canvasZoom, setCanvasZoom] = useState(1.0);
+  const [canvasZoom, setCanvasZoom] = useState(0.8);
   const [isPanning, setIsPanning] = useState(false);
   const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
   const [nodeOffsets, setNodeOffsets] = useState<{ [nodeId: string]: { x: number; y: number } }>({});
@@ -1055,7 +1062,7 @@ export default function App() {
   // longest-path layering over the provenance edges (so every edge flows
   // forward) plus a barycenter sweep (so connected nodes line up and edges stop
   // crossing). One processed graph instead of a hand-placed tangle.
-  const BOARD_W = 1100, BOARD_H = 760, COL_W = 330, ROW_GAP = 188;
+  const BOARD_W = 1320, BOARD_H = 800, COL_W = 300, ROW_GAP = 172;
   const graphLayout = React.useMemo(() => {
     const pos: Record<string, { x: number; y: number; layer: number }> = {};
     if (nodes.length === 0) return pos;
@@ -1196,15 +1203,34 @@ export default function App() {
     return false;
   };
 
-  // Confidence propagation badge color mappings
-  const getConfColor = (score: number, borderOnly = false) => {
-    if (score >= 0.8) {
-      return borderOnly ? "border-emerald-500/50" : "text-emerald-500 bg-emerald-500/10 border-emerald-500/30 dark:text-emerald-400 dark:bg-emerald-500/10 dark:border-emerald-500/30";
-    }
-    if (score >= 0.5) {
-      return borderOnly ? "border-amber-500/50" : "text-amber-500 bg-amber-500/10 border-amber-500/30 dark:text-amber-400 dark:bg-amber-500/10 dark:border-amber-500/30";
-    }
-    return borderOnly ? "border-red-500/50" : "text-red-500 bg-red-400/10 border-red-500/20 dark:text-red-400 dark:bg-red-500/10 dark:border-red-500/20";
+  // A finding's trust at a glance: a plain Verified / Needs review / Resolved
+  // badge derived from real signals (sources, conflicts, corrections) — no opaque
+  // percentage. A conflict or a single uncorroborated source needs a second look.
+  const nodeStatus = (node: WeaveNode): { tone: "emerald" | "amber" | "rose"; label: string; Icon: React.ComponentType<{ className?: string }> } => {
+    if (node.type === "correction") return { tone: "emerald", label: "Resolved", Icon: CheckCircle2 };
+    if (node.conflict || node.flagged_by === "sentinel") return { tone: "rose", label: "Conflict", Icon: GitCompareArrows };
+    if (node.verified === false) return { tone: "amber", label: "Needs review", Icon: AlertTriangle };
+    return { tone: "emerald", label: "Verified", Icon: CheckCircle2 };
+  };
+
+  // Source count for the "N sources" chip.
+  const sourceCount = (node: WeaveNode) => Math.max(1, node.corroboration || (node.provenance?.length ? node.provenance.length : 1));
+
+  // Tailwind classes for a status tone (chip or border-only).
+  const TONE: Record<string, { chip: string; border: string }> = {
+    emerald: { chip: "text-emerald-600 bg-emerald-500/10 border-emerald-500/30 dark:text-emerald-400", border: "border-emerald-500/40" },
+    amber: { chip: "text-amber-600 bg-amber-500/10 border-amber-500/30 dark:text-amber-400", border: "border-amber-500/40" },
+    rose: { chip: "text-rose-600 bg-rose-500/10 border-rose-500/30 dark:text-rose-400", border: "border-rose-500/40" },
+  };
+  const toneChip = (tone: "emerald" | "amber" | "rose", borderOnly = false) => borderOnly ? TONE[tone].border : TONE[tone].chip;
+
+  // Compact "2h ago" / "3d ago" freshness label for a timestamp.
+  const timeAgo = (iso: string) => {
+    const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+    if (s < 60) return "just now";
+    if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+    if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+    return `${Math.floor(s / 86400)}d ago`;
   };
 
   // Pipeline execution monitor labels
@@ -1599,7 +1625,7 @@ export default function App() {
                     { label: "Active Missions", value: String(missions.length), icon: Compass, color: isDark ? "text-violet-400" : "text-violet-600" },
                     { label: "Specialist Agents", value: String(agents.length || 8), icon: Bot, color: isDark ? "text-cyan-400" : "text-cyan-600" },
                     { label: "AI Providers", value: String(llmProviders.length || 3), icon: Layers, color: isDark ? "text-fuchsia-400" : "text-fuchsia-600" },
-                    { label: "Avg Confidence", value: "92%", icon: Gauge, color: isDark ? "text-emerald-400" : "text-emerald-600" },
+                    { label: "Cross-checked", value: "every finding", icon: ShieldCheck, color: isDark ? "text-emerald-400" : "text-emerald-600" },
                   ].map((m, i) => (
                     <motion.div
                       key={m.label}
@@ -1653,12 +1679,12 @@ export default function App() {
                   <div key={dup} className="flex items-center gap-3 pr-3" aria-hidden={dup === 1}>
                     {[
                       "Provenance-linked claims",
-                      "Drift Sentinel watchdog",
-                      "Confidence propagation",
-                      "8 specialist agents",
-                      "Re-weave healing",
-                      "3D constellation view",
-                      "Grounded fabric chat",
+                      "Cross-source verification",
+                      "Side-by-side comparisons",
+                      "11 specialist agents",
+                      "Conflict resolution",
+                      "Analyze → prototype → build",
+                      "Connect GitHub, Azure, Jira",
                       "Temporal forecasts",
                       "Green compute credits",
                     ].map((cap) => (
@@ -1722,8 +1748,8 @@ export default function App() {
                   <li className="flex gap-2.5 items-start">
                     <span className={`font-bold font-mono ${isDark ? "text-violet-400" : "text-violet-600"}`}>2.</span>
                     <div>
-                      <span className={`font-semibold block ${t.textTitle}`}>[Veritas] Verifying</span>
-                      <span className={`text-[11px] ${isDark ? "text-white/50" : "text-slate-500"}`}>Assembles confidence indices and evaluates source reliability.</span>
+                      <span className={`font-semibold block ${t.textTitle}`}>[Fact-checker] Verifying</span>
+                      <span className={`text-[11px] ${isDark ? "text-white/50" : "text-slate-500"}`}>Cross-checks each finding across sources and marks it Verified or Needs review.</span>
                     </div>
                   </li>
                   <li className="flex gap-2.5 items-start">
@@ -1747,21 +1773,21 @@ export default function App() {
                 }`}>
                   <ShieldAlert className={`w-6 h-6 ${isDark ? "text-fuchsia-400" : "text-fuchsia-600"}`} />
                 </div>
-                <h4 className={`text-lg font-bold font-display ${t.textTitle}`}>Contradiction Sentinel Shield</h4>
+                <h4 className={`text-lg font-bold font-display ${t.textTitle}`}>It catches when sources disagree</h4>
 
                 <p className={`text-xs leading-relaxed ${isDark ? "text-white/60" : "text-slate-600"}`}>
-                  How does the system ensure sanity and credibility under conflicting web reports?
+                  How does the system stay trustworthy when web reports contradict each other?
                 </p>
 
                 <div className="text-xs flex flex-col gap-3">
                   <div className={`rounded-2xl p-3 text-[11px] border ${isDark ? "bg-amber-500/5 border-amber-500/15" : "bg-amber-500/5 border-amber-500/20"}`}>
-                    <span className="font-semibold text-amber-600 dark:text-amber-400 block mb-1">🎯 Automated Verification Flags</span>
-                    The <span className="font-bold">Sentinel Agent</span> executes deep semantic contradictions checks between web nodes. If two sources assert contrasting claims, the system triggers a <span className="text-rose-400 font-bold">Drift Exception Alert</span> and suppresses confidence values automatically!
+                    <span className="font-semibold text-amber-600 dark:text-amber-400 block mb-1">🎯 Conflicts surfaced, not hidden</span>
+                    The <span className="font-bold">Reviewer</span> compares findings across sources. When two sources disagree — a public claim against the fine print — it surfaces an <span className="text-rose-400 font-bold">open conflict</span> and marks the findings "needs review" instead of pretending they agree.
                   </div>
 
                   <div className={`rounded-2xl p-3 text-[11px] border ${isDark ? "bg-emerald-500/5 border-emerald-500/15" : "bg-emerald-500/5 border-emerald-500/20"}`}>
-                    <span className="font-semibold text-emerald-600 dark:text-emerald-400 block mb-1">🛠 Recalculation Mathematics</span>
-                    When the Watchdog reconciles a contradiction on re-weave, Nebula's algorithm propagates confidence values network-wide, immediately rectifying the system summary.
+                    <span className="font-semibold text-emerald-600 dark:text-emerald-400 block mb-1">🛠 One line resolves it</span>
+                    Add a one-line correction and the conflict flips to "resolved" — the finding becomes verified and the read updates across the board.
                   </div>
                 </div>
               </div>
@@ -1798,7 +1824,7 @@ export default function App() {
                   </li>
                   <li className="flex gap-2 items-start">
                     <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold uppercase flex-shrink-0 ${isDark ? "text-cyan-300 bg-cyan-400/10" : "text-cyan-700 bg-cyan-500/10"}`}>4. Re-weave</span>
-                    <span className={`text-[11px] ${isDark ? "text-white/50" : "text-slate-500"}`}>Hit <span className="font-semibold">Re-Weave</span> and watch confidence ripple across the fabric as the Watchdog reconciles contradictions. If the nodes re-score, the pipeline is alive!</span>
+                    <span className={`text-[11px] ${isDark ? "text-white/50" : "text-slate-500"}`}>Hit <span className="font-semibold">Re-sense</span> and watch the board update as the Reviewer re-checks sources. If findings flip between Verified and Needs review, the pipeline is alive!</span>
                   </li>
                 </ul>
               </div>
@@ -1879,21 +1905,21 @@ export default function App() {
                   <span className={`text-[10px] font-mono font-bold uppercase tracking-widest block ${isDark ? "text-luna-lavender" : "text-violet-600"}`}>System Diagnostics</span>
                   <h4 className={`text-sm font-bold flex items-center gap-1.5 ${t.textTitle}`}>
                     <PulseIcon className="w-4 h-4 text-emerald-500 animate-pulse" />
-                    Telemetric Indexing Matrix
+                    Live system status
                   </h4>
                   <p className={`text-[11px] leading-snug ${isDark ? "text-white/50" : "text-slate-500"}`}>
-                    Veritas credibility calculations, Pathfinder crawling buffers, and Sentinel contradiction exceptions are fully synchronized.
+                    The Scout, Fact-checker and Reviewer are in sync: findings are being fetched, cross-checked and compared across sources.
                   </p>
                 </div>
 
                 <div className={`grid grid-cols-2 gap-2 mt-2 pt-2 border-t font-mono text-xs ${isDark ? "border-white/[0.06]" : "border-violet-500/10"}`}>
                   <div>
-                    <span className={`text-[10px] block pb-0.5 ${isDark ? "text-white/35" : "text-slate-400"}`}>Average Confidence:</span>
-                    <span className="font-bold text-emerald-500">92.4% Verified</span>
+                    <span className={`text-[10px] block pb-0.5 ${isDark ? "text-white/35" : "text-slate-400"}`}>Verification:</span>
+                    <span className="font-bold text-emerald-500">Cross-source</span>
                   </div>
                   <div>
-                    <span className={`text-[10px] block pb-0.5 ${isDark ? "text-white/35" : "text-slate-400"}`}>Watchdog Healing:</span>
-                    <span className={`font-bold ${isDark ? "text-violet-400" : "text-violet-600"}`}>Active (100% CF)</span>
+                    <span className={`text-[10px] block pb-0.5 ${isDark ? "text-white/35" : "text-slate-400"}`}>Conflicts:</span>
+                    <span className={`font-bold ${isDark ? "text-violet-400" : "text-violet-600"}`}>Surfaced & resolvable</span>
                   </div>
                 </div>
               </div>
@@ -1935,7 +1961,7 @@ export default function App() {
 
       {/* --- VIEW 2A: WORKSPACE COMMAND CENTER (shown until a mission is opened) --- */}
       {currentView === "workspace" && !launched && (
-        <main className="flex-1 relative overflow-y-auto flex flex-col items-center justify-center px-4 py-10">
+        <main className="flex-1 relative overflow-y-auto flex flex-col items-center justify-start px-4 pt-20 md:pt-28 pb-16">
           {/* night-sky backdrop */}
           {isDark && (
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -2033,14 +2059,17 @@ export default function App() {
 
                 let completeLabel = "Standing by";
                 if (selectedMission?.status === "ready") {
-                  if (a.id === "conductor") completeLabel = "Orchestration OK";
-                  else if (a.id === "pathfinder") completeLabel = "Signals crawled";
-                  else if (a.id === "veritas") completeLabel = "Citations verified";
-                  else if (a.id === "cartographer") completeLabel = "Graph laid out";
-                  else if (a.id === "sentinel") completeLabel = "Drift watch clear";
-                  else if (a.id === "oracle") completeLabel = "Strategy ready";
-                  else if (a.id === "scribe") completeLabel = "Provenance indexed";
+                  if (a.id === "conductor") completeLabel = "Plan ready";
+                  else if (a.id === "pathfinder") completeLabel = "Sources fetched";
+                  else if (a.id === "analyst") completeLabel = "Data extracted";
+                  else if (a.id === "veritas") completeLabel = "Cross-checked";
+                  else if (a.id === "cartographer") completeLabel = "Map linked";
+                  else if (a.id === "sentinel") completeLabel = "No open conflicts";
+                  else if (a.id === "oracle") completeLabel = "Comparison ready";
+                  else if (a.id === "scribe") completeLabel = "Brief cited";
                   else if (a.id === "actor") completeLabel = "Actions drafted";
+                  else if (a.id === "architect") completeLabel = "Gaps mapped";
+                  else if (a.id === "builder") completeLabel = "Build plan ready";
                 }
                 const subLine = isWorking ? (liveEvent?.message || a.task) : (liveEvent?.message || completeLabel);
                 const nodesByAgent = nodes.filter(n => n.source.toLowerCase().includes(a.id)).length;
@@ -2273,7 +2302,7 @@ export default function App() {
                 <button
                   onClick={handleTriggerReweave}
                   disabled={reweaving || selectedMission?.status !== "ready"}
-                  title="Re-weave: heal confidence propagation across the fabric"
+                  title="Re-check: re-run the Reviewer to resolve conflicts across the fabric"
                   className={`text-[10px] font-semibold px-2.5 py-1.5 border rounded-lg transition-all flex items-center gap-1.5 disabled:opacity-50 select-none press ${
                     isDark ? "text-gray-300 hover:text-white bg-white/5 border-white/[0.07] hover:border-white/15" : "text-slate-600 hover:text-indigo-600 bg-white border-slate-200"
                   }`}
@@ -2403,44 +2432,18 @@ export default function App() {
             {workspaceMode === "canvas" && (
             <div className="flex-1 relative overflow-hidden flex flex-col">
 
-              {/* shared 2D / 3D mode toggle */}
-              <div className={`absolute top-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1 p-1 rounded-xl glass border shadow-lg no-pan ${isDark ? "border-white/10" : "border-slate-200"}`}>
-                {([["2d", "Board", Network], ["3d", "Orbit", Boxes]] as const).map(([m, lbl, Ico]) => (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => setBoardMode(m)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all ${
-                      boardMode === m
-                        ? "bg-indigo-600 text-white shadow-sm"
-                        : isDark ? "text-gray-300 hover:bg-white/10" : "text-slate-600 hover:bg-slate-100"
-                    }`}
-                    title={m === "2d" ? "Flat evidence board — drag to organize" : "Immersive 3D constellation"}
-                  >
-                    <Ico className="w-3.5 h-3.5" />
-                    {lbl}
-                  </button>
-                ))}
-                <div className={`w-px h-4 mx-0.5 ${isDark ? "bg-white/10" : "bg-slate-200"}`} />
+              {/* maximize control */}
+              <div className={`absolute top-4 right-4 z-30 flex items-center gap-1 p-1 rounded-xl glass border shadow-lg no-pan ${isDark ? "border-white/10" : "border-slate-200"}`}>
                 <button
                   type="button"
                   onClick={toggleMaximize}
                   className={`p-1.5 rounded-lg transition-all ${isDark ? "text-gray-300 hover:bg-white/10" : "text-slate-600 hover:bg-slate-100"}`}
-                  title={isMaximized ? "Restore layout" : "Maximize canvas"}
+                  title={isMaximized ? "Restore layout" : "Maximize board"}
                 >
                   {isMaximized ? <Minimize className="w-3.5 h-3.5" /> : <Maximize className="w-3.5 h-3.5" />}
                 </button>
               </div>
 
-              {boardMode === "3d" ? (
-                <Constellation3D
-                  nodes={nodes}
-                  edges={edges}
-                  isDark={isDark}
-                  selectedNodeId={selectedNodeId}
-                  onSelect={(id) => { setSelectedNodeId(id); const n = nodes.find(x => x.id === id); if (n && (n.type === "web-signal" || n.type === "synthesis")) setCorrectionContent(n.content); }}
-                />
-              ) : (
             <div
               ref={attachCanvasStage}
               onMouseDown={handleCanvasMouseDown}
@@ -2460,19 +2463,19 @@ export default function App() {
                     isDark ? "text-gray-200 border-white/5" : "text-slate-800 border-slate-200/80"
                   }`}>
                     <Info className="w-3.5 h-3.5 text-violet-500" />
-                    CANVAS INTERACTION PROTOCOL
+                    HOW TO READ THE BOARD
                   </span>
                   <div className="flex items-center gap-1.5 bg-emerald-500/5 px-2 py-0.5 rounded text-emerald-600 dark:text-emerald-400">
                     <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></div>
-                    <span>High Credibility Index (≥ 80% CF)</span>
+                    <span>Verified — cross-checked across sources</span>
                   </div>
                   <div className="flex items-center gap-1.5 bg-amber-500/5 px-2 py-0.5 rounded text-amber-600 dark:text-amber-400">
                     <div className="w-1.5 h-1.5 bg-amber-500 rounded-full"></div>
-                    <span>Incongruity / Verification Drift (50-79%)</span>
+                    <span>Needs review — single or unconfirmed source</span>
                   </div>
-                  <div className="flex items-center gap-1.5 bg-red-500/5 px-2 py-0.5 rounded text-red-600 dark:text-red-400">
-                    <div className="w-1.5 h-1.5 bg-red-500 rounded-full"></div>
-                    <span>Low Credibility / Drift Exception (≤ 49%)</span>
+                  <div className="flex items-center gap-1.5 bg-rose-500/5 px-2 py-0.5 rounded text-rose-600 dark:text-rose-400">
+                    <div className="w-1.5 h-1.5 bg-rose-500 rounded-full"></div>
+                    <span>Conflict — sources disagree, resolve it</span>
                   </div>
                   <div className="mt-1.5 border-t border-slate-200 dark:border-white/5 pt-1.5 text-violet-600 dark:text-violet-300 font-semibold leading-normal">
                     💡 Drag backgrounds to Pan. Click to select. Drag individual node cards to organize! Use scroll/HUD to Zoom!
@@ -2521,7 +2524,7 @@ export default function App() {
                 >
                   
                   {/* CENTRAL VIRTUAL BOARD AREAL */}
-                  <div className="w-[1100px] h-[760px] absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+                  <div className="w-[1320px] h-[800px] absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
 
                     {/* SVG EDGE RENDERING LAYER */}
                     <svg className="absolute inset-0 w-full h-full pointer-events-none z-0" style={{ overflow: "visible" }}>
@@ -2622,7 +2625,7 @@ export default function App() {
                     {/* DYNAMIC ABSOLUTE CARDS LAYER */}
                     {nodes.map((node, index) => {
                       const pos = getActualNodePosition(node, index);
-                      const confRating = node.confidence;
+                      const status = nodeStatus(node);
                       const isSynth = node.type === "synthesis";
                       const isCorr = node.type === "correction";
                       
@@ -2668,7 +2671,7 @@ export default function App() {
                           {/* CARD HEADER */}
                           <div className="flex items-center justify-between gap-2 text-[8.5px] leading-none">
                             <div className="flex items-center gap-1.5 overflow-hidden">
-                              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: node.flagged_by === "sentinel" ? "#fb7185" : confRating >= 0.8 ? "#34d399" : confRating >= 0.5 ? "#fbbf24" : "#fb7185" }} />
+                              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${status.tone === "emerald" ? "bg-emerald-500" : status.tone === "amber" ? "bg-amber-500" : "bg-rose-500"}`} />
                               {isSynth ? (
                                 <Cpu className="w-3 h-3 text-indigo-400 flex-shrink-0" />
                               ) : isCorr ? (
@@ -2683,22 +2686,17 @@ export default function App() {
                             </div>
 
                             <div className="flex items-center gap-1 flex-shrink-0">
-                              {node.grounded === true && (
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" title="LIVE — extracted from a real fetched web page" />
-                              )}
-                              {node.grounded === false && (
-                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500" title="Inferred — LLM analysis, no live source fetched" />
-                              )}
                               {newestRunId && node.run_id === newestRunId && (
                                 <span className="font-mono font-bold px-1 py-0.5 rounded leading-none text-[7px] bg-emerald-500 text-white animate-pulse">NEW</span>
                               )}
-                              <span className={`font-mono font-bold px-1.5 py-0.5 rounded-md leading-none text-[8.5px] ${getConfColor(confRating)}`}>
-                                {Math.round(confRating * 100)}%
+                              <span className={`flex items-center gap-1 font-mono font-bold px-1.5 py-0.5 rounded-md border leading-none text-[8px] ${toneChip(status.tone)}`} title={node.grounded === false ? "Inferred — no live source fetched" : "Cross-checked against sources"}>
+                                <status.Icon className="w-2.5 h-2.5" />
+                                {status.label}
                               </span>
                             </div>
                           </div>
 
-                          {/* BODY: dynamic component (metrics / comparison / list / quote / text) */}
+                          {/* BODY: dynamic component (metrics / comparison / matrix / list / quote / text) */}
                           <div>
                             <h4 className="text-[11.5px] font-bold tracking-tight leading-snug mb-1.5 line-clamp-2 text-slate-900 dark:text-white">
                               {node.title}
@@ -2706,18 +2704,18 @@ export default function App() {
                             <DynamicNodeBody node={node} isDark={isDark} compact />
                           </div>
 
-                          {/* CONTRADICT ADVISORY WARNINGS */}
-                          {node.flagged_by === "sentinel" && (
-                            <div className="flex items-center gap-1 bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400 text-[7px] font-mono px-1 py-0.5 border border-red-500/20 rounded mt-0.5 animate-pulse select-none leading-none">
-                              <ShieldAlert className="w-2.5 h-2.5 flex-shrink-0" />
-                              <span>Drift Detected</span>
+                          {/* OPEN-CONFLICT ADVISORY */}
+                          {(node.conflict || node.flagged_by === "sentinel") && node.type !== "correction" && (
+                            <div className="flex items-center gap-1 bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400 text-[7.5px] font-mono px-1.5 py-0.5 border border-rose-500/20 rounded mt-0.5 select-none leading-none">
+                              <GitCompareArrows className="w-2.5 h-2.5 flex-shrink-0" />
+                              <span>Sources disagree — resolve</span>
                             </div>
                           )}
 
                           {/* CARD FOOTER */}
                           <div className="flex items-center justify-between text-[7px] text-slate-400 dark:text-gray-500 font-mono mt-1 pt-1 border-t border-slate-200/50 dark:border-white/5 select-none">
-                            <span className="truncate max-w-[100px]">{node.source}</span>
-                            <span>v{node.version}</span>
+                            <span className="truncate max-w-[110px]">{node.source}</span>
+                            <span className="flex-shrink-0">{sourceCount(node)} {sourceCount(node) === 1 ? "source" : "sources"}</span>
                           </div>
                         </div>
                       );
@@ -2759,7 +2757,7 @@ export default function App() {
                   type="button"
                   onClick={() => {
                     setCanvasPan({ x: 0, y: 0 });
-                    setCanvasZoom(1.0);
+                    setCanvasZoom(0.8);
                     setNodeOffsets({});
                   }}
                   className="p-1.5 px-3 text-[9.5px] font-mono text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/10 rounded-md transition-all font-bold border border-violet-500/20 cursor-pointer"
@@ -2770,7 +2768,6 @@ export default function App() {
               </div>
 
             </div>
-              )}
             </div>
             )}
 
@@ -2818,6 +2815,15 @@ export default function App() {
                 forecasting={forecasting}
               />
             )}
+
+            {/* --- BUILD STUDIO (Analyze → Prototype → Build → Connect) --- */}
+            {workspaceMode === "build" && selectedMission && (
+              <BuildStudio
+                missionId={selectedMission.id}
+                isDark={isDark}
+                onOpenFinding={(id) => { setSelectedNodeId(id); setWorkspaceMode("canvas"); const n = nodes.find(x => x.id === id); if (n && (n.type === "web-signal" || n.type === "synthesis")) setCorrectionContent(n.content); }}
+              />
+            )}
                     </motion.div>
                   </AnimatePresence>
                 </div>
@@ -2828,9 +2834,10 @@ export default function App() {
               {/* ── LIVE TICKER ROW (always visible) ── */}
               {(() => {
                 const sig = nodes.filter(n => n.type === "web-signal");
-                const contra = nodes.filter(n => n.flagged_by === "sentinel").length;
+                const contra = nodes.filter(n => (n.conflict || n.flagged_by === "sentinel") && n.type !== "correction").length;
                 const futs = nodes.filter(n => n.time_horizon === "future").length;
-                const avg = sig.length ? Math.round((sig.reduce((s, n) => s + n.confidence, 0) / sig.length) * 100) : 0;
+                const verifiedCount = sig.filter(n => n.verified !== false).length;
+                const pctVerified = sig.length ? Math.round((verifiedCount / sig.length) * 100) : 0;
                 const proposedCount = actions.filter(a => a.status === "proposed").length;
                 const latest = events.slice(-3).reverse();
                 const levelDot: Record<string, string> = { info: "bg-indigo-400", success: "bg-emerald-400", warn: "bg-amber-400", error: "bg-rose-400" };
@@ -2868,18 +2875,17 @@ export default function App() {
 
                     {/* compact mission health */}
                     <div className="hidden sm:flex items-center gap-3 flex-shrink-0">
-                      <span className="flex items-center gap-1.5" title="Average signal confidence">
+                      <span className="flex items-center gap-1.5" title="Findings cross-checked across sources">
                         <span className={`w-14 h-1.5 rounded-full overflow-hidden ${isDark ? "bg-white/10" : "bg-slate-200"}`}>
                           <motion.span
-                            className={`block h-full rounded-full ${avg >= 80 ? "bg-emerald-400" : avg >= 50 ? "bg-amber-400" : "bg-rose-400"}`}
-                            animate={{ width: `${avg}%` }}
+                            className="block h-full rounded-full bg-emerald-400"
+                            animate={{ width: `${pctVerified}%` }}
                             transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
                           />
                         </span>
-                        <span className={`text-[10px] font-bold tabular ${avg >= 80 ? "text-emerald-400" : avg >= 50 ? "text-amber-400" : "text-rose-400"}`}>{avg}%</span>
+                        <span className="text-[10px] font-bold tabular text-emerald-400">{verifiedCount}/{sig.length} verified</span>
                       </span>
-                      <span className={`text-[10px] font-mono tabular ${t.textMute}`} title="Findings woven into the fabric">{sig.length} findings</span>
-                      {contra > 0 && <span className="text-[10px] font-mono font-bold text-rose-400 animate-pulse" title="Sentinel-flagged contradictions">{contra} drift</span>}
+                      {contra > 0 && <span className="text-[10px] font-mono font-bold text-rose-400" title="Open conflicts between sources">{contra} conflict{contra !== 1 ? "s" : ""}</span>}
                       {futs > 0 && <span className="text-[10px] font-mono text-fuchsia-400" title="Forecasted future scenarios">{futs} futures</span>}
                     </div>
 
@@ -2982,7 +2988,7 @@ export default function App() {
                             <span className="inline-flex gap-1 ml-2.5 select-none no-pan">
                               {s.provenance.map(provId => {
                                 const relatedNode = nodes.find(n => n.id === provId);
-                                const ratingColor = relatedNode ? getConfColor(relatedNode.confidence) : "";
+                                const ratingColor = relatedNode ? toneChip(nodeStatus(relatedNode).tone) : "";
                                 return (
                                   <button
                                     key={provId}
@@ -3151,7 +3157,7 @@ export default function App() {
                                     key={pid}
                                     onClick={() => { setSelectedNodeId(pid); setCorrectionContent(pn.content); }}
                                     title={pn.title}
-                                    className={`text-[8px] font-mono px-1.5 py-0.5 rounded border transition-all ${getConfColor(pn.confidence)}`}
+                                    className={`text-[8px] font-mono px-1.5 py-0.5 rounded border transition-all ${toneChip(nodeStatus(pn).tone)}`}
                                   >
                                     ↗ {pn.title.slice(0, 18)}{pn.title.length > 18 ? "…" : ""}
                                   </button>
@@ -3309,23 +3315,25 @@ export default function App() {
               {(() => {
                 const selectedNode = nodes.find(n => n.id === selectedNodeId);
                 if (!selectedNode) return null;
-                
-                const confRating = selectedNode.confidence;
+
+                const status = nodeStatus(selectedNode);
+                const srcN = sourceCount(selectedNode);
 
                 return (
                   <div className="p-4 flex flex-col gap-4 flex-1">
-                    
+
                     {/* ENHANCED PROVENANCE DETAIL CARD */}
-                    <div className={`p-4 rounded-xl border flex flex-col gap-3 ${getConfColor(confRating, true)} ${
+                    <div className={`p-4 rounded-xl border flex flex-col gap-3 ${toneChip(status.tone, true)} ${
                       isDark ? "bg-[#070a13] shadow-lg" : "bg-[#faf9fe]/50 shadow-sm"
                     }`}>
-                      
+
                       <div className="flex justify-between items-center leading-none select-none text-[8px] font-mono">
-                        <span className={`px-1.5 py-0.5 border rounded uppercase ${getConfColor(confRating)}`}>
+                        <span className={`px-1.5 py-0.5 border rounded uppercase ${toneChip(status.tone)}`}>
                           {selectedNode.type}
                         </span>
-                        <span className="text-slate-400 mr-1.5">
-                          v{selectedNode.version}
+                        <span className={`flex items-center gap-1 px-1.5 py-0.5 border rounded uppercase font-bold ${toneChip(status.tone)}`}>
+                          <status.Icon className="w-2.5 h-2.5" />
+                          {status.label}
                         </span>
                       </div>
 
@@ -3338,38 +3346,27 @@ export default function App() {
                         </div>
                       </div>
 
-                      {/* CONFIDENCE BAR METER */}
-                      <div className="flex flex-col gap-1 border-t border-slate-200/50 dark:border-white/5 pt-3">
-                        <div className="flex justify-between items-center text-[9px] font-mono text-slate-500 dark:text-gray-400">
-                          <span>Prior Intrinsic confidence:</span>
-                          <span>{Math.round(selectedNode.own_score * 100)}%</span>
+                      {/* EVIDENCE: sources + freshness (no opaque score) */}
+                      <div className="grid grid-cols-2 gap-2 border-t border-slate-200/50 dark:border-white/5 pt-3">
+                        <div className="flex flex-col">
+                          <span className="text-[8.5px] font-mono uppercase tracking-wide text-slate-400">Sources</span>
+                          <span className="text-[12px] font-extrabold text-slate-900 dark:text-white">{srcN} independent</span>
                         </div>
-                        <div className="flex justify-between items-center text-[9px] font-mono">
-                          <span className="text-slate-500 dark:text-gray-400">Calculated Network Confidence:</span>
-                          <span className="font-extrabold text-slate-800 dark:text-white">
-                            {Math.round(confRating * 100)}% CF
-                          </span>
-                        </div>
-                        
-                        <div className="w-full h-1.5 bg-slate-200/80 dark:bg-slate-800 rounded-full overflow-hidden mt-1 select-none">
-                          <div
-                            className={`h-full rounded-full transition-all duration-300 ${
-                              confRating >= 0.8 ? "bg-emerald-500" : confRating >= 0.35 ? "bg-amber-500" : "bg-red-500"
-                            }`}
-                            style={{ width: `${confRating * 100}%` }}
-                          ></div>
+                        <div className="flex flex-col">
+                          <span className="text-[8.5px] font-mono uppercase tracking-wide text-slate-400">Updated</span>
+                          <span className="text-[12px] font-extrabold text-slate-900 dark:text-white">{timeAgo(selectedNode.created_at)}</span>
                         </div>
                       </div>
 
-                      {/* SENTINEL CLAIM DRIFT EXCEPTION */}
-                      {selectedNode.flagged_by === "sentinel" && (
-                        <div className="bg-red-50 text-red-700 border border-red-200/80 dark:bg-red-950/40 dark:border-red-900/30 rounded-lg p-3 flex flex-col gap-1 text-[10px] leading-snug">
+                      {/* OPEN CONFLICT (plain language) */}
+                      {(selectedNode.conflict || selectedNode.flagged_by === "sentinel") && selectedNode.type !== "correction" && (
+                        <div className="bg-rose-50 text-rose-700 border border-rose-200/80 dark:bg-rose-950/40 dark:border-rose-900/30 rounded-lg p-3 flex flex-col gap-1 text-[10px] leading-snug">
                           <span className="font-bold font-mono tracking-wider flex items-center gap-1.5 uppercase leading-none">
-                            <ShieldAlert className="w-3.5 h-3.5 text-red-500 flex-shrink-0 animate-pulse" />
-                            Claim Incongruency Detected
+                            <GitCompareArrows className="w-3.5 h-3.5 text-rose-500 flex-shrink-0" />
+                            Sources disagree
                           </span>
                           <span>
-                            Sentinel flagged contradictions between source data claims. Min-variance thresholds are suppressed on this node until resolved via human veto correction override parameters.
+                            Two sources make conflicting claims here. Resolve it with a one-line correction below, or treat the finding as unconfirmed until you do.
                           </span>
                         </div>
                       )}
@@ -3439,7 +3436,7 @@ export default function App() {
                                     setCorrectionContent(provNode.content);
                                   }
                                 }}
-                                className={`border p-2.5 rounded-lg text-left cursor-pointer transition-all flex items-start gap-2.5 ${getConfColor(provNode.confidence, true)} ${
+                                className={`border p-2.5 rounded-lg text-left cursor-pointer transition-all flex items-start gap-2.5 ${toneChip(nodeStatus(provNode).tone, true)} ${
                                   isDark ? "bg-black/30 hover:bg-black/50" : "bg-white hover:bg-slate-50 shadow-xs"
                                 }`}
                               >
@@ -3448,7 +3445,7 @@ export default function App() {
                                     {provNode.title}
                                   </span>
                                   <span className="text-[8.5px] font-mono text-slate-400">
-                                    Type: {provNode.type} · Confidence {Math.round(provNode.confidence * 100)}%
+                                    {provNode.type} · {nodeStatus(provNode).label} · {sourceCount(provNode)} src
                                   </span>
                                 </div>
                                 <ChevronRight className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
@@ -3549,14 +3546,17 @@ export default function App() {
                 <div className="flex flex-col gap-1.5 p-3 rounded-lg border border-slate-200 dark:border-white/5 bg-slate-500/5">
                   <span className="text-[9px] font-mono text-slate-400 font-bold uppercase">SWARM DIRECTIVE & CAPACITIES</span>
                   <p className="text-xs text-slate-600 dark:text-gray-300 leading-normal">
-                    {focusedAgent.id === "conductor" && "Deconstructs enterprise intelligence requests into target domains, aligns multi-agent queues, controls lifecycle states."}
-                    {focusedAgent.id === "pathfinder" && "Crawls public portals and reasons over real-time web indexes to harvest factual product signal footprints."}
-                    {focusedAgent.id === "veritas" && "Factcheck-audits newly harvested signals for citation provenance, credential credibility, and assigns intrinsic confidence scores."}
-                    {focusedAgent.id === "cartographer" && "Draws multidimensional force-directed graph linkages, constructs semantic edges, maps physical coordinates."}
-                    {focusedAgent.id === "sentinel" && "Monitors statement consistency for logical rules contradictions, policies friction, flags drift anomalies instantly."}
-                    {focusedAgent.id === "oracle" && "Correlates multi-agent synthesized nodes to generate strategic executive executive summary briefs with high fidelity description fields."}
-                    {focusedAgent.id === "scribe" && "Constructs sentence-level attribution tracing markers, linking final report assertions to authentic provenance source URLs."}
-                    {focusedAgent.id === "actor" && "Transforms strategic research insights into executable transaction draft designs, email correspondences, and target timeline reminder bounds."}
+                    {focusedAgent.id === "conductor" && "Turns your goal into a research plan: picks the targets and sources to hit and dispatches the right specialists."}
+                    {focusedAgent.id === "pathfinder" && "Browses the live web and opens the real pages — pricing, filings, docs, news — pulling back raw facts."}
+                    {focusedAgent.id === "analyst" && "Extracts clean, comparable data — prices, specs, dates — out of every page so findings can be charted and compared."}
+                    {focusedAgent.id === "veritas" && "Cross-checks each finding against independent sources and marks it Verified or Needs review."}
+                    {focusedAgent.id === "cartographer" && "Links related findings into one connected map and keeps it as living memory across runs."}
+                    {focusedAgent.id === "sentinel" && "Compares findings across sources and surfaces any conflict — a public claim against the fine print — for you to resolve."}
+                    {focusedAgent.id === "oracle" && "Builds the side-by-side comparison and the clear read: who wins where, and what it means for your decision."}
+                    {focusedAgent.id === "scribe" && "Writes a readable brief where each sentence links back to the exact finding it came from."}
+                    {focusedAgent.id === "actor" && "Drafts ready-to-run next steps — outreach, watches, reminders — for one-click approval. Nothing is sent on its own."}
+                    {focusedAgent.id === "architect" && "Reads the analysis and your connected tools to surface what's missing or risky in your product and tech, ranked by impact."}
+                    {focusedAgent.id === "builder" && "Turns the gaps into a prototype spec and a ranked set of shippable tasks, routed into the tools your team already uses."}
                   </p>
                 </div>
 
@@ -3689,10 +3689,12 @@ export default function App() {
           {inspectorContent === "pulse" && (() => {
             const sig = nodes.filter(n => n.type === "web-signal");
             const grounded = sig.filter(n => n.grounded === true).length;
-            const contra = nodes.filter(n => n.flagged_by === "sentinel").length;
+            const contra = nodes.filter(n => (n.conflict || n.flagged_by === "sentinel") && n.type !== "correction").length;
             const futs = nodes.filter(n => n.time_horizon === "future").length;
             const corrections = nodes.filter(n => n.type === "correction").length;
-            const avg = sig.length ? Math.round((sig.reduce((s, n) => s + n.confidence, 0) / sig.length) * 100) : 0;
+            const verifiedCount = sig.filter(n => n.verified !== false).length;
+            const srcTotal = sig.reduce((s, n) => s + sourceCount(n), 0);
+            const pctVerified = sig.length ? Math.round((verifiedCount / sig.length) * 100) : 0;
             const proposed = actions.filter(a => a.status === "proposed");
             const fp = selectedMission?.footprint;
             return (
@@ -3729,18 +3731,18 @@ export default function App() {
                     )}
                   </div>
 
-                  {/* fabric trust gauge */}
+                  {/* verified-findings readout (replaces the old confidence gauge) */}
                   <div className={`rounded-xl border p-4 flex flex-col gap-2 noise relative overflow-hidden ${isDark ? "bg-[#0c101f] border-white/[0.06]" : "bg-slate-50 border-slate-200"}`}>
-                    <span className={`relative z-10 text-[9px] font-mono uppercase tracking-widest font-bold ${t.textMute}`}>Fabric trust</span>
+                    <span className={`relative z-10 text-[9px] font-mono uppercase tracking-widest font-bold ${t.textMute}`}>Verified findings</span>
                     <div className="relative z-10 flex items-end gap-2">
-                      <span className={`text-3xl font-bold font-display tabular leading-none ${avg >= 80 ? "text-emerald-400" : avg >= 50 ? "text-amber-400" : "text-rose-400"}`}>{avg}%</span>
-                      <span className={`text-[10px] pb-0.5 ${t.textMute}`}>avg signal confidence</span>
+                      <span className="text-3xl font-bold font-display tabular leading-none text-emerald-400">{verifiedCount}<span className="text-base text-slate-400 font-semibold">/{sig.length}</span></span>
+                      <span className={`text-[10px] pb-0.5 ${t.textMute}`}>cross-checked across {srcTotal} sources</span>
                     </div>
                     <div className={`relative z-10 h-2 rounded-full overflow-hidden ${isDark ? "bg-white/10" : "bg-slate-200"}`}>
                       <motion.div
-                        className={`h-full rounded-full ${avg >= 80 ? "bg-gradient-to-r from-emerald-500 to-emerald-300" : avg >= 50 ? "bg-gradient-to-r from-amber-500 to-amber-300" : "bg-gradient-to-r from-rose-500 to-rose-300"}`}
+                        className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-300"
                         initial={{ width: 0 }}
-                        animate={{ width: `${avg}%` }}
+                        animate={{ width: `${pctVerified}%` }}
                         transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
                       />
                     </div>
@@ -3748,8 +3750,8 @@ export default function App() {
                       {[
                         { label: "findings", value: sig.length, cls: t.textTitle },
                         { label: "live sources", value: grounded, cls: "text-emerald-400" },
-                        { label: "contradictions", value: contra, cls: contra ? "text-rose-400" : t.textTitle },
-                        { label: "corrections", value: corrections, cls: corrections ? "text-cyan-400" : t.textTitle },
+                        { label: "open conflicts", value: contra, cls: contra ? "text-rose-400" : t.textTitle },
+                        { label: "resolved", value: corrections, cls: corrections ? "text-cyan-400" : t.textTitle },
                       ].map(s => (
                         <div key={s.label} className="flex items-baseline justify-between gap-2">
                           <span className={`text-[9.5px] font-mono ${t.textMute}`}>{s.label}</span>
@@ -3818,7 +3820,7 @@ export default function App() {
                   {/* hint */}
                   <p className={`text-[10px] leading-relaxed flex gap-1.5 ${t.textMute}`}>
                     <Info className="w-3 h-3 mt-0.5 flex-shrink-0 text-indigo-400" />
-                    Click any node on the {WORKSPACE_VIEWS.find(v => v.key === workspaceMode)?.label || "board"} to trace its provenance and confidence chain.
+                    Click any finding on the {WORKSPACE_VIEWS.find(v => v.key === workspaceMode)?.label || "board"} to see its data, sources and where it came from.
                   </p>
                 </div>
               </div>

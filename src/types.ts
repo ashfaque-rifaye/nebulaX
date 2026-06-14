@@ -148,6 +148,7 @@ export interface WeaveNode {
   corroboration?: number;        // # of independent sources supporting this signal
   verified?: boolean;            // binary trust badge — true = cross-checked across sources, false = needs a second look
   conflict?: boolean;            // an open conflict the swarm surfaced for the user to resolve
+  category?: string;             // analysis category (Finance, Product, Marketing, Pricing, Security…) for the Flow map
   render_kind?: "text" | "metrics" | "comparison" | "matrix" | "list" | "quote"; // how the canvas should render it
   data?: any;                    // structured payload for the chosen render_kind
   // ── temporal (EchoForge) ──

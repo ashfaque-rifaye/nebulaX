@@ -11,6 +11,41 @@ function llmReady(): boolean {
   return isLLMAvailable();
 }
 
+// Lightweight keyword categorizer so every finding lands in a Flow category
+// (Finance, Product, Marketing, Pricing, Security…) even with no LLM key.
+export function inferCategory(text: string): string {
+  const t = (text || "").toLowerCase();
+  if (/\b(settle|payout|t\+\d)\b/.test(t)) return "Settlement";
+  if (/\b(contract|terms|clause|sla|agreement|msa|waiver)\b/.test(t)) return "Contracts";
+  if (/\b(secur|vuln|secret|api key|exploit|leak|breach|encrypt)\b/.test(t)) return "Security";
+  if (/\b(latency|performance|tti|lcp|bundle|throughput|p95|page load)\b/.test(t)) return "Performance";
+  if (/\b(reliab|idempoten|retry|outage|failover|uptime|incident)\b/.test(t)) return "Reliability";
+  if (/\b(region|infra|cloud|deploy|hosting|architecture|kubernetes|scaling)\b/.test(t)) return "Infrastructure";
+  if (/\b(funding|raise|valuation|series [a-e]\b|arr|revenue|run-rate|profit|margin|ipo)\b/.test(t)) return "Finance";
+  if (/\b(hir|hiring|role|job|career|headcount|recruit|talent|layoff)\b/.test(t)) return "Hiring";
+  if (/\b(market|campaign|positioning|brand|devrel|conference|messaging|gtm|go-to-market|ads?)\b/.test(t)) return "Marketing";
+  if (/\b(price|pricing|mdr|\bfee\b|\bcost\b|discount|tariff|per month|\/mo|tier)\b/.test(t)) return "Pricing";
+  if (/\b(launch|product|feature|\bapi\b|sdk|model|release|roadmap|ships?|beta)\b/.test(t)) return "Product";
+  return "General";
+}
+
+// Build the structured payload the Reconcile UI reads from a conflict's two
+// source findings + the model's reasoning, so runtime conflicts are resolvable.
+function buildConflictData(a: any, b: any, reasoning: string, recValue?: string) {
+  return {
+    field: "Disputed claim",
+    sides: [
+      { ref: a?.id, label: (a?.source || a?.title || "Source A"), value: (a?.title || "Claim A"), source: a?.source_url || a?.source || "" },
+      { ref: b?.id, label: (b?.source || b?.title || "Source B"), value: (b?.title || "Claim B"), source: b?.source_url || b?.source || "" },
+    ],
+    recommendation: {
+      verdict: "needs-data",
+      value: recValue || "Record both as conditional until corroborated",
+      reasoning: reasoning || "Two sources disagree; corroborate with a third before relying on either.",
+    },
+  };
+}
+
 // Given a generic mission prompt, propose 3 distinct strategic interpretations
 // for the user to choose from BEFORE the swarm is deployed.
 export async function planMissionVariants(prompt: string, persona: string | null): Promise<MissionPlanVariant[]> {
@@ -172,10 +207,13 @@ Return JSON: { "contradictions": [ { "a": <claim number>, "b": <claim number>, "
       const cid = `node-conflict-${Math.random().toString(36).substr(2, 5)}`;
       db.addNode({
         id: cid, mission_id: missionId, type: "synthesis",
-        title: `Open conflict: ${a.title.slice(0, 34)} vs ${b.title.slice(0, 34)}`,
+        title: `Conflict: ${a.title.slice(0, 34)} vs ${b.title.slice(0, 34)}`,
         content: c.reason || "Two findings disagree — surfaced for you to resolve.",
         confidence: 0.5, own_score: 0.5, source: "Conflict Reviewer", source_url: null,
-        version: 1, provenance: [a.id, b.id], flagged_by: "sentinel", conflict: true, verified: false, created_at: ts()
+        version: 1, provenance: [a.id, b.id], flagged_by: "sentinel", conflict: true, verified: false,
+        category: a.category || inferCategory(`${a.title} ${b.title}`),
+        data: buildConflictData(a, b, c.reason),
+        created_at: ts()
       });
       db.addEdge({ id: `edge-wd-a-${Math.random().toString(36).substr(2, 5)}`, mission_id: missionId, source: a.id, target: cid, relation: "contradicts", label: "conflict", created_by: "Reviewer", created_at: ts() });
       db.addEdge({ id: `edge-wd-b-${Math.random().toString(36).substr(2, 5)}`, mission_id: missionId, source: b.id, target: cid, relation: "contradicts", label: "conflict", created_by: "Reviewer", created_at: ts() });
@@ -495,7 +533,8 @@ export async function runMissionSensing(
               created_at: timestamp(),
               grounded: true,
               corroboration: 2,
-              verified: true
+              verified: true,
+              category: inferCategory(`${sig.title} ${sig.content}`)
             };
 
             db.addNode(newNode);
@@ -563,7 +602,8 @@ Format strictly as:
                 created_at: timestamp(),
                 grounded: false,
                 corroboration: 1,
-                verified: false
+                verified: false,
+                category: inferCategory(`${sig.title || ""} ${sig.content || ""}`)
               };
 
               db.addNode(newNode);
@@ -611,13 +651,18 @@ Format strictly as:
             `Analyze the following findings about "${prompt}":
 ${signalsText}
 
-Identify any single contradiction, contrast, or point of friction between the findings.
-Also provide a strategic synthesis summary.
+Identify any single contradiction between the findings — two that cannot both be true (different values for the same fact, a public claim vs fine print). Use the [n] numbers from the findings list.
+Also provide a strategic synthesis summary, and IF there is a conflict, a recommended reconciliation.
 Return JSON:
 {
   "has_contradiction": boolean,
   "contradiction_title": "Short title if conflict found, else empty",
-  "contradiction_description": "Detailed explanation of the conflicting statements or contrast, else empty",
+  "contradiction_description": "What exactly disagrees, in one or two sentences, else empty",
+  "contradiction_a": <finding number of the first conflicting claim, or 0>,
+  "contradiction_b": <finding number of the second conflicting claim, or 0>,
+  "disputed_field": "the single fact in dispute (e.g. 'annual maintenance fee'), else empty",
+  "recommended_value": "the value you'd record to resolve it, else empty",
+  "recommended_reasoning": "why that resolution, in one sentence, else empty",
   "synthesis_title": "Short title for strategic synthesis",
   "synthesis_content": "The overall high-level insight derived from these points combined."
 }`
@@ -629,27 +674,41 @@ Return JSON:
 
           if (agentOn("sentinel") && parsedReasoning.has_contradiction && parsedReasoning.contradiction_title) {
             logEvent("Reviewer", "Possible conflict found between sources — writing it up for review...", "warn");
+            const ai = Number(parsedReasoning.contradiction_a) - 1;
+            const bi = Number(parsedReasoning.contradiction_b) - 1;
+            const na = discoveredNodes[ai] || discoveredNodes[0];
+            const nb = discoveredNodes[bi] || discoveredNodes[1] || discoveredNodes[0];
+            const conflData = buildConflictData(na, nb, parsedReasoning.contradiction_description, parsedReasoning.recommended_value);
+            if (parsedReasoning.disputed_field) conflData.field = parsedReasoning.disputed_field;
+            if (parsedReasoning.recommended_reasoning) conflData.recommendation.reasoning = parsedReasoning.recommended_reasoning;
+            conflData.sides[0].value = na?.data?.items?.[0]?.value || na?.title || conflData.sides[0].value;
+            conflData.sides[1].value = nb?.data?.items?.[0]?.value || nb?.title || conflData.sides[1].value;
             conflictNode = {
               id: `node-conflict-${Math.random().toString(36).substr(2, 5)}`,
               mission_id: missionId,
               type: "synthesis",
-              title: `Open conflict: ${parsedReasoning.contradiction_title}`,
+              title: `Conflict: ${parsedReasoning.contradiction_title}`,
               content: parsedReasoning.contradiction_description || "Two sources disagree — surfaced for you to resolve before relying on it.",
               confidence: 0.52,
               own_score: 0.52,
               source: "Conflict Reviewer",
               source_url: null,
               version: 1,
-              provenance: discoveredNodes.map(n => n.id),
+              provenance: [na?.id, nb?.id].filter(Boolean) as string[],
               flagged_by: "sentinel",
               conflict: true,
               verified: false,
+              category: na?.category || inferCategory(parsedReasoning.contradiction_title),
+              data: conflData,
               created_at: timestamp()
             };
             db.addNode(conflictNode);
+            // Mark the two conflicting findings as needing review.
+            [na, nb].forEach(n => { if (n) db.updateNode(n.id, { flagged_by: "sentinel", conflict: true, verified: false }); });
             logEvent("Reviewer", `Open conflict surfaced: ${parsedReasoning.contradiction_title}. Resolve it with a one-line correction.`, "warn");
 
-            discoveredNodes.forEach(rn => {
+            [na, nb].forEach(rn => {
+              if (!rn) return;
               db.addEdge({
                 id: `edge-conflict-${Math.random().toString(36).substr(2, 5)}`,
                 mission_id: missionId,
@@ -685,23 +744,6 @@ Return JSON:
     logEvent("Reporter", "Indexing every claim back to its source for traceability...", "info");
     await sleep(1200);
 
-    // Form weave curves between nodes
-    discoveredNodes.forEach((node, i) => {
-      if (i > 0) {
-        const edge: WeaveEdge = {
-          id: `edge-dyn-w-${i}-${Math.random().toString(36).substr(2, 5)}`,
-          mission_id: missionId,
-          source: discoveredNodes[i - 1].id,
-          target: node.id,
-          relation: "weaved",
-          label: "related",
-          created_by: "Mapper",
-          created_at: timestamp()
-        };
-        db.addEdge(edge);
-      }
-    });
-
     // Strategy synthesis node
     const synthesisNode: WeaveNode = {
       id: `node-dyn-synthesis-${Math.random().toString(36).substr(2, 5)}`,
@@ -718,9 +760,37 @@ Return JSON:
       flagged_by: null,
       corroboration: discoveredNodes.length,
       verified: true,
+      category: inferCategory(`${synthesisTitle} ${synthesisContent}`),
       created_at: timestamp()
     };
     db.addNode(synthesisNode);
+
+    // Category-aware weave: link each finding into the synthesis hub (labelled by
+    // its category), and link findings that share a category to each other — so the
+    // Flow maps "what connects to what" instead of one undifferentiated chain.
+    const byCat = new Map<string, WeaveNode[]>();
+    discoveredNodes.forEach(n => {
+      if (n.id === conflictNode?.id) return;
+      db.addEdge({
+        id: `edge-dyn-w-${Math.random().toString(36).substr(2, 5)}`,
+        mission_id: missionId, source: n.id, target: synthesisNode.id,
+        relation: "supports", label: (n.category || "General").toLowerCase(),
+        created_by: "Synthesist", created_at: timestamp(),
+      });
+      const c = n.category || "General";
+      if (!byCat.has(c)) byCat.set(c, []);
+      byCat.get(c)!.push(n);
+    });
+    byCat.forEach(group => {
+      for (let i = 1; i < group.length; i++) {
+        db.addEdge({
+          id: `edge-dyn-c-${Math.random().toString(36).substr(2, 5)}`,
+          mission_id: missionId, source: group[i - 1].id, target: group[i].id,
+          relation: "weaved", label: (group[i].category || "related").toLowerCase(),
+          created_by: "Mapper", created_at: timestamp(),
+        });
+      }
+    });
 
     // Link synthesis to conflict node
     if (conflictNode) {
@@ -1105,7 +1175,7 @@ export async function executeSingleAgentCognition(missionId: string, agentId: st
       id: `node-manualSentinel-${Math.random().toString(36).substr(2, 5)}`,
       mission_id: missionId,
       type: "synthesis",
-      title: `Open conflict: ${conflictTitle}`,
+      title: `Conflict: ${conflictTitle}`,
       content: conflictContent,
       confidence: 0.74,
       own_score: 0.74,
@@ -1116,6 +1186,15 @@ export async function executeSingleAgentCognition(missionId: string, agentId: st
       flagged_by: "sentinel",
       conflict: true,
       verified: false,
+      category: inferCategory(`${conflictTitle} ${conflictContent}`),
+      data: {
+        field: conflictTitle,
+        sides: [
+          { label: "Public claim", value: "as advertised", source: "" },
+          { label: "Verified detail", value: "fine print / SLA", source: "" },
+        ],
+        recommendation: { verdict: "needs-data", value: "Reconcile against a primary source", reasoning: conflictContent },
+      },
       created_at: timestamp()
     };
     db.addNode(conflictNode);

@@ -19,15 +19,30 @@ interface DBState {
   ledger?: LedgerEntry[];
   media?: MediaAsset[];
   connectors?: Connector[];
+  seedVersion?: number;
 }
 
 // Pre-seeded, demo-ready workspaces. Every finding carries the REAL data it
 // describes (metrics / side-by-side comparisons), a binary verified badge and a
 // source count — no opaque confidence percentages.
+// Bump this whenever the seeded workspaces change so existing installs replace
+// their old demo data instead of keeping stale missions around.
+export const SEED_VERSION = 4;
+
+// Every mission id we have ever seeded — used to purge old demo workspaces on a
+// version bump while leaving user-created missions untouched.
+export const ALL_SEED_MISSION_IDS = [
+  "mission-payments", "mission-battery", "mission-uber",   // legacy
+  "mission-fintech", "mission-teardown", "mission-stack",  // current
+];
+
+// Category palette lives in a client-safe module; re-export for server callers.
+export { CATEGORY_META } from "./categories.ts";
+
 const SEEDED_MISSIONS: Mission[] = [
   {
-    id: "mission-payments",
-    prompt: "Compare Razorpay, Cashfree and PayU on enterprise pricing, settlement and AI checkout.",
+    id: "mission-fintech",
+    prompt: "Compare Razorpay, Cashfree and PayU for our checkout — pricing, product, settlement and contract terms.",
     persona: "Founder / Product Executive",
     targets: ["razorpay.com", "cashfree.com", "payu.in"],
     status: "ready",
@@ -35,13 +50,13 @@ const SEEDED_MISSIONS: Mission[] = [
     updated_at: new Date().toISOString()
   },
   {
-    id: "mission-battery",
-    prompt: "Compare QuantumScape, Factorial and Solid Power on energy density, cycle life and funding.",
-    persona: "VC / Deep-Tech Investor",
-    targets: ["quantumscape.com", "factorialenergy.com", "solidpowerbattery.com"],
+    id: "mission-teardown",
+    prompt: "Map Vercel's moves across finance, product, marketing and hiring.",
+    persona: "Competitive Strategist",
+    targets: ["vercel.com", "vercel.com/blog", "vercel.com/careers"],
     status: "ready",
     created_at: new Date(Date.now() - 3600000 * 24).toISOString(),
-    updated_at: new Date(Date.now() - 3600000 * 22).toISOString()
+    updated_at: new Date(Date.now() - 3600000 * 20).toISOString()
   },
   {
     id: "mission-stack",
@@ -55,31 +70,30 @@ const SEEDED_MISSIONS: Mission[] = [
 ];
 
 const SEEDED_NODES: WeaveNode[] = [
-  // ─────────────────── Mission PAYMENTS — Razorpay vs Cashfree vs PayU ───────────────────
+  // ─────────────────── Mission FINTECH — Razorpay vs Cashfree vs PayU ───────────────────
   {
-    id: "node-p1",
-    mission_id: "mission-payments",
+    id: "node-f1",
+    mission_id: "mission-fintech",
     type: "web-signal",
     title: "Razorpay enterprise pricing",
-    content: "Razorpay's enterprise tier is volume-banded: ₹10L–₹50L/month settles at 1.95%, while custom high-volume accounts with AI checkout acceleration are quoted 1.80% API routing + a 0.05% optimization fee. T+1 settlement standard, T+0 on request.",
+    content: "Razorpay's enterprise tier is volume-banded: ₹10L–₹50L/month settles at 1.95%, while custom high-volume accounts with AI checkout acceleration are quoted 1.80% API routing + a 0.05% optimization fee.",
     confidence: 0.9, own_score: 0.9,
     source: "razorpay.com/pricing",
     source_url: "https://razorpay.com/pricing",
     version: 1, provenance: [], flagged_by: null,
-    corroboration: 3, verified: true,
-    grounded: true,
+    corroboration: 3, verified: true, grounded: true,
+    category: "Pricing",
     render_kind: "metrics",
     data: { items: [
       { label: "MDR (custom)", value: "1.80%" },
       { label: "Standard band", value: "1.95%" },
       { label: "AI fee", value: "+0.05%" },
-      { label: "Settlement", value: "T+1 / T+0" },
     ] },
     created_at: new Date(Date.now() - 3600000 * 1.9).toISOString()
   },
   {
-    id: "node-p2",
-    mission_id: "mission-payments",
+    id: "node-f2",
+    mission_id: "mission-fintech",
     type: "web-signal",
     title: "Cashfree public pricing",
     content: "Cashfree's landing page advertises ₹0 setup, ₹0 annual maintenance, and a flat 1.90% per transaction with instant settlement on the Growth plan.",
@@ -87,20 +101,19 @@ const SEEDED_NODES: WeaveNode[] = [
     source: "cashfree.com/pricing",
     source_url: "https://cashfree.com/pricing",
     version: 1, provenance: [], flagged_by: null,
-    corroboration: 2, verified: true,
-    grounded: true,
+    corroboration: 2, verified: true, grounded: true,
+    category: "Pricing",
     render_kind: "metrics",
     data: { items: [
       { label: "Flat MDR", value: "1.90%" },
       { label: "Setup fee", value: "₹0" },
-      { label: "Maintenance", value: "₹0*" },
-      { label: "Settlement", value: "Instant" },
+      { label: "Maintenance", value: "₹0" },
     ] },
     created_at: new Date(Date.now() - 3600000 * 1.8).toISOString()
   },
   {
-    id: "node-p3",
-    mission_id: "mission-payments",
+    id: "node-f3",
+    mission_id: "mission-fintech",
     type: "web-signal",
     title: "Cashfree developer terms, Clause 4.2",
     content: "Buried in the developer integration terms: a ₹500/month platform servicing fee applies to every active API endpoint using the Smart Routing engine, waived only for merchants processing above ₹15L/month.",
@@ -108,43 +121,42 @@ const SEEDED_NODES: WeaveNode[] = [
     source: "cashfree.com/terms/developer",
     source_url: "https://cashfree.com/terms/developer",
     version: 1, provenance: [], flagged_by: null,
-    corroboration: 2, verified: true,
-    grounded: true,
+    corroboration: 2, verified: true, grounded: true,
+    category: "Contracts",
     render_kind: "quote",
     data: { quote: "A platform servicing fee of ₹500/month applies to all active API endpoints using the Smart Routing engine, waived only for merchants processing above ₹15L/month.", attribution: "Developer Terms, Clause 4.2" },
     created_at: new Date(Date.now() - 3600000 * 1.7).toISOString()
   },
   {
-    id: "node-p-conflict",
-    mission_id: "mission-payments",
+    id: "node-f-conflict",
+    mission_id: "mission-fintech",
     type: "synthesis",
-    title: "Open conflict: Cashfree's ₹0 pledge vs the ₹500 clause",
-    content: "Cashfree's public '₹0 annual maintenance' pledge conflicts with Clause 4.2 of its developer terms, which charges ₹500/month for Smart Routing endpoints. Both can't be true at face value — the swarm surfaced it for you to resolve before relying on the pricing.",
-    confidence: 0.65, own_score: 0.5,
-    source: "Cross-source check",
+    title: "Conflict: Cashfree's ₹0 maintenance vs the ₹500 clause",
+    content: "Cashfree's public page says ₹0 annual maintenance, but Clause 4.2 of its developer terms charges ₹500/month for Smart Routing endpoints. Both can't be true at face value.",
+    confidence: 0.55, own_score: 0.5,
+    source: "Conflict Reviewer",
     source_url: null,
-    version: 1, provenance: ["node-p2", "node-p3"], flagged_by: "sentinel",
+    version: 1, provenance: ["node-f2", "node-f3"], flagged_by: "sentinel",
     corroboration: 2, verified: false, conflict: true,
+    category: "Contracts",
     render_kind: "text",
+    data: {
+      field: "Cashfree annual maintenance / platform fee",
+      sides: [
+        { ref: "node-f2", label: "Cashfree public pricing page", value: "₹0 / year", source: "cashfree.com/pricing" },
+        { ref: "node-f3", label: "Developer Terms · Clause 4.2", value: "₹500 / month (Smart Routing)", source: "cashfree.com/terms/developer" },
+      ],
+      recommendation: {
+        verdict: "both-conditional",
+        value: "₹500/month for Smart Routing endpoints, waived for merchants above ₹15L/month",
+        reasoning: "The marketing page quotes the headline ₹0 maintenance but omits the Smart-Routing platform fee; the developer terms add it with a volume-based waiver. Both are technically true — the fee exists, but is waived at your processing volume.",
+      },
+    },
     created_at: new Date(Date.now() - 3600000 * 1.2).toISOString()
   },
   {
-    id: "node-p4",
-    mission_id: "mission-payments",
-    type: "correction",
-    title: "Resolved: the maintenance fee is waived in writing",
-    content: "Confirmed against the Cashfree merchant billing dashboard: the ₹500/month Smart Routing fee is real, but merchants onboarding before June 2026 get a perpetual waiver. The conflict resolves to 'fee exists, but is contractually waived for you.'",
-    confidence: 1.0, own_score: 1.0,
-    source: "Human verification · merchant dashboard",
-    source_url: null,
-    version: 1, provenance: ["node-p-conflict", "node-p3"], flagged_by: null,
-    corroboration: 1, verified: true,
-    render_kind: "text",
-    created_at: new Date(Date.now() - 3600000 * 0.5).toISOString()
-  },
-  {
-    id: "node-p5",
-    mission_id: "mission-payments",
+    id: "node-f4",
+    mission_id: "mission-fintech",
     type: "web-signal",
     title: "Razorpay 'AI Optimizer' launch",
     content: "Razorpay shipped 'AI Optimizer', a predictive routing model that picks the gateway with the best real-time success rate per transaction. Razorpay reports it cuts charge failures by 22% versus static routing.",
@@ -152,8 +164,8 @@ const SEEDED_NODES: WeaveNode[] = [
     source: "TechCrunch",
     source_url: "https://techcrunch.com/razorpay-ai-optimizer",
     version: 1, provenance: [], flagged_by: null,
-    corroboration: 2, verified: true,
-    grounded: true,
+    corroboration: 2, verified: true, grounded: true,
+    category: "Product",
     render_kind: "metrics",
     data: { items: [
       { label: "Failure drop", value: "−22%" },
@@ -163,177 +175,316 @@ const SEEDED_NODES: WeaveNode[] = [
     created_at: new Date(Date.now() - 3600000 * 1.5).toISOString()
   },
   {
-    id: "node-p6",
-    mission_id: "mission-payments",
+    id: "node-f5",
+    mission_id: "mission-fintech",
     type: "web-signal",
     title: "PayU enterprise pricing & AI",
-    content: "PayU quotes 1.85% blended MDR for enterprise, ₹0 setup, T+2 standard settlement (T+1 paid add-on). Its 'PayU Engine' offers rule-based smart routing but no published success-rate uplift, and AI fraud scoring is in private beta.",
+    content: "PayU quotes 1.85% blended MDR for enterprise, ₹0 setup. Its 'PayU Engine' offers rule-based smart routing but no published success-rate uplift, and AI fraud scoring is in private beta.",
     confidence: 0.84, own_score: 0.84,
     source: "payu.in/pricing",
     source_url: "https://payu.in/pricing",
     version: 1, provenance: [], flagged_by: null,
-    corroboration: 2, verified: true,
-    grounded: true,
+    corroboration: 2, verified: true, grounded: true,
+    category: "Pricing",
     render_kind: "metrics",
     data: { items: [
       { label: "Blended MDR", value: "1.85%" },
       { label: "Setup fee", value: "₹0" },
-      { label: "Settlement", value: "T+2 / T+1" },
       { label: "AI routing", value: "Rule-based" },
     ] },
     created_at: new Date(Date.now() - 3600000 * 1.4).toISOString()
   },
   {
-    id: "node-p-matrix",
-    mission_id: "mission-payments",
+    id: "node-f6",
+    mission_id: "mission-fintech",
+    type: "web-signal",
+    title: "Settlement speed compared",
+    content: "Settlement timelines differ materially: Razorpay settles T+1 standard (T+0 on request), Cashfree advertises instant settlement on Growth, and PayU is T+2 standard with a paid T+1 add-on.",
+    confidence: 0.9, own_score: 0.9,
+    source: "Vendor docs · cross-checked",
+    source_url: "https://razorpay.com/settlements",
+    version: 1, provenance: [], flagged_by: null,
+    corroboration: 3, verified: true, grounded: true,
+    category: "Settlement",
+    render_kind: "metrics",
+    data: { items: [
+      { label: "Razorpay", value: "T+1 / T+0" },
+      { label: "Cashfree", value: "Instant" },
+      { label: "PayU", value: "T+2 / T+1" },
+    ] },
+    created_at: new Date(Date.now() - 3600000 * 1.3).toISOString()
+  },
+  {
+    id: "node-f-matrix",
+    mission_id: "mission-fintech",
     type: "synthesis",
     title: "Side-by-side: Razorpay vs Cashfree vs PayU",
-    content: "Three-way comparison across the metrics that actually move an enterprise checkout decision: effective MDR, fixed fees, settlement speed, and AI routing maturity.",
-    confidence: 0.94, own_score: 0.94,
+    content: "Three-way comparison across the metrics that move an enterprise checkout decision: effective MDR, fixed fees, settlement speed, and AI routing maturity.",
+    confidence: 0.92, own_score: 0.92,
     source: "Synthesist",
     source_url: null,
-    version: 1, provenance: ["node-p1", "node-p2", "node-p4", "node-p5", "node-p6"], flagged_by: null,
+    version: 1, provenance: ["node-f1", "node-f2", "node-f4", "node-f5", "node-f6"], flagged_by: null,
     corroboration: 5, verified: true,
+    category: "Pricing",
     render_kind: "matrix",
     data: {
       columns: ["Razorpay", "Cashfree", "PayU"],
       rows: [
         { label: "Effective MDR", values: ["1.80%*", "1.90%", "1.85%"] },
-        { label: "Fixed fees", values: ["₹0", "₹500/mo†", "₹0"] },
+        { label: "Fixed fees", values: ["₹0", "₹500/mo?", "₹0"] },
         { label: "Settlement", values: ["T+1 / T+0", "Instant", "T+2 / T+1"] },
         { label: "AI routing", values: ["Predictive −22%", "Smart Routing", "Rule-based"] },
       ],
-      note: "*custom high-volume tier · †waived for you per the verified correction",
+      note: "*custom high-volume tier · ?Cashfree fixed fee is under an open conflict — resolve it to lock the value",
       highlight: 0,
     },
     created_at: new Date(Date.now() - 3600000 * 1.0).toISOString()
   },
   {
-    id: "node-p7",
-    mission_id: "mission-payments",
+    id: "node-f7",
+    mission_id: "mission-fintech",
     type: "synthesis",
     title: "Where each gateway wins",
-    content: "Razorpay leads on high-volume routing economics and the only measured AI uplift (−22% failures), making it the strongest fit above ₹50L/month. Cashfree is cheapest to start and settles instantly, best for early-stage volume — once the Smart Routing fee is waived in the contract. PayU sits in the middle with the slowest settlement.",
-    confidence: 0.93, own_score: 0.93,
+    content: "Razorpay leads on high-volume routing economics and the only measured AI uplift (−22% failures). Cashfree is cheapest to start and settles instantly — pending the maintenance-fee conflict. PayU sits in the middle with the slowest settlement.",
+    confidence: 0.91, own_score: 0.91,
     source: "Synthesist",
     source_url: null,
-    version: 1, provenance: ["node-p-matrix", "node-p4"], flagged_by: null,
+    version: 1, provenance: ["node-f-matrix"], flagged_by: null,
     corroboration: 5, verified: true,
+    category: "Product",
     render_kind: "list",
     data: { items: [
       "Razorpay — best for high volume + measured AI routing uplift",
-      "Cashfree — cheapest start + instant settlement, after the fee waiver",
+      "Cashfree — cheapest start + instant settlement (resolve the fee conflict first)",
       "PayU — middle of the pack, slowest settlement (T+2 default)",
     ] },
     created_at: new Date(Date.now() - 3600000 * 0.9).toISOString()
   },
 
-  // ─────────────────── Mission BATTERY — QuantumScape vs Factorial vs Solid Power ───────────────────
+  // ─────────────────── Mission TEARDOWN — Vercel across finance / product / marketing / hiring ───────────────────
   {
-    id: "node-b1",
-    mission_id: "mission-battery",
+    id: "node-t1",
+    mission_id: "mission-teardown",
     type: "web-signal",
-    title: "QuantumScape A0 cells shipping",
-    content: "QuantumScape's earnings note confirms A0 cell prototypes shipped to automotive partners: 24-layer cells holding 95%+ capacity retention after 800 cycles. Cash runway reported into 2028.",
-    confidence: 0.95, own_score: 0.95,
-    source: "QuantumScape SEC filing",
-    source_url: "https://quantumscape.com/investor-sec",
+    title: "Series E funding & valuation",
+    content: "Vercel raised a $250M Series E led by Accel at a $3.25B valuation, citing growth of its Frontend Cloud and AI products. Total raised to date crosses $560M.",
+    confidence: 0.92, own_score: 0.92,
+    source: "TechCrunch",
+    source_url: "https://techcrunch.com/vercel-series-e",
     version: 1, provenance: [], flagged_by: null,
-    corroboration: 3, verified: true,
-    grounded: true,
+    corroboration: 3, verified: true, grounded: true,
+    category: "Finance",
     render_kind: "metrics",
     data: { items: [
-      { label: "Layers", value: "24" },
-      { label: "Retention", value: "95% @800" },
-      { label: "Stage", value: "A0 shipping" },
-      { label: "Runway", value: "to 2028" },
+      { label: "Round", value: "Series E" },
+      { label: "Raised", value: "$250M" },
+      { label: "Valuation", value: "$3.25B" },
+    ] },
+    created_at: new Date(Date.now() - 3600000 * 22).toISOString()
+  },
+  {
+    id: "node-t2",
+    mission_id: "mission-teardown",
+    type: "web-signal",
+    title: "Revenue — trade press estimate",
+    content: "The Information reported Vercel at roughly $100M ARR in late 2024, driven by Pro seats and enterprise contracts.",
+    confidence: 0.78, own_score: 0.78,
+    source: "The Information (2024)",
+    source_url: "https://theinformation.com/vercel-arr",
+    version: 1, provenance: [], flagged_by: null,
+    corroboration: 1, verified: false, grounded: true,
+    category: "Finance",
+    render_kind: "metrics",
+    data: { items: [
+      { label: "ARR", value: "~$100M" },
+      { label: "As of", value: "late 2024" },
+      { label: "Driver", value: "Pro + enterprise" },
+    ] },
+    created_at: new Date(Date.now() - 3600000 * 21).toISOString()
+  },
+  {
+    id: "node-t3",
+    mission_id: "mission-teardown",
+    type: "web-signal",
+    title: "Revenue — founder interview",
+    content: "In a 2025 interview the founder referenced a roughly $200M run-rate, attributing the jump to AI (v0) adoption.",
+    confidence: 0.74, own_score: 0.74,
+    source: "Podcast interview (2025)",
+    source_url: null,
+    version: 1, provenance: [], flagged_by: null,
+    corroboration: 1, verified: false, grounded: false,
+    category: "Finance",
+    render_kind: "metrics",
+    data: { items: [
+      { label: "Run-rate", value: "~$200M" },
+      { label: "As of", value: "2025" },
+      { label: "Driver", value: "v0 / AI" },
     ] },
     created_at: new Date(Date.now() - 3600000 * 20).toISOString()
   },
   {
-    id: "node-b2",
-    mission_id: "mission-battery",
-    type: "web-signal",
-    title: "Solid Power scaling bottleneck",
-    content: "Industry sources describe Solid Power's dry sulphide-electrolyte powder line hitting thermal/humidity instability, capping pilot output of 100Ah cells at ~15/week against a 100/week target. Single-source — worth a second look before acting.",
-    confidence: 0.72, own_score: 0.72,
-    source: "Industry insider (single source)",
+    id: "node-t-conflict",
+    mission_id: "mission-teardown",
+    type: "synthesis",
+    title: "Conflict: ARR figures don't match",
+    content: "Two finance sources give different revenue: ~$100M ARR (trade press, 2024) vs ~$200M run-rate (interview, 2025). Reconcile before using either in a model.",
+    confidence: 0.5, own_score: 0.5,
+    source: "Conflict Reviewer",
     source_url: null,
+    version: 1, provenance: ["node-t2", "node-t3"], flagged_by: "sentinel",
+    corroboration: 2, verified: false, conflict: true,
+    category: "Finance",
+    render_kind: "text",
+    data: {
+      field: "Vercel annualized revenue",
+      sides: [
+        { ref: "node-t2", label: "The Information (2024)", value: "~$100M ARR", source: "theinformation.com" },
+        { ref: "node-t3", label: "Founder interview (2025)", value: "~$200M run-rate", source: "podcast (2025)" },
+      ],
+      recommendation: {
+        verdict: "needs-data",
+        value: "Record as a range: ~$100M ARR (2024) → ~$200M run-rate (2025) — growth over time, not a contradiction",
+        reasoning: "The figures are from different dates and metrics (trailing ARR vs forward run-rate). Both are likely right at their respective times; store as a time-ranged estimate rather than picking one.",
+      },
+    },
+    created_at: new Date(Date.now() - 3600000 * 19).toISOString()
+  },
+  {
+    id: "node-t4",
+    mission_id: "mission-teardown",
+    type: "web-signal",
+    title: "v0 — generative UI product",
+    content: "v0 turns prompts into production React/Tailwind. Vercel positions it as the on-ramp from idea to deployed app, tightly bound to the Frontend Cloud.",
+    confidence: 0.9, own_score: 0.9,
+    source: "vercel.com/blog",
+    source_url: "https://vercel.com/blog/v0",
     version: 1, provenance: [], flagged_by: null,
-    corroboration: 1, verified: false,
-    grounded: false,
-    render_kind: "metrics",
+    corroboration: 2, verified: true, grounded: true,
+    category: "Product",
+    render_kind: "list",
     data: { items: [
-      { label: "Output", value: "~15/wk" },
-      { label: "Target", value: "100/wk" },
-      { label: "Blocker", value: "Powder line" },
+      "Prompt → production React + Tailwind",
+      "Deploys straight to Vercel",
+      "Lead AI product, drives upgrade path",
     ] },
     created_at: new Date(Date.now() - 3600000 * 18).toISOString()
   },
   {
-    id: "node-b3",
-    mission_id: "mission-battery",
+    id: "node-t5",
+    mission_id: "mission-teardown",
     type: "web-signal",
-    title: "Factorial 40Ah cell certified",
-    content: "TÜV SÜD certified Factorial's 40Ah solid-state pouch cells at 391 Wh/kg with zero thermal runaway under nail-penetration testing. Joint development deals with two OEMs disclosed.",
-    confidence: 0.98, own_score: 0.98,
-    source: "TÜV SÜD registry",
-    source_url: "https://tuvsud.com/factorial-verification",
+    title: "Next.js + AI SDK cadence",
+    content: "Vercel ships Next.js and the AI SDK on a fast cadence, keeping the open-source funnel that feeds the paid Frontend Cloud. AI SDK adoption is the current wedge.",
+    confidence: 0.88, own_score: 0.88,
+    source: "vercel.com/blog",
+    source_url: "https://vercel.com/blog",
     version: 1, provenance: [], flagged_by: null,
-    corroboration: 3, verified: true,
-    grounded: true,
+    corroboration: 2, verified: true, grounded: true,
+    category: "Product",
     render_kind: "metrics",
     data: { items: [
-      { label: "Density", value: "391 Wh/kg" },
-      { label: "Capacity", value: "40 Ah" },
-      { label: "Safety", value: "0 runaway" },
-      { label: "OEM deals", value: "2" },
+      { label: "OSS funnel", value: "Next.js" },
+      { label: "AI wedge", value: "AI SDK" },
+      { label: "Cadence", value: "Fast" },
+    ] },
+    created_at: new Date(Date.now() - 3600000 * 17).toISOString()
+  },
+  {
+    id: "node-t6",
+    mission_id: "mission-teardown",
+    type: "web-signal",
+    title: "Positioning: 'Frontend Cloud'",
+    content: "Marketing has consolidated around one phrase — 'Frontend Cloud' — reframing hosting as an AI-native developer platform rather than a deploy tool.",
+    confidence: 0.86, own_score: 0.86,
+    source: "vercel.com",
+    source_url: "https://vercel.com",
+    version: 1, provenance: [], flagged_by: null,
+    corroboration: 2, verified: true, grounded: true,
+    category: "Marketing",
+    render_kind: "quote",
+    data: { quote: "The Frontend Cloud gives developers the frameworks, workflows, and infrastructure to build a faster, more personalized web.", attribution: "Vercel homepage" },
+    created_at: new Date(Date.now() - 3600000 * 16).toISOString()
+  },
+  {
+    id: "node-t7",
+    mission_id: "mission-teardown",
+    type: "web-signal",
+    title: "DevRel & 'Ship' campaigns",
+    content: "Heavy developer-relations motion: Ship conference, template galleries, and high-volume technical content keep Vercel top-of-funnel with frontend engineers.",
+    confidence: 0.83, own_score: 0.83,
+    source: "Conf + social",
+    source_url: "https://vercel.com/ship",
+    version: 1, provenance: [], flagged_by: null,
+    corroboration: 2, verified: true, grounded: true,
+    category: "Marketing",
+    render_kind: "list",
+    data: { items: [
+      "Ship — annual developer conference",
+      "Template & starter galleries",
+      "High-volume technical content",
     ] },
     created_at: new Date(Date.now() - 3600000 * 15).toISOString()
   },
   {
-    id: "node-b-matrix",
-    mission_id: "mission-battery",
-    type: "synthesis",
-    title: "Side-by-side: solid-state readiness",
-    content: "Three solid-state contenders compared on the levers a deep-tech investor underwrites: verified energy density, cycle life, manufacturing readiness, and validation.",
-    confidence: 0.92, own_score: 0.92,
-    source: "Synthesist",
-    source_url: null,
-    version: 1, provenance: ["node-b1", "node-b2", "node-b3"], flagged_by: null,
-    corroboration: 3, verified: true,
-    render_kind: "matrix",
-    data: {
-      columns: ["QuantumScape", "Factorial", "Solid Power"],
-      rows: [
-        { label: "Energy density", values: ["~380 Wh/kg", "391 Wh/kg ✓", "~350 Wh/kg"] },
-        { label: "Cycle life", values: ["95% @800", "n/d", "n/d"] },
-        { label: "Mfg readiness", values: ["A0 shipping", "Pilot + OEM", "Bottlenecked"] },
-        { label: "Validation", values: ["Automaker", "TÜV SÜD ✓", "Single-source"] },
-      ],
-      note: "n/d = not disclosed in verified sources",
-      highlight: 1,
-    },
+    id: "node-t8",
+    mission_id: "mission-teardown",
+    type: "web-signal",
+    title: "Hiring: AI & infra roles surging",
+    content: "Careers page is weighted toward AI/ML and infrastructure engineering, with a cluster of v0 and AI-SDK roles — signaling where the next product investment goes.",
+    confidence: 0.85, own_score: 0.85,
+    source: "vercel.com/careers",
+    source_url: "https://vercel.com/careers",
+    version: 1, provenance: [], flagged_by: null,
+    corroboration: 2, verified: true, grounded: true,
+    category: "Hiring",
+    render_kind: "metrics",
+    data: { items: [
+      { label: "Top area", value: "AI / ML" },
+      { label: "Cluster", value: "v0 + AI SDK" },
+      { label: "Signal", value: "AI doubling-down" },
+    ] },
     created_at: new Date(Date.now() - 3600000 * 14).toISOString()
   },
   {
-    id: "node-b4",
-    mission_id: "mission-battery",
-    type: "synthesis",
-    title: "Read: Factorial leads on verified maturity",
-    content: "Factorial is the only contender with an independently certified density figure (391 Wh/kg, TÜV SÜD) plus OEM development deals. QuantumScape has the strongest cycle-life evidence and is shipping A0. Solid Power's bottleneck is single-sourced and unverified — treat as a watch item, not a thesis driver.",
-    confidence: 0.91, own_score: 0.91,
-    source: "Synthesist",
-    source_url: null,
-    version: 1, provenance: ["node-b-matrix"], flagged_by: null,
-    corroboration: 3, verified: true,
+    id: "node-t9",
+    mission_id: "mission-teardown",
+    type: "web-signal",
+    title: "Hiring: enterprise GTM expansion",
+    content: "A second hiring cluster is enterprise go-to-market — sales, solutions engineering and support — consistent with the move upmarket the funding round described.",
+    confidence: 0.82, own_score: 0.82,
+    source: "vercel.com/careers",
+    source_url: "https://vercel.com/careers",
+    version: 1, provenance: [], flagged_by: null,
+    corroboration: 2, verified: true, grounded: true,
+    category: "Hiring",
     render_kind: "list",
     data: { items: [
-      "Factorial — only certified density + OEM deals (lead)",
-      "QuantumScape — best cycle-life evidence, A0 shipping",
-      "Solid Power — bottleneck unverified, watch not thesis",
+      "Enterprise sales + solutions engineering",
+      "Support / success roles",
+      "Move upmarket matches the raise",
     ] },
     created_at: new Date(Date.now() - 3600000 * 13).toISOString()
+  },
+  {
+    id: "node-t-synth",
+    mission_id: "mission-teardown",
+    type: "synthesis",
+    title: "Read: AI is the thesis, enterprise is the engine",
+    content: "Across categories the story is consistent: a $3.25B raise (finance) funds an AI-first product bet (v0/AI SDK) marketed as the 'Frontend Cloud', with hiring split between AI engineering and enterprise GTM. The one thing to nail down is revenue — the two figures conflict.",
+    confidence: 0.9, own_score: 0.9,
+    source: "Synthesist",
+    source_url: null,
+    version: 1, provenance: ["node-t1", "node-t4", "node-t6", "node-t8", "node-t-conflict"], flagged_by: null,
+    corroboration: 5, verified: true,
+    category: "Product",
+    render_kind: "list",
+    data: { items: [
+      "Finance — $3.25B valuation funds the AI bet",
+      "Product — v0 + AI SDK is the wedge",
+      "Marketing — 'Frontend Cloud', AI-native repositioning",
+      "Hiring — AI engineering + enterprise GTM",
+    ] },
+    created_at: new Date(Date.now() - 3600000 * 12).toISOString()
   },
 
   // ─────────────────── Mission STACK — Acme Checkout product & tech audit ───────────────────
@@ -349,6 +500,7 @@ const SEEDED_NODES: WeaveNode[] = [
     version: 1, provenance: [], flagged_by: null,
     corroboration: 2, verified: true,
     grounded: true,
+    category: "Infrastructure",
     render_kind: "metrics",
     data: { items: [
       { label: "Frontend", value: "React 18" },
@@ -370,6 +522,7 @@ const SEEDED_NODES: WeaveNode[] = [
     version: 1, provenance: [], flagged_by: null,
     corroboration: 2, verified: true,
     grounded: true,
+    category: "Reliability",
     render_kind: "list",
     data: { items: [
       "Retry re-POSTs /charge with no idempotency key",
@@ -390,6 +543,7 @@ const SEEDED_NODES: WeaveNode[] = [
     version: 1, provenance: [], flagged_by: null,
     corroboration: 2, verified: true,
     grounded: true,
+    category: "Security",
     render_kind: "list",
     data: { items: [
       "Restricted key + analytics secret in client bundle",
@@ -410,6 +564,7 @@ const SEEDED_NODES: WeaveNode[] = [
     version: 1, provenance: [], flagged_by: null,
     corroboration: 2, verified: true,
     grounded: true,
+    category: "Performance",
     render_kind: "metrics",
     data: { items: [
       { label: "Bundle", value: "1.8 MB" },
@@ -430,6 +585,7 @@ const SEEDED_NODES: WeaveNode[] = [
     source_url: null,
     version: 1, provenance: ["node-s1", "node-s2", "node-s3", "node-s4"], flagged_by: null,
     corroboration: 4, verified: true,
+    category: "Infrastructure",
     render_kind: "matrix",
     data: {
       columns: ["Today", "Target"],
@@ -454,6 +610,7 @@ const SEEDED_NODES: WeaveNode[] = [
     source_url: null,
     version: 1, provenance: ["node-s-matrix"], flagged_by: null,
     corroboration: 4, verified: true,
+    category: "Reliability",
     render_kind: "list",
     data: { items: [
       "Idempotent payment retries (correctness)",
@@ -465,21 +622,28 @@ const SEEDED_NODES: WeaveNode[] = [
 ];
 
 const SEEDED_EDGES: WeaveEdge[] = [
-  // ── PAYMENTS: the conflict thread + the comparison thread ──
-  { id: "edge-p1", mission_id: "mission-payments", source: "node-p2", target: "node-p-conflict", relation: "source-of", label: "public ₹0 pledge", created_by: "Synthesist", created_at: new Date(Date.now() - 3600000 * 1.2).toISOString() },
-  { id: "edge-p2", mission_id: "mission-payments", source: "node-p3", target: "node-p-conflict", relation: "contradicts", label: "₹500 clause", created_by: "Synthesist", created_at: new Date(Date.now() - 3600000 * 1.2).toISOString() },
-  { id: "edge-p3", mission_id: "mission-payments", source: "node-p4", target: "node-p-conflict", relation: "correction-applied", label: "resolved: waived", created_by: "human", created_at: new Date(Date.now() - 3600000 * 0.5).toISOString() },
-  { id: "edge-p4", mission_id: "mission-payments", source: "node-p1", target: "node-p-matrix", relation: "supports", label: "Razorpay", created_by: "Synthesist", created_at: new Date(Date.now() - 3600000 * 1.0).toISOString() },
-  { id: "edge-p5", mission_id: "mission-payments", source: "node-p2", target: "node-p-matrix", relation: "supports", label: "Cashfree", created_by: "Synthesist", created_at: new Date(Date.now() - 3600000 * 1.0).toISOString() },
-  { id: "edge-p6", mission_id: "mission-payments", source: "node-p5", target: "node-p-matrix", relation: "supports", label: "AI routing", created_by: "Synthesist", created_at: new Date(Date.now() - 3600000 * 1.0).toISOString() },
-  { id: "edge-p7", mission_id: "mission-payments", source: "node-p6", target: "node-p-matrix", relation: "supports", label: "PayU", created_by: "Synthesist", created_at: new Date(Date.now() - 3600000 * 1.0).toISOString() },
-  { id: "edge-p8", mission_id: "mission-payments", source: "node-p-matrix", target: "node-p7", relation: "weaved", label: "read-out", created_by: "Synthesist", created_at: new Date(Date.now() - 3600000 * 0.9).toISOString() },
+  // ── FINTECH: the conflict thread + the comparison thread ──
+  { id: "edge-f1", mission_id: "mission-fintech", source: "node-f2", target: "node-f-conflict", relation: "source-of", label: "₹0 pledge", created_by: "Reviewer", created_at: new Date(Date.now() - 3600000 * 1.2).toISOString() },
+  { id: "edge-f2", mission_id: "mission-fintech", source: "node-f3", target: "node-f-conflict", relation: "contradicts", label: "₹500 clause", created_by: "Reviewer", created_at: new Date(Date.now() - 3600000 * 1.2).toISOString() },
+  { id: "edge-f3", mission_id: "mission-fintech", source: "node-f1", target: "node-f-matrix", relation: "supports", label: "Razorpay", created_by: "Synthesist", created_at: new Date(Date.now() - 3600000 * 1.0).toISOString() },
+  { id: "edge-f4", mission_id: "mission-fintech", source: "node-f2", target: "node-f-matrix", relation: "supports", label: "Cashfree", created_by: "Synthesist", created_at: new Date(Date.now() - 3600000 * 1.0).toISOString() },
+  { id: "edge-f5", mission_id: "mission-fintech", source: "node-f4", target: "node-f-matrix", relation: "supports", label: "AI routing", created_by: "Synthesist", created_at: new Date(Date.now() - 3600000 * 1.0).toISOString() },
+  { id: "edge-f6", mission_id: "mission-fintech", source: "node-f5", target: "node-f-matrix", relation: "supports", label: "PayU", created_by: "Synthesist", created_at: new Date(Date.now() - 3600000 * 1.0).toISOString() },
+  { id: "edge-f7", mission_id: "mission-fintech", source: "node-f6", target: "node-f-matrix", relation: "supports", label: "settlement", created_by: "Synthesist", created_at: new Date(Date.now() - 3600000 * 1.0).toISOString() },
+  { id: "edge-f8", mission_id: "mission-fintech", source: "node-f-conflict", target: "node-f-matrix", relation: "contradicts", label: "open fee", created_by: "Reviewer", created_at: new Date(Date.now() - 3600000 * 1.0).toISOString() },
+  { id: "edge-f9", mission_id: "mission-fintech", source: "node-f-matrix", target: "node-f7", relation: "weaved", label: "read-out", created_by: "Synthesist", created_at: new Date(Date.now() - 3600000 * 0.9).toISOString() },
 
-  // ── BATTERY: three signals → comparison → read ──
-  { id: "edge-b1", mission_id: "mission-battery", source: "node-b1", target: "node-b-matrix", relation: "supports", label: "QuantumScape", created_by: "Synthesist", created_at: new Date(Date.now() - 3600000 * 14).toISOString() },
-  { id: "edge-b2", mission_id: "mission-battery", source: "node-b2", target: "node-b-matrix", relation: "supports", label: "Solid Power", created_by: "Synthesist", created_at: new Date(Date.now() - 3600000 * 14).toISOString() },
-  { id: "edge-b3", mission_id: "mission-battery", source: "node-b3", target: "node-b-matrix", relation: "supports", label: "Factorial", created_by: "Synthesist", created_at: new Date(Date.now() - 3600000 * 14).toISOString() },
-  { id: "edge-b4", mission_id: "mission-battery", source: "node-b-matrix", target: "node-b4", relation: "weaved", label: "read-out", created_by: "Synthesist", created_at: new Date(Date.now() - 3600000 * 13).toISOString() },
+  // ── TEARDOWN: within-category links + cross-category synthesis ──
+  { id: "edge-t1", mission_id: "mission-teardown", source: "node-t2", target: "node-t-conflict", relation: "source-of", label: "ARR 2024", created_by: "Reviewer", created_at: new Date(Date.now() - 3600000 * 19).toISOString() },
+  { id: "edge-t2", mission_id: "mission-teardown", source: "node-t3", target: "node-t-conflict", relation: "contradicts", label: "run-rate 2025", created_by: "Reviewer", created_at: new Date(Date.now() - 3600000 * 19).toISOString() },
+  { id: "edge-t3", mission_id: "mission-teardown", source: "node-t5", target: "node-t4", relation: "supports", label: "product cadence", created_by: "Mapper", created_at: new Date(Date.now() - 3600000 * 17).toISOString() },
+  { id: "edge-t4", mission_id: "mission-teardown", source: "node-t7", target: "node-t6", relation: "supports", label: "devrel", created_by: "Mapper", created_at: new Date(Date.now() - 3600000 * 15).toISOString() },
+  { id: "edge-t5", mission_id: "mission-teardown", source: "node-t9", target: "node-t8", relation: "supports", label: "GTM", created_by: "Mapper", created_at: new Date(Date.now() - 3600000 * 13).toISOString() },
+  { id: "edge-t6", mission_id: "mission-teardown", source: "node-t1", target: "node-t-synth", relation: "supports", label: "finance", created_by: "Synthesist", created_at: new Date(Date.now() - 3600000 * 12).toISOString() },
+  { id: "edge-t7", mission_id: "mission-teardown", source: "node-t4", target: "node-t-synth", relation: "supports", label: "product", created_by: "Synthesist", created_at: new Date(Date.now() - 3600000 * 12).toISOString() },
+  { id: "edge-t8", mission_id: "mission-teardown", source: "node-t6", target: "node-t-synth", relation: "supports", label: "marketing", created_by: "Synthesist", created_at: new Date(Date.now() - 3600000 * 12).toISOString() },
+  { id: "edge-t9", mission_id: "mission-teardown", source: "node-t8", target: "node-t-synth", relation: "supports", label: "hiring", created_by: "Synthesist", created_at: new Date(Date.now() - 3600000 * 12).toISOString() },
+  { id: "edge-t10", mission_id: "mission-teardown", source: "node-t-conflict", target: "node-t-synth", relation: "contradicts", label: "revenue caveat", created_by: "Reviewer", created_at: new Date(Date.now() - 3600000 * 12).toISOString() },
 
   // ── STACK: four findings → today/target → build shortlist ──
   { id: "edge-s1", mission_id: "mission-stack", source: "node-s1", target: "node-s-matrix", relation: "supports", label: "stack", created_by: "Synthesist", created_at: new Date(Date.now() - 3600000 * 5.0).toISOString() },
@@ -490,10 +654,10 @@ const SEEDED_EDGES: WeaveEdge[] = [
 ];
 
 const SEEDED_ACTIONS: ProposedAction[] = [
-  // --- Mission PAYMENTS Actions — a varied "next move" set ---
+  // --- Mission FINTECH Actions — a varied "next move" set ---
   {
-    id: "action-p1",
-    mission_id: "mission-payments",
+    id: "action-f1",
+    mission_id: "mission-fintech",
     kind: "outreach",
     title: "Open a pricing renegotiation with Razorpay",
     payload: {
@@ -510,13 +674,13 @@ Could we find 30 minutes this week?
 Best regards,
 Enterprise Operations Lead`
     },
-    rationale: "Razorpay's newly surfaced 1.80% custom tier gives high-volume founders concrete leverage to pitch a flat 1.75–1.82% on equivalent checkouts.",
-    provenance: ["node-p1", "node-p7"],
+    rationale: "Razorpay's surfaced 1.80% custom tier gives high-volume founders concrete leverage to pitch a flat 1.75–1.82% on equivalent checkouts.",
+    provenance: ["node-f1", "node-f7"],
     status: "proposed"
   },
   {
-    id: "action-p2",
-    mission_id: "mission-payments",
+    id: "action-f2",
+    mission_id: "mission-fintech",
     kind: "monitor",
     title: "Put Cashfree's developer terms on a standing watch",
     payload: {
@@ -524,12 +688,12 @@ Enterprise Operations Lead`
       body: "Stand up a daily watch on Cashfree's developer terms (Clause 4.2). Alert me if the ₹500/mo Smart Routing fee, or its waiver wording, changes — the public ‘₹0 maintenance’ pledge already conflicts with the fine print once."
     },
     rationale: "The swarm surfaced a live conflict between Cashfree's public pricing and its developer terms; the waiver is conditional, so the clause is worth watching continuously.",
-    provenance: ["node-p3", "node-p-conflict"],
+    provenance: ["node-f3", "node-f-conflict"],
     status: "proposed"
   },
   {
-    id: "action-p3",
-    mission_id: "mission-payments",
+    id: "action-f3",
+    mission_id: "mission-fintech",
     kind: "deep-dive",
     title: "Deep-dive PayU's AI fraud-scoring beta",
     payload: {
@@ -537,46 +701,46 @@ Enterprise Operations Lead`
       body: "Spawn a focused child mission on PayU's AI roadmap: the private fraud-scoring beta, any measured success-rate uplift, and rollout timing — the one column where PayU's data is still thin in the comparison."
     },
     rationale: "PayU is fully in the three-way comparison except on measured AI uplift; a scoped deep-dive closes the last data gap.",
-    provenance: ["node-p6", "node-p-matrix"],
+    provenance: ["node-f5", "node-f-matrix"],
     status: "proposed"
   },
   {
-    id: "action-p4",
-    mission_id: "mission-payments",
+    id: "action-f4",
+    mission_id: "mission-fintech",
     kind: "decision",
-    title: "Lock the verified ₹0-maintenance waiver into the MSA",
+    title: "Reconcile the Cashfree fee before signing",
     payload: {
-      body: "Decision: before signing, cite the verified correction — Cashfree's ₹500/mo Smart Routing fee is waived in perpetuity for merchants onboarding before June 2026. Get the waiver written into the MSA, not left to policy."
+      body: "Decision: resolve the open ₹0-vs-₹500 conflict in the workspace, then write the agreed term into the MSA. The Reviewer's recommendation is that the ₹500/mo Smart-Routing fee is waived above ₹15L/month — confirm with Cashfree and lock it as a contract clause, not a policy."
     },
-    rationale: "The conflict resolved to a verified, in-writing waiver; turning it into a contract clause converts the finding into a protected commercial term.",
-    provenance: ["node-p4", "node-p-conflict"],
+    rationale: "An unresolved pricing conflict shouldn't go into a contract. Reconcile it first; the resolved value becomes a protected commercial term.",
+    provenance: ["node-f-conflict", "node-f3"],
     status: "proposed"
   },
 
-  // --- Mission BATTERY Actions ---
+  // --- Mission TEARDOWN Actions ---
   {
-    id: "action-b1",
-    mission_id: "mission-battery",
+    id: "action-t1",
+    mission_id: "mission-teardown",
     kind: "decision",
-    title: "Re-weight capital from Solid Power toward Factorial Energy",
+    title: "Underwrite the AI thesis, hedge the revenue",
     payload: {
-      body: "Decision: shift Solid Power's allocation out 3–4 quarters and redirect surplus to Factorial Energy. Solid Power's bottleneck is single-sourced and unverified; Factorial holds the only TÜV SÜD-certified 391 Wh/kg figure plus OEM deals."
+      body: "Decision: base the view on the AI-product + enterprise-GTM thesis (well-evidenced across product, marketing and hiring), but model revenue as a range until the ARR conflict is reconciled. Don't anchor a number on a single source."
     },
-    rationale: "Factorial is the verified leader and Solid Power's risk is unconfirmed; re-routing toward certified maturity de-risks the timeline.",
-    provenance: ["node-b2", "node-b3", "node-b4"],
+    rationale: "The strategic picture is corroborated across four categories; only revenue is in conflict, so it should be hedged rather than guessed.",
+    provenance: ["node-t-synth", "node-t-conflict"],
     status: "proposed"
   },
   {
-    id: "action-b2",
-    mission_id: "mission-battery",
+    id: "action-t2",
+    mission_id: "mission-teardown",
     kind: "monitor",
-    title: "Watch QuantumScape for A0 shipping cadence",
+    title: "Watch hiring + v0 launches for the next move",
     payload: {
-      target: "quantumscape.com/investor-sec",
-      body: "Stand up a watch on QuantumScape's investor/SEC updates for A0 prototype shipment volume and cycle-retention figures — the leading indicator that the 24-layer cells are scaling."
+      target: "vercel.com/careers",
+      body: "Stand up a watch on Vercel's careers page and product blog. AI/infra role clusters and v0 launches are the leading indicator of where the next product and revenue push lands."
     },
-    rationale: "A0 shipments to automotive partners are the clearest near-term signal of QuantumScape's execution; cadence changes move the thesis.",
-    provenance: ["node-b1", "node-b4"],
+    rationale: "Hiring and product cadence lead the public narrative; changes there move the competitive read before the press catches up.",
+    provenance: ["node-t8", "node-t4"],
     status: "proposed"
   },
 
@@ -611,51 +775,51 @@ Enterprise Operations Lead`
 const SEEDED_EVENTS: ActivityFeedEvent[] = [
   {
     id: "event-1",
-    mission_id: "mission-payments",
+    mission_id: "mission-fintech",
     timestamp: new Date(Date.now() - 3600000 * 2).toISOString(),
-    sender: "Conductor",
-    message: "Intelligence Mission Initiated: Deploying sense teams across Payment corridors.",
+    sender: "Planner",
+    message: "Mission started: comparing Razorpay, Cashfree and PayU across pricing, product, settlement and contracts.",
     level: "info"
   },
   {
     id: "event-2",
-    mission_id: "mission-payments",
+    mission_id: "mission-fintech",
     timestamp: new Date(Date.now() - 3600000 * 1.9).toISOString(),
-    sender: "Pathfinder",
-    message: "Navigated razorpay.com/pricing successfully. Extracted tiered enterprise pricing details.",
+    sender: "Scout",
+    message: "Read razorpay.com/pricing — extracted the tiered enterprise pricing.",
     level: "success"
   },
   {
     id: "event-3",
-    mission_id: "mission-payments",
+    mission_id: "mission-fintech",
     timestamp: new Date(Date.now() - 3600000 * 1.8).toISOString(),
-    sender: "PricingProductSignal",
-    message: "Cashfree billing guidelines resolved. Banner promises flat 1.90% with ₹0 setup / ₹0 care premium.",
+    sender: "Analyst",
+    message: "Cashfree pricing parsed: flat 1.90%, ₹0 setup, ₹0 maintenance on the public page.",
     level: "info"
   },
   {
     id: "event-4",
-    mission_id: "mission-payments",
+    mission_id: "mission-fintech",
     timestamp: new Date(Date.now() - 3600000 * 1.7).toISOString(),
-    sender: "Pathfinder",
-    message: "Retrieved Developer Terms page. Discovered Clause 4.2 detailing undisclosed ₹500 platform fee.",
+    sender: "Scout",
+    message: "Read the developer terms — found Clause 4.2 with a ₹500/month Smart-Routing fee.",
     level: "warn"
   },
   {
     id: "event-5",
-    mission_id: "mission-payments",
+    mission_id: "mission-fintech",
     timestamp: new Date(Date.now() - 3600000 * 1.2).toISOString(),
-    sender: "Fact-checker",
-    message: "Conflict surfaced: Cashfree's public ‘₹0 maintenance’ pledge doesn't match Clause 4.2's ₹500/mo Smart Routing fee. Flagged for review.",
+    sender: "Reviewer",
+    message: "Conflict surfaced: Cashfree's public ‘₹0 maintenance’ doesn't match Clause 4.2's ₹500/mo fee. Open the finding to reconcile.",
     level: "warn"
   },
   {
     id: "event-6",
-    mission_id: "mission-payments",
-    timestamp: new Date(Date.now() - 3600000 * 0.5).toISOString(),
-    sender: "Synthesist",
-    message: "Conflict resolved: verified against the merchant dashboard — the fee exists but is waived in writing for pre-June-2026 onboarding.",
-    level: "success"
+    mission_id: "mission-fintech",
+    timestamp: new Date(Date.now() - 3600000 * 1.1).toISOString(),
+    sender: "Reviewer",
+    message: "Recommendation ready: the fee exists but is waived above ₹15L/month — accept it or set your own value to update memory.",
+    level: "info"
   }
 ];
 
@@ -673,8 +837,8 @@ const SEEDED_CONNECTORS: Connector[] = [
 // Pre-built "what to build next" plans for the seeded workspaces. Each turns the
 // verified findings into gaps → a prototype → ranked, connector-routed tasks.
 const BUILD_PLANS: Record<string, Omit<BuildPlan, "connectors">> = {
-  "mission-payments": {
-    mission_id: "mission-payments",
+  "mission-fintech": {
+    mission_id: "mission-fintech",
     headline: "Build a smart-rail router that picks the cheapest verified gateway per transaction",
     rationale: "The verified comparison shows no single gateway wins everywhere — Razorpay leads on AI routing economics, Cashfree on instant settlement, PayU in between. A thin routing layer captures the best of each instead of locking to one.",
     gaps: [
@@ -699,30 +863,30 @@ const BUILD_PLANS: Record<string, Omit<BuildPlan, "connectors">> = {
       { id: "t-p4", title: "Route MDR-change alerts to #payments", detail: "Hook the standing watch on Cashfree's terms into Slack.", effort: "S", connector: "slack" },
     ],
   },
-  "mission-battery": {
-    mission_id: "mission-battery",
-    headline: "Build a diligence board that tracks verified solid-state milestones, not press claims",
-    rationale: "Factorial is the only contender with a certified density figure and OEM deals; QuantumScape has the cycle-life evidence; Solid Power's risk is single-sourced. A board that only counts verified milestones keeps the thesis honest.",
+  "mission-teardown": {
+    mission_id: "mission-teardown",
+    headline: "Build a category-mapped competitive tracker that watches a rival across finance, product, marketing and hiring",
+    rationale: "The teardown shows the value of one connected view: a $3.25B raise funds an AI-first product bet, marketed as the 'Frontend Cloud', staffed by AI + enterprise hiring. The gap is keeping it live and reconciling conflicting numbers automatically.",
     gaps: [
-      { id: "g-b1", title: "Cycle-life undisclosed for 2 of 3", detail: "Only QuantumScape publishes retention-after-cycles. Factorial and Solid Power are blank, so maturity can't be compared on durability.", severity: "medium", area: "Data" },
-      { id: "g-b2", title: "Solid Power's blocker is unverified", detail: "The bottleneck claim is single-source — it shouldn't drive allocation until corroborated.", severity: "high", area: "Verification" },
-      { id: "g-b3", title: "No funding-runway tracker", detail: "Runway is the real clock on a deep-tech bet; it isn't being tracked against milestone burn.", severity: "low", area: "Risk" },
+      { id: "g-t1", title: "Revenue is a single-source guess", detail: "The two ARR figures conflict (~$100M vs ~$200M) and neither is corroborated. Any model built on one is fragile.", severity: "high", area: "Finance" },
+      { id: "g-t2", title: "Signals aren't categorized automatically", detail: "Findings arrive flat; mapping them to Finance / Product / Marketing / Hiring is manual today.", severity: "medium", area: "Product" },
+      { id: "g-t3", title: "No leading-indicator alerting", detail: "Hiring clusters and product launches lead the narrative, but there's no watch that fires when they move.", severity: "low", area: "Ops" },
     ],
     prototype: {
-      name: "Solid-State Diligence Board",
-      summary: "A board that ingests filings, certifications and OEM disclosures, scores each contender only on verified milestones, and flags single-source claims so they never silently become facts.",
-      stack: ["React", "Node", "Postgres", "Recharts", "Scheduled ingestion jobs"],
+      name: "Rival Radar",
+      summary: "A live competitor board that pulls signals, auto-tags each into a category, draws the cross-category map, reconciles conflicting numbers, and alerts on leading indicators (hiring, launches).",
+      stack: ["React", "Node", "Postgres", "Scheduled scrapers", "Embeddings (category tagging)"],
       screens: [
-        { name: "Contender matrix", purpose: "Verified density, cycle life, readiness and validation per company." },
-        { name: "Milestone timeline", purpose: "Filing- and cert-backed events, single-source items visibly marked." },
-        { name: "Runway tracker", purpose: "Cash runway vs milestone burn, with alerts on dilution events." },
+        { name: "Category map", purpose: "Finance / Product / Marketing / Hiring lanes with cross-links to the synthesis." },
+        { name: "Conflict queue", purpose: "Numbers that disagree, with an agent-recommended reconciliation to accept or edit." },
+        { name: "Signal alerts", purpose: "Fire when hiring clusters or product launches shift — the leading indicators." },
       ],
     },
     tasks: [
-      { id: "t-b1", title: "Ingest QuantumScape SEC + earnings", detail: "Scheduled pull of filings; extract cells/layer, retention, runway.", effort: "M", connector: "azure" },
-      { id: "t-b2", title: "Add a certification verification source", detail: "Cross-check density claims against TÜV/UL registries before they count.", effort: "S", connector: "github" },
-      { id: "t-b3", title: "Track OEM-deal disclosures", detail: "Watch for new joint-development announcements per contender.", effort: "S", connector: "jira" },
-      { id: "t-b4", title: "Alert on new cycle-life data", detail: "Notify when any contender first publishes retention-after-cycles.", effort: "S", connector: "slack" },
+      { id: "t-t1", title: "Auto-tag findings into categories", detail: "Classify each signal into Finance/Product/Marketing/Hiring with embeddings; let the user re-tag.", effort: "M", connector: "github" },
+      { id: "t-t2", title: "Wire careers + blog scrapers", detail: "Scheduled pulls of careers and product blog; diff against last run.", effort: "M", connector: "azure" },
+      { id: "t-t3", title: "Build the conflict reconciliation queue", detail: "Surface disagreeing figures with the agent's recommendation; write resolutions to memory.", effort: "M", connector: "github" },
+      { id: "t-t4", title: "Alert on hiring/launch moves", detail: "Notify when a category's leading indicator changes materially.", effort: "S", connector: "slack" },
     ],
   },
   "mission-stack": {
@@ -782,6 +946,19 @@ class Database {
       if (fs.existsSync(STORAGE_FILE)) {
         const fileContent = fs.readFileSync(STORAGE_FILE, "utf-8");
         this.state = JSON.parse(fileContent);
+        // One-time refresh: when the seeded workspaces change, drop the old demo
+        // missions (and their entire fabric) and reinstall the current set below.
+        // User-created missions (ids outside the seed set) are left untouched.
+        if (this.state.seedVersion !== SEED_VERSION) {
+          const seedSet = new Set(ALL_SEED_MISSION_IDS);
+          this.state.missions = (this.state.missions || []).filter(m => !seedSet.has(m.id));
+          this.state.nodes = (this.state.nodes || []).filter(n => !seedSet.has(n.mission_id));
+          this.state.edges = (this.state.edges || []).filter(e => !seedSet.has(e.mission_id));
+          this.state.actions = (this.state.actions || []).filter(a => !seedSet.has(a.mission_id));
+          this.state.events = (this.state.events || []).filter(ev => !seedSet.has(ev.mission_id));
+          this.state.connectors = [...SEEDED_CONNECTORS];
+          this.state.seedVersion = SEED_VERSION;
+        }
         // Ensure seeded missions exist
         for (const m of SEEDED_MISSIONS) {
           if (!this.state.missions.some(x => x.id === m.id)) {
@@ -836,7 +1013,8 @@ class Database {
           sessions: [],
           ledger: [],
           media: [],
-          connectors: [...SEEDED_CONNECTORS]
+          connectors: [...SEEDED_CONNECTORS],
+          seedVersion: SEED_VERSION
         };
         this.save();
       }
@@ -854,7 +1032,8 @@ class Database {
         sessions: [],
         ledger: [],
         media: [],
-        connectors: [...SEEDED_CONNECTORS]
+        connectors: [...SEEDED_CONNECTORS],
+        seedVersion: SEED_VERSION
       };
     }
   }
@@ -1348,6 +1527,65 @@ class Database {
     this.save();
   }
 
+  // ─── Conflict reconciliation (the "Reconcile" feature) ─────────────────────
+  // Resolve a flagged conflict by recording a canonical value back into the
+  // fabric (our living memory). `choice` is "accept" (agent recommendation),
+  // "a"/"b" (trust one source), or "custom" (a user-edited value). Writes a
+  // correction node, marks the conflict + its sources resolved, and returns both.
+  public resolveConflict(
+    conflictNodeId: string,
+    choice: "accept" | "a" | "b" | "custom",
+    customValue?: string,
+    by = "human",
+  ): { conflict?: WeaveNode; correction?: WeaveNode } {
+    const conflict = this.getNode(conflictNodeId);
+    if (!conflict || !(conflict.conflict || conflict.flagged_by === "sentinel")) return {};
+    const d = (conflict.data && typeof conflict.data === "object") ? conflict.data : {};
+    const sides: any[] = Array.isArray(d.sides) ? d.sides : [];
+    const rec = d.recommendation || {};
+
+    let value = "";
+    let how = "";
+    if (choice === "custom" && customValue && customValue.trim()) { value = customValue.trim(); how = "your edited value"; }
+    else if (choice === "a" && sides[0]) { value = String(sides[0].value); how = `${sides[0].label}`; }
+    else if (choice === "b" && sides[1]) { value = String(sides[1].value); how = `${sides[1].label}`; }
+    else { value = String(rec.value || customValue || "Reconciled by the user"); how = "the recommended reconciliation"; }
+
+    const cid = `node-correction-${Math.random().toString(36).substr(2, 6)}`;
+    const correction: WeaveNode = {
+      id: cid, mission_id: conflict.mission_id, type: "correction",
+      title: `Resolved: ${d.field || conflict.title.replace(/^Conflict:\s*/i, "")}`,
+      content: `Reconciled value recorded to memory: ${value}. (via ${how})`,
+      confidence: 1.0, own_score: 1.0,
+      source: by === "human" ? "Human reconciliation" : "Agent reconciliation",
+      source_url: null, version: 1, provenance: [conflictNodeId], flagged_by: null,
+      corroboration: Math.max(1, sides.length), verified: true,
+      category: conflict.category,
+      render_kind: "text",
+      created_at: new Date().toISOString(),
+    };
+    this.state.nodes.push(correction);
+    this.state.edges.push({
+      id: `edge-resolve-${Math.random().toString(36).substr(2, 6)}`,
+      mission_id: conflict.mission_id, source: cid, target: conflictNodeId,
+      relation: "correction-applied", label: "resolved", created_by: by,
+      created_at: new Date().toISOString(),
+    });
+
+    // Mark the conflict + its source findings resolved.
+    conflict.conflict = false;
+    conflict.flagged_by = null;
+    conflict.verified = true;
+    conflict.title = `Resolved: ${(d.field || "conflict")}`;
+    conflict.data = { ...d, resolution: { choice, value, by, at: new Date().toISOString() } };
+    for (const s of sides) {
+      const sn = s?.ref ? this.getNode(s.ref) : undefined;
+      if (sn) { sn.flagged_by = null; sn.conflict = false; sn.verified = true; }
+    }
+    this.save();
+    return { conflict, correction };
+  }
+
   // Core IP: Confidence propagation logic
   // A node's confidence score = min(own_score, weakest provenance node score)
   // If a node is weaved from other source nodes, its score propagates from them.
@@ -1437,66 +1675,71 @@ class Database {
     const mission = this.getMission(missionId);
     const nodes = this.getNodes(missionId);
 
-    if (missionId === "mission-payments") {
+    if (missionId === "mission-fintech") {
       return {
-        summary: "Across Razorpay, Cashfree and PayU, no single gateway wins everywhere. Razorpay leads on high-volume routing economics and is the only one with a measured AI uplift; Cashfree is cheapest to start and settles instantly once its hidden Smart-Routing fee is waived in writing; PayU sits in between with the slowest settlement.",
+        summary: "Across Razorpay, Cashfree and PayU, no single gateway wins everywhere. Razorpay leads on high-volume routing economics and is the only one with a measured AI uplift; Cashfree is cheapest to start and settles instantly — pending one open conflict on its maintenance fee; PayU sits in between with the slowest settlement.",
         sentences: [
           {
             id: "s1",
             text: "Razorpay's custom enterprise tier settles at 1.80% (1.95% standard band) plus a 0.05% AI fee, the lowest effective rate for high volume.",
-            provenance: ["node-p1", "node-p-matrix"]
+            provenance: ["node-f1", "node-f-matrix"]
           },
           {
             id: "s2",
             text: "Cashfree advertises a flat 1.90% with ₹0 setup and ₹0 maintenance, plus instant settlement.",
-            provenance: ["node-p2"]
+            provenance: ["node-f2"]
           },
           {
             id: "s3",
-            text: "But Clause 4.2 of Cashfree's developer terms adds a ₹500/month Smart-Routing fee — a direct conflict with the public ₹0 pledge.",
-            provenance: ["node-p3", "node-p-conflict"]
+            text: "But Clause 4.2 of Cashfree's developer terms adds a ₹500/month Smart-Routing fee — an open conflict with the public ₹0 pledge that you can reconcile in the workspace.",
+            provenance: ["node-f3", "node-f-conflict"]
           },
           {
             id: "s4",
-            text: "Verified against the merchant dashboard, that fee is waived in writing for merchants onboarding before June 2026 — resolving the conflict in your favour.",
-            provenance: ["node-p4"]
+            text: "Settlement speed differs materially: Razorpay T+1 (T+0 on request), Cashfree instant, PayU T+2.",
+            provenance: ["node-f6"]
           },
           {
             id: "s5",
             text: "Razorpay's AI Optimizer is the only routing engine with a measured result: a 22% drop in charge failures versus static routing.",
-            provenance: ["node-p5", "node-p-matrix"]
+            provenance: ["node-f4", "node-f-matrix"]
           }
         ],
         recommendations: [
+          "Reconcile the Cashfree ₹0-vs-₹500 conflict, then write the agreed term into the MSA.",
           "Use Razorpay's 1.80% custom slab as the benchmark when negotiating high-volume rates.",
-          "Get Cashfree's ₹0-maintenance waiver written into the MSA, not left to policy.",
           "Pilot Razorpay AI Optimizer behind a flag and verify the −22% claim on your own traffic."
         ]
       };
-    } else if (missionId === "mission-battery") {
+    } else if (missionId === "mission-teardown") {
       return {
-        summary: "On verified evidence, Factorial leads: it holds the only independently certified density figure (391 Wh/kg, TÜV SÜD) plus OEM development deals. QuantumScape has the strongest cycle-life data and is shipping A0 cells. Solid Power's bottleneck is single-sourced — a watch item, not a thesis driver.",
+        summary: "Vercel's strategy is consistent across categories: a $3.25B raise (Finance) funds an AI-first product bet — v0 and the AI SDK (Product) — repositioned as the 'Frontend Cloud' (Marketing), staffed by AI-engineering and enterprise-GTM hiring (Hiring). The one open question is revenue: two sources disagree.",
         sentences: [
           {
-            id: "sb1",
-            text: "QuantumScape shipped 24-layer A0 cells holding 95% capacity after 800 cycles, with cash runway reported into 2028.",
-            provenance: ["node-b1", "node-b-matrix"]
+            id: "tb1",
+            text: "A $250M Series E at a $3.25B valuation funds the AI product push.",
+            provenance: ["node-t1", "node-t-synth"]
           },
           {
-            id: "sb2",
-            text: "Factorial's 40Ah pouch cells are TÜV SÜD-certified at 391 Wh/kg with zero thermal runaway — the only certified density figure in the set.",
-            provenance: ["node-b3", "node-b-matrix"]
+            id: "tb2",
+            text: "v0 (prompt → production React) and a fast Next.js / AI SDK cadence are the product wedge.",
+            provenance: ["node-t4", "node-t5"]
           },
           {
-            id: "sb3",
-            text: "Solid Power's reported ~15/week output bottleneck is single-sourced and unverified, so it shouldn't drive allocation yet.",
-            provenance: ["node-b2", "node-b4"]
+            id: "tb3",
+            text: "Hiring splits between AI/infra engineering and enterprise go-to-market — matching the move upmarket.",
+            provenance: ["node-t8", "node-t9"]
+          },
+          {
+            id: "tb4",
+            text: "Revenue is unresolved: ~$100M ARR (trade press, 2024) vs ~$200M run-rate (interview, 2025) — reconcile before modelling.",
+            provenance: ["node-t-conflict"]
           }
         ],
         recommendations: [
-          "Weight toward Factorial on verified maturity; keep QuantumScape for its cycle-life evidence.",
-          "Hold on Solid Power until the manufacturing bottleneck is corroborated by a second source.",
-          "Track cycle-life disclosures — the one durability metric still missing for two of three."
+          "Reconcile the ARR conflict (record a 2024→2025 range rather than picking one figure).",
+          "Treat hiring clusters and v0 launches as the leading indicators to watch.",
+          "Underwrite the AI + enterprise thesis; it's corroborated across four categories."
         ]
       };
     } else if (missionId === "mission-stack") {

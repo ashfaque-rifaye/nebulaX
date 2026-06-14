@@ -27,7 +27,7 @@ interface DBState {
 // source count — no opaque confidence percentages.
 // Bump this whenever the seeded workspaces change so existing installs replace
 // their old demo data instead of keeping stale missions around.
-export const SEED_VERSION = 4;
+export const SEED_VERSION = 5;
 
 // Every mission id we have ever seeded — used to purge old demo workspaces on a
 // version bump while leaving user-created missions untouched.
@@ -38,6 +38,7 @@ export const ALL_SEED_MISSION_IDS = [
 
 // Category palette lives in a client-safe module; re-export for server callers.
 export { CATEGORY_META } from "./categories.ts";
+import { inferCategory } from "./categories.ts";
 
 const SEEDED_MISSIONS: Mission[] = [
   {
@@ -827,11 +828,16 @@ const SEEDED_EVENTS: ActivityFeedEvent[] = [
 // one is simulated for the demo: it flips to "connected" and surfaces detected
 // context that feeds the analysis and gives build tasks somewhere to land.
 const SEEDED_CONNECTORS: Connector[] = [
-  { id: "github", name: "GitHub", category: "Code", icon: "Github", status: "connected", summary: "Repos, pull requests, issues and CI status.", detected: ["acme/checkout · 38 open issues", "No idempotency key in /charge", "Secret name found in dist bundle"] },
-  { id: "azure", name: "Azure", category: "Cloud", icon: "Cloud", status: "available", summary: "App Service, regions, cost and alerts.", detected: ["1 region (Central India)", "No failover slot", "P95 latency 480ms"] },
+  { id: "github", name: "GitHub", category: "Code & CI/CD", icon: "Github", status: "connected", summary: "Repos, pull requests, issues, and GitHub Actions CI/CD.", detected: ["acme/checkout · 38 open issues", "No idempotency key in /charge", "Actions: 2 failing workflows"] },
+  { id: "azure", name: "Azure", category: "Cloud & Deploy", icon: "Cloud", status: "available", summary: "App Service, resources, deployments and cost.", detected: ["1 region (Central India)", "No failover slot", "P95 latency 480ms"] },
+  { id: "cicd", name: "CI/CD Pipeline", category: "Code & CI/CD", icon: "GitBranch", status: "available", summary: "Build, test and deploy pipelines (Actions / Azure Pipelines).", detected: ["Deploy on merge to main", "No canary stage", "Avg build 6m 20s"] },
   { id: "jira", name: "Jira", category: "Tracking", icon: "SquareKanban", status: "available", summary: "Backlog, sprints, and one-click issue creation.", detected: ["Sprint 24 · 12 in progress", "No security epic", "3 stale 'checkout' bugs"] },
-  { id: "figma", name: "Figma", category: "Design", icon: "PenTool", status: "available", summary: "Designs, prototypes and design tokens.", detected: ["Checkout v2 frames", "Token set: Acme/Light", "2 prototypes linked"] },
+  { id: "email", name: "Email", category: "Comms", icon: "Mail", status: "connected", summary: "Send outreach and briefs from a drafted template.", detected: ["Outbound via workspace inbox", "Signature attached", "BCC archive on"] },
   { id: "slack", name: "Slack", category: "Comms", icon: "MessageSquare", status: "available", summary: "Channels, alerts and approval routing.", detected: ["#payments · 4 alerts today", "Routes approvals to @leads", "Incident webhook live"] },
+  { id: "teams", name: "Microsoft Teams", category: "Comms", icon: "Users", status: "available", summary: "Post to channels, route approvals, share briefs.", detected: ["'Strategy' channel", "Approvals via Adaptive Cards", "2 connectors configured"] },
+  { id: "powerbi", name: "Power BI", category: "Dashboards", icon: "BarChart3", status: "available", summary: "Push findings into a live dashboard / dataset.", detected: ["Workspace: Acme Exec", "Dataset 'Competitive' stale 9d", "3 reports linked"] },
+  { id: "tableau", name: "Tableau", category: "Dashboards", icon: "PieChart", status: "available", summary: "Publish a comparison view as a Tableau data source.", detected: ["Site: acme.online", "No 'pricing' workbook yet", "Extract refresh daily"] },
+  { id: "figma", name: "Figma", category: "Design", icon: "PenTool", status: "available", summary: "Designs, prototypes and design tokens.", detected: ["Checkout v2 frames", "Token set: Acme/Light", "2 prototypes linked"] },
 ];
 
 // Pre-built "what to build next" plans for the seeded workspaces. Each turns the
@@ -996,6 +1002,9 @@ class Database {
         if (!this.state.ledger) this.state.ledger = [];
         if (!this.state.media) this.state.media = [];
         if (!this.state.connectors || this.state.connectors.length === 0) this.state.connectors = [...SEEDED_CONNECTORS];
+        // Backfill: any finding created before categories existed gets one now,
+        // so the Flow never shows everything as "General".
+        for (const n of this.state.nodes) if (!n.category) n.category = inferCategory(`${n.title} ${n.content}`);
         // Backfill profiles created before the wallet ledger existed.
         for (const p of this.state.profiles) if (p.totalSpent === undefined) p.totalSpent = 0;
         this.save();

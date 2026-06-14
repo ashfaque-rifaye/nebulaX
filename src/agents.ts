@@ -3,30 +3,13 @@ import { WeaveNode, WeaveEdge, ProposedAction, ActivityFeedEvent, MissionPlanVar
 import { chatJSON, isLLMAvailable, getProviderNames } from "./llm.ts";
 import { estimateFootprint, efficiencyDividend, creditsForTokens } from "./footprint.ts";
 import { gatherWebIntelligence } from "./web.ts";
+import { inferCategory } from "./categories.ts";
 
 // Nebula's AI layer is now provider-agnostic: Groq (primary) → Cerebras → Hugging Face.
 // See src/llm.ts for the fallback chain. No vendor SDK is required.
 
 function llmReady(): boolean {
   return isLLMAvailable();
-}
-
-// Lightweight keyword categorizer so every finding lands in a Flow category
-// (Finance, Product, Marketing, Pricing, Security…) even with no LLM key.
-export function inferCategory(text: string): string {
-  const t = (text || "").toLowerCase();
-  if (/\b(settle|payout|t\+\d)\b/.test(t)) return "Settlement";
-  if (/\b(contract|terms|clause|sla|agreement|msa|waiver)\b/.test(t)) return "Contracts";
-  if (/\b(secur|vuln|secret|api key|exploit|leak|breach|encrypt)\b/.test(t)) return "Security";
-  if (/\b(latency|performance|tti|lcp|bundle|throughput|p95|page load)\b/.test(t)) return "Performance";
-  if (/\b(reliab|idempoten|retry|outage|failover|uptime|incident)\b/.test(t)) return "Reliability";
-  if (/\b(region|infra|cloud|deploy|hosting|architecture|kubernetes|scaling)\b/.test(t)) return "Infrastructure";
-  if (/\b(funding|raise|valuation|series [a-e]\b|arr|revenue|run-rate|profit|margin|ipo)\b/.test(t)) return "Finance";
-  if (/\b(hir|hiring|role|job|career|headcount|recruit|talent|layoff)\b/.test(t)) return "Hiring";
-  if (/\b(market|campaign|positioning|brand|devrel|conference|messaging|gtm|go-to-market|ads?)\b/.test(t)) return "Marketing";
-  if (/\b(price|pricing|mdr|\bfee\b|\bcost\b|discount|tariff|per month|\/mo|tier)\b/.test(t)) return "Pricing";
-  if (/\b(launch|product|feature|\bapi\b|sdk|model|release|roadmap|ships?|beta)\b/.test(t)) return "Product";
-  return "General";
 }
 
 // Build the structured payload the Reconcile UI reads from a conflict's two
@@ -358,20 +341,20 @@ export async function generateFutures(missionId: string): Promise<{ created: num
     db.addEvent({ id: `ev-fc-${rand()}`, mission_id: missionId, timestamp: ts(), sender, message: msg, level });
 
   const present = db.getNodes(missionId).filter(n => (n.type === "web-signal" || n.type === "synthesis") && n.time_horizon !== "future");
-  if (!isLLMAvailable() || present.length === 0) { log("Oracle", "Not enough verified present findings to forecast futures.", "warn"); return { created: 0, tokens: 0 }; }
+  if (!isLLMAvailable() || present.length === 0) { log("Synthesist", "Not enough verified present findings to forecast futures.", "warn"); return { created: 0, tokens: 0 }; }
 
   // Re-forge = replace, not append: clear the old scenarios first so corrections
   // produce a fresh, healed set of futures (not a pile-up).
   const oldFutures = db.getNodes(missionId).filter(n => n.time_horizon === "future");
   if (oldFutures.length > 0) {
     oldFutures.forEach(f => db.deleteNode(f.id));
-    log("Oracle", `Re-forging: cleared ${oldFutures.length} prior scenario${oldFutures.length !== 1 ? "s" : ""} to rebuild from the corrected present.`, "info");
+    log("Synthesist", `Re-forging: cleared ${oldFutures.length} prior scenario${oldFutures.length !== 1 ? "s" : ""} to rebuild from the corrected present.`, "info");
   }
 
   // Tag existing nodes as "present" so the timeline has a left side.
   present.forEach(n => { if (!n.time_horizon) db.updateNode(n.id, { time_horizon: "present" }); });
 
-  log("Oracle", "Futurist simulating branching scenarios from the verified present...", "info");
+  log("Synthesist", "Futurist simulating branching scenarios from the verified present...", "info");
   const ctx = present.map((n, i) => `[${i + 1}] ${n.title}: ${n.content.slice(0, 200)}`).join("\n");
   const mission = db.getMission(missionId);
   try {
@@ -404,12 +387,12 @@ Return JSON: { "futures": [ { "title": "short scenario name", "narrative": "2-3 
         relation: "supports", label: "could lead to", created_by: "Futurist", created_at: ts()
       }));
       created++;
-      log("Oracle", `Scenario "${f.title}" — ${Math.round(prob * 100)}% likely (${f.risk_reward || "mixed"}).`, "success");
+      log("Synthesist", `Scenario "${f.title}" — ${Math.round(prob * 100)}% likely (${f.risk_reward || "mixed"}).`, "success");
     });
     db.propagateConfidence(missionId);
     return { created, tokens };
   } catch (e: any) {
-    log("Oracle", `Forecast failed: ${e.message || "unknown"}.`, "error");
+    log("Synthesist", `Forecast failed: ${e.message || "unknown"}.`, "error");
     return { created: 0, tokens: 0 };
   }
 }
@@ -462,14 +445,14 @@ export async function runMissionSensing(
   try {
     // --- STEP 1: QUEUED -> SENSING ---
     db.updateMissionStatus(missionId, "sensing");
-    logEvent("Conductor", `Decomposed mission: "${prompt}". Activating sensing cells.`, "info");
+    logEvent("Planner", `Planning the mission: "${prompt}". Dispatching the swarm.`, "info");
     if (llmReady()) {
-      logEvent("Conductor", `LLM swarm online. Provider chain: ${getProviderNames().join(" → ")}.`, "success");
+      logEvent("Planner", `AI online. Provider chain: ${getProviderNames().join(" → ")}.`, "success");
     }
     await sleep(800);
 
-    logEvent("Pathfinder", "Deploying search agents, navigating public indices...", "success");
-    logEvent("SignalAgent", "Spawning PricingProductSignal, TalentSignal, and NarrativeSignal...", "info");
+    logEvent("Scout", "Searching the open web and opening real pages...", "success");
+    logEvent("Analyst", "Standing by to extract pricing, hiring and product data...", "info");
     await sleep(1200);
 
     let discoveredNodes: WeaveNode[] = [];
@@ -481,27 +464,27 @@ export async function runMissionSensing(
       // real websites, extracts real data, and feeds it into the swarm.
       // ──────────────────────────────────────────────────────────────────────
       try {
-        logEvent("Pathfinder", `Launching real web intelligence gathering for: "${prompt}"...`, "info");
+        logEvent("Scout", `Launching real web intelligence gathering for: "${prompt}"...`, "info");
 
         const webResult = await gatherWebIntelligence(prompt, persona, (progressMsg) => {
           // Route progress messages to the appropriate agent in the event feed
           if (progressMsg.includes("search queries")) {
-            logEvent("Pathfinder", progressMsg, "info");
+            logEvent("Scout", progressMsg, "info");
           } else if (progressMsg.includes("Navigating") || progressMsg.includes("Fetching")) {
-            logEvent("Pathfinder", progressMsg, "success");
+            logEvent("Scout", progressMsg, "success");
           } else if (progressMsg.includes("Veritas") || progressMsg.includes("Distilled")) {
-            logEvent("Veritas", progressMsg, "success");
+            logEvent("Fact-checker", progressMsg, "success");
           } else if (progressMsg.includes("Discovered")) {
             logEvent("SignalAgent", progressMsg, "info");
           } else {
-            logEvent("Pathfinder", progressMsg, "info");
+            logEvent("Scout", progressMsg, "info");
           }
         });
 
         totalTokens += webResult.totalTokens;
 
         if (webResult.signals.length > 0) {
-          logEvent("Pathfinder", `Web intelligence complete: ${webResult.pagesFetched} pages fetched, ${webResult.signals.length} real signals extracted.`, "success");
+          logEvent("Scout", `Web intelligence complete: ${webResult.pagesFetched} pages fetched, ${webResult.signals.length} real signals extracted.`, "success");
 
           // De-dupe against what's already in the fabric (re-sense shouldn't pile up copies).
           const norm = (s: string) => (s || "").toLowerCase().replace(/[^a-z0-9 ]/g, "").trim();
@@ -544,20 +527,20 @@ export async function runMissionSensing(
           });
 
           if (deduped > 0) {
-            logEvent("Cartographer", `Merged ${deduped} duplicate signal${deduped !== 1 ? "s" : ""} already in the fabric (no repeats).`, "info");
+            logEvent("Mapper", `Merged ${deduped} duplicate signal${deduped !== 1 ? "s" : ""} already in the fabric (no repeats).`, "info");
           }
         } else {
-          logEvent("Pathfinder", `Web fetching returned no usable signals (${webResult.pagesAttempted} pages attempted, ${webResult.pagesFetched} succeeded). Falling back to LLM analysis.`, "warn");
+          logEvent("Scout", `Web fetching returned no usable signals (${webResult.pagesAttempted} pages attempted, ${webResult.pagesFetched} succeeded). Falling back to LLM analysis.`, "warn");
         }
       } catch (webErr: any) {
         console.error("Web intelligence pipeline failed:", webErr);
-        logEvent("Pathfinder", `Web intelligence pipeline encountered an error: ${webErr.message || "Unknown"}. Falling back to LLM analysis.`, "warn");
+        logEvent("Scout", `Web intelligence pipeline encountered an error: ${webErr.message || "Unknown"}. Falling back to LLM analysis.`, "warn");
       }
 
       // Fallback: if real web sensing returned nothing, use LLM-only mode
       if (discoveredNodes.length === 0) {
         try {
-          logEvent("Pathfinder", "Activating LLM-only analysis mode as web sensing fallback...", "info");
+          logEvent("Scout", "Activating LLM-only analysis mode as web sensing fallback...", "info");
 
           const { data, provider, tokens } = await chatJSON<{ signals: any[] }>(
             `You are an autonomous intelligence researcher for the "Agentic Web". Investigate this mission: "${prompt}".
@@ -580,7 +563,7 @@ Format strictly as:
           totalTokens += tokens;
           runProvider = provider;
           if (data?.signals && Array.isArray(data.signals)) {
-            logEvent("Veritas", `LLM fallback discovered ${data.signals.length} analytical data points via ${provider}.`, "success");
+            logEvent("Fact-checker", `LLM fallback discovered ${data.signals.length} analytical data points via ${provider}.`, "success");
 
             data.signals.forEach((sig: any, index: number) => {
               const nodeId = `node-llm-${index}-${Math.random().toString(36).substr(2, 5)}`;
@@ -613,13 +596,13 @@ Format strictly as:
           }
         } catch (llmError: any) {
           console.error("LLM fallback also failed:", llmError);
-          logEvent("Conductor", `Both web and LLM pipelines failed: ${llmError.message}. Using offline simulation.`, "warn");
+          logEvent("Planner", `Both web and LLM pipelines failed: ${llmError.message}. Using offline simulation.`, "warn");
           discoveredNodes = generateSmartFallbackNodes(missionId, prompt, timestamp);
         }
       }
     } else {
       // --- ZERO-API-KEY FALLBACK ---
-      logEvent("Conductor", "No LLM API keys configured. Running high-fidelity simulation...", "warn");
+      logEvent("Planner", "No LLM API keys configured. Running high-fidelity simulation...", "warn");
       discoveredNodes = generateSmartFallbackNodes(missionId, prompt, timestamp);
     }
 
@@ -807,11 +790,11 @@ Return JSON:
       db.addEdge(parentEdge);
     }
 
-    logEvent("Scribe", "Report brief has been compiled, with tracing anchors wired.", "success");
+    logEvent("Reporter", "Brief compiled — every claim linked to its source.", "success");
     await sleep(1000);
 
     // --- STEP 4: SYNTHESIZING -> READY ---
-    logEvent("Oracle", "Oracle mapping findings to direct executable recommendations...", "info");
+    logEvent("Synthesist", "Oracle mapping findings to direct executable recommendations...", "info");
     logEvent("Actor", "Actor assembling email correspondence drafts and calendar prompts...", "info");
     await sleep(1200);
 
@@ -955,17 +938,17 @@ Return JSON:
       : `Re-sense #${runIndex}: +${newSignals} new signal${newSignals !== 1 ? "s" : ""}${newConflicts ? `, ${newConflicts} new contradiction${newConflicts > 1 ? "s" : ""}` : ""}.`;
     db.updateRun(missionId, runId, { finished_at: timestamp(), node_ids: runNodes.map(n => n.id), newSignals, summary });
     if (trigger !== "initial") {
-      logEvent("Conductor", summary, newSignals > 0 ? "success" : "info");
+      logEvent("Planner", summary, newSignals > 0 ? "success" : "info");
     }
 
     // Complete pipeline
     db.updateMissionStatus(missionId, "ready");
-    logEvent("Conductor", "Intelligence Mission ready. Monitoring is permanently active, standing by for override reweaves.", "success");
+    logEvent("Planner", "Analysis ready. Findings are mapped by category, conflicts surfaced, and next moves drafted.", "success");
 
   } catch (error: any) {
     console.error("Critical swarm crash during sensing:", error);
     db.updateMissionStatus(missionId, "ready");
-    logEvent("Conductor", `Swarm encountered runtime exception: ${error.message || "Unknown error"}`, "error");
+    logEvent("Planner", `Swarm encountered runtime exception: ${error.message || "Unknown error"}`, "error");
   }
 }
 
@@ -989,6 +972,7 @@ export function generateSmartFallbackNodes(missionId: string, prompt: string, ti
     source_url: `https://${brand.toLowerCase()}.com/pricing`,
     version: 1, provenance: [], flagged_by: null,
     corroboration: 2, verified: true, grounded: true,
+    category: "Pricing",
     render_kind: "metrics",
     data: { items: [ { label: "Setup fee", value: "$0" }, { label: "Maintenance", value: "$0*" }, { label: "Model", value: "Flat" } ] },
     created_at: timestamp()
@@ -1005,6 +989,7 @@ export function generateSmartFallbackNodes(missionId: string, prompt: string, ti
     source_url: `https://${brand.toLowerCase()}.com/terms/developer`,
     version: 1, provenance: [], flagged_by: null,
     corroboration: 2, verified: true, grounded: true,
+    category: "Contracts",
     render_kind: "quote",
     data: { quote: "Endpoints over 100 API queries/hour bear a $50/month maintenance tariff.", attribution: "Developer Terms, fine print" },
     created_at: timestamp()
@@ -1021,6 +1006,7 @@ export function generateSmartFallbackNodes(missionId: string, prompt: string, ti
     source_url: "https://techcrunch.com/competitive-ai-rollouts",
     version: 1, provenance: [], flagged_by: null,
     corroboration: 1, verified: false, grounded: false,
+    category: "Product",
     render_kind: "list",
     data: { items: [ "Native checkout-optimization APIs", "Higher base price, no endpoint sub-charges", "Single press source — corroborate" ] },
     created_at: timestamp()
@@ -1050,28 +1036,33 @@ export async function executeSingleAgentCognition(missionId: string, agentId: st
     });
   };
 
-  const senderName = agentId.charAt(0).toUpperCase() + agentId.slice(1);
+  const AGENT_NAMES: Record<string, string> = {
+    conductor: "Planner", pathfinder: "Scout", analyst: "Analyst", veritas: "Fact-checker",
+    cartographer: "Mapper", sentinel: "Reviewer", oracle: "Synthesist", scribe: "Reporter",
+    actor: "Assistant", architect: "Architect", builder: "Builder",
+  };
+  const senderName = AGENT_NAMES[agentId] || (agentId.charAt(0).toUpperCase() + agentId.slice(1));
 
-  logEvent(senderName, `Cognitive manual run initiated for agent ${senderName}. Ingestion state: optimized.`, "info");
+  logEvent(senderName, `${senderName} running on demand…`, "info");
   await sleep(1500);
 
   let resultData: any = { status: "success", agentId, tokens: 0 };
 
   if (agentId === "conductor") {
-    logEvent("Conductor", `Analyzing mission parameters: "${prompt}". Recalculating task graphs.`, "info");
+    logEvent("Planner", `Re-reading the goal: "${prompt}". Re-planning the work.`, "info");
     await sleep(1000);
     db.propagateConfidence(missionId);
-    logEvent("Conductor", `Coordinate system healed and synchronized. Sub-swarm alignment intact.`, "success");
-    resultData.message = "Swarm task graphs recalculated successfully.";
+    logEvent("Planner", `Plan refreshed. Specialists re-aligned to the goal.`, "success");
+    resultData.message = "Re-planned the work against the goal.";
   }
   else if (agentId === "pathfinder") {
-    logEvent("Pathfinder", "Deploying the live Web Scout... Target query: " + prompt, "info");
+    logEvent("Scout", "Deploying the live Web Scout... Target query: " + prompt, "info");
 
     let added = 0;
     if (llmReady()) {
       try {
         const web = await gatherWebIntelligence(prompt, persona, (m) =>
-          logEvent("Pathfinder", m, m.includes("Fetch") || m.includes("Navigat") ? "success" : "info")
+          logEvent("Scout", m, m.includes("Fetch") || m.includes("Navigat") ? "success" : "info")
         );
         const existing = db.getNodes(missionId);
         const norm = (s: string) => (s || "").toLowerCase().replace(/[^a-z0-9 ]/g, "").trim();
@@ -1099,19 +1090,19 @@ export async function executeSingleAgentCognition(missionId: string, agentId: st
           existing.push(node);
           added++;
           resultData.nodeId = node.id;
-          logEvent("Veritas", `Verified live signal: "${sig.title}" from ${sig.source_url}.`, "success");
+          logEvent("Fact-checker", `Verified live signal: "${sig.title}" from ${sig.source_url}.`, "success");
         });
       } catch (e: any) {
         console.error("Manual Web Scout failed:", e);
-        logEvent("Pathfinder", `Web scout hit an error: ${e.message || "unknown"}.`, "warn");
+        logEvent("Scout", `Web scout hit an error: ${e.message || "unknown"}.`, "warn");
       }
     }
     if (added === 0) {
-      logEvent("Pathfinder", "No new live signals (duplicates already in the fabric, or sources blocked).", "warn");
+      logEvent("Scout", "No new live signals (duplicates already in the fabric, or sources blocked).", "warn");
     }
   }
   else if (agentId === "veritas") {
-    logEvent("Veritas", "Verifying credibility metrics across all active canvas nodes.", "info");
+    logEvent("Fact-checker", "Re-checking each finding against its sources.", "info");
     await sleep(1000);
     const nodes = db.getNodes(missionId);
     nodes.forEach(n => {
@@ -1120,11 +1111,11 @@ export async function executeSingleAgentCognition(missionId: string, agentId: st
       }
     });
     db.propagateConfidence(missionId);
-    logEvent("Veritas", "Cross-source validation completed. Evaluated metadata credibility curves successfully.", "success");
+    logEvent("Fact-checker", "Cross-source check complete. Verified and needs-review marks updated.", "success");
     resultData.message = "Findings re-checked against their sources.";
   }
   else if (agentId === "cartographer") {
-    logEvent("Cartographer", "Reprojecting 2D node coordinates. Ingesting semantic similarities...", "info");
+    logEvent("Mapper", "Re-linking related findings into the category map...", "info");
     await sleep(1000);
     const nodes = db.getNodes(missionId);
     if (nodes.length >= 2) {
@@ -1139,10 +1130,10 @@ export async function executeSingleAgentCognition(missionId: string, agentId: st
         created_at: timestamp()
       };
       db.addEdge(edge);
-      logEvent("Cartographer", `Successfully constructed semantic edge link: "${nodes[0].title}" -> "${nodes[nodes.length-1].title}".`, "success");
+      logEvent("Mapper", `Linked related findings: "${nodes[0].title}" -> "${nodes[nodes.length-1].title}".`, "success");
       resultData.edgeId = edge.id;
     } else {
-      logEvent("Cartographer", "Too few nodes to calculate dynamic similarity matrices.", "warn");
+      logEvent("Mapper", "Not enough findings yet to link.", "warn");
     }
   }
   else if (agentId === "sentinel") {
@@ -1202,7 +1193,7 @@ export async function executeSingleAgentCognition(missionId: string, agentId: st
     resultData.nodeId = conflictNode.id;
   }
   else if (agentId === "oracle") {
-    logEvent("Oracle", "Integrating findings to generate an optimal core strategic synthesis summary...", "info");
+    logEvent("Synthesist", "Building the side-by-side read from the verified findings...", "info");
     await sleep(1200);
 
     let synthTitle = "Consolidated Strategic Swarm Insight";
@@ -1243,13 +1234,13 @@ export async function executeSingleAgentCognition(missionId: string, agentId: st
       created_at: timestamp()
     };
     db.addNode(synthNode);
-    logEvent("Oracle", `Dynamic strategic synthesis generated: "${synthTitle}"`, "success");
+    logEvent("Synthesist", `Read produced: "${synthTitle}"`, "success");
     resultData.nodeId = synthNode.id;
   }
   else if (agentId === "scribe") {
-    logEvent("Scribe", "Assembling provenance tracing indexes and structuring report brief.", "info");
+    logEvent("Reporter", "Writing the brief, linking each line to its source.", "info");
     await sleep(1000);
-    logEvent("Scribe", "Traceability mapping table successfully compiled.", "success");
+    logEvent("Reporter", "Brief compiled — every claim traced to a source.", "success");
     resultData.message = "Scribe compiled and locked active metadata tracing bounds.";
   }
   else if (agentId === "actor") {

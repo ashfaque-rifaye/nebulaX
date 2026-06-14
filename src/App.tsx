@@ -70,9 +70,17 @@ import {
   Hammer,
   BarChart3,
   GitCompareArrows,
-  CheckCircle2
+  CheckCircle2,
+  Github,
+  Cloud,
+  SquareKanban,
+  Users,
+  PieChart,
+  Plug,
+  PenTool
 } from "lucide-react";
-import { Mission, WeaveNode, WeaveEdge, ProposedAction, ActivityFeedEvent, ResearchBrief, AgentStatus, MissionPlanVariant, Profile, ChatTurn, MissionRun, CustomAgent } from "./types.ts";
+import { Mission, WeaveNode, WeaveEdge, ProposedAction, ActivityFeedEvent, ResearchBrief, AgentStatus, MissionPlanVariant, Profile, ChatTurn, MissionRun, CustomAgent, Connector } from "./types.ts";
+import { catColor } from "./categories.ts";
 import { GreenCredits, PledgeDef } from "./components/GreenCredits.tsx";
 import { FabricChat } from "./components/FabricChat.tsx";
 import { HowItWorksPage, AgentsPage, UseCasesPage } from "./components/ExplainerPages.tsx";
@@ -129,6 +137,27 @@ const AGENT_ICONS: Record<string, React.ComponentType<{ className?: string }>> =
   builder: Hammer,
   visualizer: ImageIcon,
   cinematographer: Clapperboard,
+};
+
+// Glyphs for the org tools an action can be routed into.
+const CONNECTOR_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
+  github: Github, azure: Cloud, cicd: GitBranch, jira: SquareKanban, email: Mail,
+  slack: MessageSquare, teams: Users, powerbi: BarChart3, tableau: PieChart, figma: PenTool,
+};
+
+// Which tool each proposed move strategizes into by default. The "build &
+// strategize" wiring: outreach → email, watch → Slack, decision → Teams, etc.
+const ACTION_ROUTING: Record<string, { connector: string; verb: string }> = {
+  outreach: { connector: "email", verb: "Send via Email" },
+  "draft-email": { connector: "email", verb: "Send via Email" },
+  "draft-application": { connector: "email", verb: "Send via Email" },
+  reminder: { connector: "email", verb: "Email reminder" },
+  monitor: { connector: "slack", verb: "Send alert to Slack" },
+  alert: { connector: "slack", verb: "Alert in Slack" },
+  decision: { connector: "teams", verb: "Share to Teams" },
+  "deep-dive": { connector: "github", verb: "Open as GitHub issue" },
+  "draft-brief": { connector: "powerbi", verb: "Push to Power BI" },
+  other: { connector: "github", verb: "File in GitHub" },
 };
 
 export default function App() {
@@ -215,6 +244,8 @@ export default function App() {
   const [events, setEvents] = useState<ActivityFeedEvent[]>([]);
   const [brief, setBrief] = useState<ResearchBrief | null>(null);
   const [actions, setActions] = useState<ProposedAction[]>([]);
+  const [connectors, setConnectors] = useState<Connector[]>([]);
+  const [routingId, setRoutingId] = useState<string | null>(null);
   const [agents, setAgents] = useState<AgentStatus[]>([]);
   const [focusedAgent, setFocusedAgent] = useState<AgentStatus | null>(null);
   const [runningAgentId, setRunningAgentId] = useState<string | null>(null);
@@ -397,6 +428,7 @@ export default function App() {
   useEffect(() => {
     fetchMissions();
     fetchAgents();
+    fetchConnectors();
     fetchLlmStatus();
     fetchLlmConfig();
     fetchPledges();
@@ -1043,6 +1075,26 @@ export default function App() {
     } catch (err) {
       console.error("Failed to approve action:", err);
     }
+  };
+
+  const fetchConnectors = async () => {
+    try {
+      const r = await fetch("/api/connectors");
+      if (r.ok) setConnectors(await r.json());
+    } catch (err) { console.error("Failed to fetch connectors:", err); }
+  };
+
+  // Route an approved move into a connected tool (GitHub/Slack/Teams/Email/…).
+  const routeAction = async (actionId: string, connectorId: string) => {
+    setRoutingId(actionId);
+    try {
+      const r = await fetch(`/api/actions/${actionId}/route`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
+        body: JSON.stringify({ connector: connectorId }),
+      });
+      if (r.ok && selectedMissionId) await fetchMissionData(selectedMissionId);
+    } catch (err) { console.error("Failed to route action:", err); }
+    finally { setRoutingId(null); }
   };
 
   const handleDismissAction = async (actionId: string) => {
@@ -1736,29 +1788,36 @@ export default function App() {
                 <h4 className={`text-lg font-bold font-display ${t.textTitle}`}>What do they do?</h4>
 
                 <p className={`text-xs leading-relaxed ${isDark ? "text-white/60" : "text-slate-600"}`}>
-                  Nebula deploys specialized cognitive virtual agents in parallel pipelines to handle distinct analytical milestones:
+                  A team of specialists, each owning one job, hands work down the line — sense, verify, compare, then build:
                 </p>
 
                 <ul className="text-xs flex flex-col gap-2.5 list-none font-sans mt-1">
                   <li className="flex gap-2.5 items-start">
                     <span className={`font-bold font-mono ${isDark ? "text-violet-400" : "text-violet-600"}`}>1.</span>
                     <div>
-                      <span className={`font-semibold block ${t.textTitle}`}>[Pathfinder] Scanning</span>
-                      <span className={`text-[11px] ${isDark ? "text-white/50" : "text-slate-500"}`}>Scrapes search indices, crawling target domains to fetch web signals.</span>
+                      <span className={`font-semibold block ${t.textTitle}`}>Scout — Sensing</span>
+                      <span className={`text-[11px] ${isDark ? "text-white/50" : "text-slate-500"}`}>Browses the live web and reads real pages, pulling back the data behind each finding.</span>
                     </div>
                   </li>
                   <li className="flex gap-2.5 items-start">
                     <span className={`font-bold font-mono ${isDark ? "text-violet-400" : "text-violet-600"}`}>2.</span>
                     <div>
-                      <span className={`font-semibold block ${t.textTitle}`}>[Fact-checker] Verifying</span>
+                      <span className={`font-semibold block ${t.textTitle}`}>Fact-checker — Verifying</span>
                       <span className={`text-[11px] ${isDark ? "text-white/50" : "text-slate-500"}`}>Cross-checks each finding across sources and marks it Verified or Needs review.</span>
                     </div>
                   </li>
                   <li className="flex gap-2.5 items-start">
                     <span className={`font-bold font-mono ${isDark ? "text-violet-400" : "text-violet-600"}`}>3.</span>
                     <div>
-                      <span className={`font-semibold block ${t.textTitle}`}>[Scribe & Oracle] Synthesizing</span>
-                      <span className={`text-[11px] ${isDark ? "text-white/50" : "text-slate-500"}`}>Generates executive brief reports and draft proposed actions.</span>
+                      <span className={`font-semibold block ${t.textTitle}`}>Mapper &amp; Synthesist — Comparing</span>
+                      <span className={`text-[11px] ${isDark ? "text-white/50" : "text-slate-500"}`}>Tags every finding into a category, lays the Flow into lanes, and builds the side-by-side read.</span>
+                    </div>
+                  </li>
+                  <li className="flex gap-2.5 items-start">
+                    <span className={`font-bold font-mono ${isDark ? "text-violet-400" : "text-violet-600"}`}>4.</span>
+                    <div>
+                      <span className={`font-semibold block ${t.textTitle}`}>Architect &amp; Builder — Shipping</span>
+                      <span className={`text-[11px] ${isDark ? "text-white/50" : "text-slate-500"}`}>Turns the analysis into ranked moves, routed into GitHub, Slack, Teams, Email and your dashboards.</span>
                     </div>
                   </li>
                 </ul>
@@ -2699,14 +2758,35 @@ export default function App() {
                   )}
 
                   {activeTab === "actions" && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="flex flex-col gap-3">
+                      {/* strategize & ship header */}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="w-7 h-7 rounded-lg bg-luna-gradient flex items-center justify-center flex-shrink-0">
+                            <Rocket className="w-3.5 h-3.5 text-white" />
+                          </span>
+                          <div className="leading-tight">
+                            <h4 className={`text-[12px] font-bold font-display ${t.textTitle}`}>Strategize &amp; ship</h4>
+                            <p className={`text-[9.5px] ${t.textMute}`}>Each verified move routes straight into a tool you use.</p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => setWorkspaceMode("build")}
+                          className={`text-[10px] font-bold flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition-all ${isDark ? "border-white/10 text-gray-300 hover:border-white/25" : "border-slate-200 text-slate-600 hover:border-slate-300"}`}
+                          title="Manage connectors in the Build view"
+                        >
+                          <Plug className="w-3 h-3 text-sky-400" /> Connections
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {actions.length === 0 && (
                         <div className="col-span-2 flex flex-col items-center gap-2 py-8 text-center">
                           <span className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/25 flex items-center justify-center">
-                            <Mail className="w-5 h-5 text-indigo-400" />
+                            <Rocket className="w-5 h-5 text-indigo-400" />
                           </span>
                           <p className={`text-xs max-w-sm leading-relaxed ${t.textMute}`}>
-                            The Actor agent turns verified findings into next moves: outreach to draft, an entity to watch, a thread to deep-dive, or a decision to lock in. Each is one click, and never auto-sends.
+                            The Assistant turns verified findings into next moves — outreach, a watch, a deep-dive, a decision — each ready to route into Email, GitHub, Slack, Teams or your dashboards. Nothing is sent without you.
                           </p>
                         </div>
                       )}
@@ -2722,35 +2802,38 @@ export default function App() {
                           k === "reminder" ? { Icon: Clock, label: "Reminder", tone: "amber" } :
                           k === "alert" ? { Icon: ShieldAlert, label: "Alert", tone: "rose" } :
                           { Icon: FileText, label: "Brief", tone: "violet" };
-                        const tones: Record<string, { text: string; chip: string; solid: string; dot: string }> = {
-                          violet: { text: "text-violet-600 dark:text-violet-300", chip: "border-violet-500/25 bg-violet-500/10", solid: "bg-violet-600 hover:bg-violet-500", dot: "bg-violet-500" },
-                          emerald: { text: "text-emerald-600 dark:text-emerald-300", chip: "border-emerald-500/25 bg-emerald-500/10", solid: "bg-emerald-600 hover:bg-emerald-500", dot: "bg-emerald-500" },
-                          cyan: { text: "text-cyan-600 dark:text-cyan-300", chip: "border-cyan-500/25 bg-cyan-500/10", solid: "bg-cyan-600 hover:bg-cyan-500", dot: "bg-cyan-500" },
-                          amber: { text: "text-amber-600 dark:text-amber-300", chip: "border-amber-500/25 bg-amber-500/10", solid: "bg-amber-600 hover:bg-amber-500", dot: "bg-amber-500" },
-                          rose: { text: "text-rose-600 dark:text-rose-300", chip: "border-rose-500/25 bg-rose-500/10", solid: "bg-rose-600 hover:bg-rose-500", dot: "bg-rose-500" },
+                        const tones: Record<string, { text: string; chip: string }> = {
+                          violet: { text: "text-violet-600 dark:text-violet-300", chip: "border-violet-500/25 bg-violet-500/10" },
+                          emerald: { text: "text-emerald-600 dark:text-emerald-300", chip: "border-emerald-500/25 bg-emerald-500/10" },
+                          cyan: { text: "text-cyan-600 dark:text-cyan-300", chip: "border-cyan-500/25 bg-cyan-500/10" },
+                          amber: { text: "text-amber-600 dark:text-amber-300", chip: "border-amber-500/25 bg-amber-500/10" },
+                          rose: { text: "text-rose-600 dark:text-rose-300", chip: "border-rose-500/25 bg-rose-500/10" },
                         };
                         const tone = tones[meta.tone];
                         const MetaIcon = meta.Icon;
 
-                        // Type-specific one-click handoff (also marks the move as taken).
-                        const primary =
-                          isMail ? {
-                            label: act.payload.to ? "Open in Mail" : "Copy draft", Icon: Mail,
-                            run: () => { copy(act.payload.body); if (act.payload.to) window.open(`mailto:${act.payload.to}?subject=${encodeURIComponent(act.payload.subject || act.title)}&body=${encodeURIComponent(act.payload.body || "")}`); handleApproveAction(act.id); }
-                          } : k === "monitor" ? {
-                            label: "Start watch", Icon: Radio,
-                            run: () => { handleApproveAction(act.id); if (!selectedMission?.monitoring) toggleMonitor(); }
-                          } : k === "deep-dive" ? {
-                            label: "Launch deep-dive", Icon: Crosshair,
-                            run: () => { handleApproveAction(act.id); deepDive(act.payload.seed || act.title); }
-                          } : k === "reminder" && act.payload.deadline ? {
-                            label: "Add to calendar", Icon: Clock,
-                            run: () => { window.open(`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(act.title)}&details=${encodeURIComponent(act.payload.body || "")}&dates=${String(act.payload.deadline).replace(/-/g, "")}/${String(act.payload.deadline).replace(/-/g, "")}`, "_blank"); handleApproveAction(act.id); }
-                          } : {
-                            label: "Copy & commit", Icon: Check,
-                            run: () => { copy(act.payload.body); handleApproveAction(act.id); }
-                          };
-                        const PrimaryIcon = primary.Icon;
+                        // Connector routing — the "build & strategize" wiring.
+                        const route = ACTION_ROUTING[k] || ACTION_ROUTING.other;
+                        const connector = connectors.find(c => c.id === route.connector);
+                        const connected = connector?.status === "connected";
+                        const ConnIcon = connector ? (CONNECTOR_ICON[connector.id] || Plug) : Plug;
+                        const sending = routingId === act.id;
+
+                        const sendToConnector = () => {
+                          if (!connector) { copy(act.payload.body); handleApproveAction(act.id); return; }
+                          if (!connected) { setWorkspaceMode("build"); return; }
+                          if (connector.id === "email") {
+                            window.open(`mailto:${act.payload.to || ""}?subject=${encodeURIComponent(act.payload.subject || act.title)}&body=${encodeURIComponent(act.payload.body || "")}`);
+                          }
+                          routeAction(act.id, connector.id);
+                        };
+
+                        // Live secondary handoff (does the actual NebulaX-side action).
+                        const secondary =
+                          k === "monitor" ? { label: "Start watch", Icon: Radio, run: () => { if (!selectedMission?.monitoring) toggleMonitor(); handleApproveAction(act.id); } } :
+                          k === "deep-dive" ? { label: "Launch", Icon: Crosshair, run: () => { deepDive(act.payload.seed || act.title); handleApproveAction(act.id); } } :
+                          (k === "reminder" && act.payload.deadline) ? { label: "Calendar", Icon: Clock, run: () => { window.open(`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(act.title)}&details=${encodeURIComponent(act.payload.body || "")}&dates=${String(act.payload.deadline).replace(/-/g, "")}/${String(act.payload.deadline).replace(/-/g, "")}`, "_blank"); } } :
+                          null;
 
                         return (
                         <div
@@ -2763,13 +2846,21 @@ export default function App() {
                               : act.status === "dismissed" ? "opacity-40" : ""
                           }`}
                         >
-                          <div className="flex justify-between items-center select-none">
-                            <span className={`inline-flex items-center gap-1.5 text-[8.5px] font-mono font-bold px-2 py-0.5 border rounded-full uppercase tracking-wide ${tone.text} ${tone.chip}`}>
-                              <MetaIcon className="w-2.5 h-2.5" /> {meta.label}
-                            </span>
+                          <div className="flex justify-between items-center gap-1.5 select-none">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className={`inline-flex items-center gap-1 text-[8.5px] font-mono font-bold px-2 py-0.5 border rounded-full uppercase tracking-wide ${tone.text} ${tone.chip}`}>
+                                <MetaIcon className="w-2.5 h-2.5" /> {meta.label}
+                              </span>
+                              {connector && (
+                                <span className={`inline-flex items-center gap-1 text-[8.5px] font-mono px-1.5 py-0.5 rounded-full border ${isDark ? "border-white/10 text-gray-300" : "border-slate-200 text-slate-500"}`} title={`Routes to ${connector.name}`}>
+                                  <ArrowRight className="w-2.5 h-2.5 opacity-50" /> <ConnIcon className="w-2.5 h-2.5" /> {connector.name}
+                                  {!connected && <span className="text-amber-500">·off</span>}
+                                </span>
+                              )}
+                            </div>
                             {act.status === "approved" && (
-                              <span className="text-[8.5px] font-mono text-emerald-600 dark:text-emerald-300 flex items-center gap-1 font-bold">
-                                <Check className="w-2.5 h-2.5" /> taken
+                              <span className="text-[8.5px] font-mono text-emerald-600 dark:text-emerald-300 flex items-center gap-1 font-bold flex-shrink-0">
+                                <Check className="w-2.5 h-2.5" /> shipped
                               </span>
                             )}
                           </div>
@@ -2826,44 +2917,50 @@ export default function App() {
                             </div>
                           )}
 
-                          {act.status === "proposed" && (
-                            <div className="flex gap-2 mt-0.5 select-none no-pan">
+                          {act.status !== "dismissed" && (
+                            <div className="flex items-center gap-2 mt-0.5 select-none no-pan">
                               <button
-                                onClick={primary.run}
-                                className={`flex-1 ${tone.solid} text-white text-[10px] font-bold py-1.5 px-2 rounded-lg transition-all flex items-center justify-center gap-1.5 shadow-sm press`}
-                                title={primary.label}
+                                onClick={sendToConnector}
+                                disabled={sending}
+                                className={`flex-1 text-[10px] font-bold py-1.5 px-2 rounded-lg transition-all flex items-center justify-center gap-1.5 shadow-sm press disabled:opacity-60 ${
+                                  connected || !connector ? "bg-luna-gradient cta-luna text-white" : (isDark ? "border border-sky-500/40 text-sky-300 bg-sky-500/10" : "border border-sky-500/40 text-sky-600 bg-sky-500/5")
+                                }`}
+                                title={connected ? route.verb : connector ? `Connect ${connector.name} in Build` : "Copy & commit"}
                               >
-                                <PrimaryIcon className="w-3.5 h-3.5" /> {primary.label}
+                                <ConnIcon className="w-3.5 h-3.5" />
+                                {sending ? "Routing…" : connected ? route.verb : connector ? `Connect ${connector.name}` : "Copy & commit"}
                               </button>
-                              <button
-                                onClick={() => handleDismissAction(act.id)}
-                                className={`p-1 px-2 rounded-lg text-[10px] transition-all flex items-center press border ${isDark ? "border-white/10 text-white/50 hover:text-rose-400 hover:border-rose-500/30" : "border-slate-200 text-slate-400 hover:text-rose-500 hover:bg-rose-50"}`}
-                                title="Dismiss (archived, never deleted)"
-                              >
-                                <X className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          )}
-
-                          {act.status === "approved" && (
-                            <div className="flex flex-wrap gap-2 no-pan">
-                              <button
-                                onClick={primary.run}
-                                className={`flex-1 ${tone.solid} text-white text-[10px] font-bold py-1 px-2 rounded-lg transition-all flex items-center justify-center gap-1.5 shadow-sm`}
-                              >
-                                <PrimaryIcon className="w-3.5 h-3.5" /> {primary.label} again
-                              </button>
+                              {secondary && (
+                                <button
+                                  onClick={secondary.run}
+                                  className={`text-[10px] font-bold py-1.5 px-2.5 rounded-lg border transition-all flex items-center gap-1.5 ${isDark ? "border-white/10 text-gray-300 hover:border-white/25" : "border-slate-200 text-slate-600 hover:border-slate-300"}`}
+                                  title={secondary.label}
+                                >
+                                  <secondary.Icon className="w-3.5 h-3.5" /> {secondary.label}
+                                </button>
+                              )}
                               <button
                                 onClick={() => copy(act.payload.body)}
-                                className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 border ${isDark ? "border-white/10 text-white/70 hover:border-white/25" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}
+                                className={`p-1.5 rounded-lg text-[10px] transition-all border ${isDark ? "border-white/10 text-white/60 hover:border-white/25" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}
+                                title="Copy draft"
                               >
-                                <FileText className="w-3.5 h-3.5" /> Copy
+                                <FileText className="w-3.5 h-3.5" />
                               </button>
+                              {act.status === "proposed" && (
+                                <button
+                                  onClick={() => handleDismissAction(act.id)}
+                                  className={`p-1.5 rounded-lg text-[10px] transition-all border ${isDark ? "border-white/10 text-white/50 hover:text-rose-400 hover:border-rose-500/30" : "border-slate-200 text-slate-400 hover:text-rose-500 hover:bg-rose-50"}`}
+                                  title="Dismiss (archived, never deleted)"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              )}
                             </div>
                           )}
                         </div>
                       );
                       })}
+                      </div>
                     </div>
                   )}
                 </div>

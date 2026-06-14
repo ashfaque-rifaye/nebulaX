@@ -3,7 +3,7 @@ import { BuildPlan, BuildGap, BuildTask, Connector } from "../types.ts";
 import {
   Hammer, Boxes, Search, AlertTriangle, CheckCircle2, ArrowRight, Plug,
   Layers, Sparkles, Loader2, Github, Cloud, SquareKanban, PenTool, MessageSquare,
-  Wrench, Link2,
+  Wrench, Link2, GitBranch, Mail, Users, BarChart3, PieChart,
 } from "lucide-react";
 
 interface Props {
@@ -13,7 +13,7 @@ interface Props {
 }
 
 const CONNECTOR_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
-  Github, Cloud, SquareKanban, PenTool, MessageSquare,
+  Github, Cloud, SquareKanban, PenTool, MessageSquare, GitBranch, Mail, Users, BarChart3, PieChart,
 };
 
 const SEV: Record<BuildGap["severity"], { label: string; chip: string; dot: string }> = {

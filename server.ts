@@ -438,6 +438,32 @@ async function startServer() {
     }
   });
 
+  // Route an action into a connected tool (GitHub / Slack / Teams / Email / …).
+  // Simulated for the demo: marks the move taken and logs it to the activity feed.
+  app.post("/api/actions/:id/route", (req, res) => {
+    try {
+      const all = db.getMissions().flatMap(m => db.getActions(m.id));
+      const act = all.find(a => a.id === req.params.id);
+      const connectorId = (req.body?.connector || "").toString();
+      const connector = db.getConnectors().find(c => c.id === connectorId);
+      if (!act) return res.status(404).json({ error: "Action not found" });
+      if (connector && connector.status !== "connected") {
+        return res.status(409).json({ error: "not_connected", connector: connector.id });
+      }
+      db.updateActionStatus(act.id, "approved");
+      db.addEvent({
+        id: `ev-route-${Math.random().toString(36).substr(2, 6)}`,
+        mission_id: act.mission_id, timestamp: new Date().toISOString(),
+        sender: "Assistant",
+        message: `Routed "${act.title}" to ${connector?.name || connectorId}.`,
+        level: "success",
+      });
+      res.json({ success: true, connector: connector?.name || connectorId });
+    } catch (err) {
+      res.status(500).json({ error: "Failed to route action" });
+    }
+  });
+
   // Dismiss action
   app.post("/api/actions/:id/dismiss", (req, res) => {
     try {

@@ -32,3 +32,22 @@ export const catRank = (cat?: string): number => {
   const i = CATEGORY_ORDER.indexOf(cat || "General");
   return i === -1 ? CATEGORY_ORDER.length : i;
 };
+
+// Keyword categorizer so every finding lands in a real category (not "General")
+// even with no LLM key. Order matters — more specific buckets win first.
+export function inferCategory(text: string): string {
+  const t = (text || "").toLowerCase();
+  if (/\b(settle|payout|t\+\d|disburs)\b/.test(t)) return "Settlement";
+  if (/\b(contract|terms|clause|sla|agreement|\bmsa\b|waiver|license|compliance)\b/.test(t)) return "Contracts";
+  if (/\b(secur|vuln|\bcve\b|secret|api key|exploit|leak|breach|encrypt|auth|password)\b/.test(t)) return "Security";
+  if (/\b(latency|performance|\btti\b|\blcp\b|bundle|throughput|p95|p99|page load|render|fps)\b/.test(t)) return "Performance";
+  if (/\b(reliab|idempoten|retry|outage|failover|uptime|incident|resilien|downtime)\b/.test(t)) return "Reliability";
+  if (/\b(region|infra|cloud|deploy|hosting|architecture|kubernetes|server|database|ci\/cd|pipeline)\b/.test(t)) return "Infrastructure";
+  if (/\b(hir|hiring|\brole\b|\bjob\b|career|headcount|recruit|talent|layoff|researcher|engineer|\bteam\b|staff|workforce)\b/.test(t)) return "Hiring";
+  if (/\b(market|campaign|positioning|brand|devrel|conference|messaging|\bgtm\b|go-to-market|\bads?\b|launch event|community)\b/.test(t)) return "Marketing";
+  if (/\b(funding|raise|valuation|series [a-e]\b|\barr\b|revenue|run-rate|profit|margin|\bipo\b|earnings|quarter|\bq[1-4]\b|growth|expansion|cash)\b/.test(t)) return "Finance";
+  if (/\b(price|pricing|\bmdr\b|\bfee\b|\bcost\b|discount|tariff|per month|\/mo|\btier\b|\bplan\b|subscription)\b/.test(t)) return "Pricing";
+  if (/\b(launch|product|feature|\bapi\b|\bsdk\b|\bmodel\b|release|roadmap|ships?|\bbeta\b|\bgpu\b|chip|graphics|hardware|prototype)\b/.test(t)) return "Product";
+  return "General";
+}
+
